@@ -77,7 +77,8 @@ func TestSPA(t *testing.T) {
 		{"/", "app", "no-cache", 200},
 		{"/sites/example.com", "app", "no-cache", 200}, // client-side route
 		{"/assets/app-1a.js", "console.log", "immutable", 200},
-		{"/api/v1/nope", "not_found", "", 404},
+		{"/api/v1/nope", "not_found", "no-store", 404},
+		{"/api/v1/health", "ok", "no-store", 200}, // API data must never be cached by a CDN
 	}
 	for _, tt := range tests {
 		rec := httptest.NewRecorder()

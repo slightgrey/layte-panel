@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -67,6 +68,12 @@ func (s *server) securityHeaders(next http.Handler) http.Handler {
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		if !s.Config.Dev {
 			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
+		// API responses hold private data: no browser or proxy (e.g. a CDN with a
+		// "cache everything" rule) may store them. Handlers can override this
+		// for public data (openapi.json).
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			h.Set("Cache-Control", "no-store")
 		}
 		next.ServeHTTP(w, r)
 	})
