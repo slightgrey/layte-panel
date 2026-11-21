@@ -6,8 +6,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"layte-panel/internal/agent"
+	"layte-panel/internal/auth"
 	"layte-panel/internal/config"
 	"layte-panel/internal/store"
 )
@@ -22,22 +24,36 @@ type AgentCaller interface {
 type Deps struct {
 	Config  config.Config
 	Store   *store.Store
+	Keyring *auth.Keyring
 	Agent   AgentCaller
 	Log     *slog.Logger
 	Version string
+	Now     func() time.Time // optional; defaults to time.Now (tests override it)
 }
 
 type server struct {
 	Deps
+	authLimiter *auth.RateLimiter
 }
 
 // New builds the full HTTP handler: routes wrapped in middleware.
 func New(d Deps) http.Handler {
-	s := &server{Deps: d}
+	if d.Now == nil {
+		d.Now = time.Now
+	}
+	s := &server{
+		Deps:        d,
+		authLimiter: auth.NewRateLimiter(5, 10), // per IP: 5/min, burst 10
+	}
 	mux := http.NewServeMux()
 
 	// Go 1.22+ patterns: "METHOD /path". A wrong method gets 405 automatically.
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
+
+	mux.Handle("POST /api/v1/auth/login", s.rateLimited(http.HandlerFunc(s.handleLogin)))
+	mux.Handle("POST /api/v1/auth/totp", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTP))))
+	mux.Handle("POST /api/v1/auth/logout", s.requireAnySession(http.HandlerFunc(s.handleLogout)))
+	mux.Handle("GET /api/v1/auth/me", s.requireAuth(http.HandlerFunc(s.handleMe)))
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
@@ -47,6 +63,9 @@ func New(d Deps) http.Handler {
 		s.recoverPanics,
 		s.logRequests,
 		s.securityHeaders,
+		s.devCORS,
+		s.loadSession,
+		s.csrf,
 	)
 }
 

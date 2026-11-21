@@ -13,6 +13,7 @@ import (
 
 	"layte-panel/internal/agent"
 	"layte-panel/internal/api"
+	"layte-panel/internal/auth"
 	"layte-panel/internal/store"
 )
 
@@ -39,11 +40,21 @@ func runServe(args []string) error {
 	}
 	defer st.Close()
 
+	kr, err := auth.LoadOrCreateKey(cfg.SecretKeyFile)
+	if err != nil {
+		return err
+	}
+	if n, err := st.CountUsers(ctx); err == nil && n == 0 {
+		log.Warn("no admin users yet; create one with: layte admin create --username NAME")
+	}
+	go api.CleanupSessions(ctx, st, cfg, log, 10*time.Minute)
+
 	srv := &http.Server{
 		Addr: cfg.Listen,
 		Handler: api.New(api.Deps{
 			Config:  cfg,
 			Store:   st,
+			Keyring: kr,
 			Agent:   &agent.Client{SocketPath: cfg.AgentSocket, Auditor: storeAuditor{st}},
 			Log:     log,
 			Version: version,
