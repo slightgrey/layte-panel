@@ -69,5 +69,6 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("wp.set_url", false, time.Minute, d.wpSetURL),
 		agent.Def("ssl.issue", false, 3*time.Minute, d.sslIssue),
 		agent.Def("ssl.revoke", false, time.Minute, d.sslRevoke),
+		agent.Def("cron.write", false, 15*time.Second, d.cronWrite),
 	)
 }

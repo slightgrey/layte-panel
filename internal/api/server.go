@@ -75,6 +75,11 @@ func New(d Deps) http.Handler {
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
 	mux.Handle("GET /api/v1/ssl", authed(s.handleListSSL))
 
+	mux.Handle("GET /api/v1/cron", authed(s.handleListCron))
+	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
+	mux.Handle("PATCH /api/v1/cron/{id}", authed(s.handleUpdateCron))
+	mux.Handle("DELETE /api/v1/cron/{id}", authed(s.handleDeleteCron))
+
 	mux.Handle("GET /api/v1/databases", authed(s.handleListDatabases))
 	mux.Handle("POST /api/v1/databases", authed(s.handleCreateDatabase))
 	mux.Handle("DELETE /api/v1/databases/{name}", authed(s.handleDropDatabase))

@@ -1,0 +1,3 @@
+# /etc/cron.d/certbot: crontab entries for the certbot package
+SHELL=/bin/sh
+0 */12 * * * root test -x /usr/bin/certbot && certbot -q renew

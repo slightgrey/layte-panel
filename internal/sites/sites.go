@@ -315,6 +315,10 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		if err := call("nginx.vhost_remove", actions.DomainParams{Domain: site.Domain}); err != nil {
 			return fail(err)
 		}
+		j.Step("Remove cron jobs")
+		if err := call("cron.write", actions.CronWriteParams{Domain: site.Domain, Username: site.SystemUser}); err != nil {
+			return fail(err)
+		}
 		if site.SSL {
 			j.Step("Revoke certificate")
 			if err := call("ssl.revoke", actions.DomainParams{Domain: site.Domain}); err != nil {

@@ -127,11 +127,15 @@ func WriteConfig(ctx context.Context, fsys FS, r Runner, s WriteSpec) error {
 		}
 	}
 
-	if res, err := r.RunCmd(ctx, s.Test); err != nil {
+	if s.Test.Bin == "" {
+		// nothing to test (e.g. cron.d files)
+	} else if res, err := r.RunCmd(ctx, s.Test); err != nil {
 		rollback()
 		return &TestError{Cmd: s.Test.String(), Output: testOutput(res, err)}
 	}
-	if res, err := r.RunCmd(ctx, s.Reload); err != nil {
+	if s.Reload.Bin == "" {
+		// the service picks up changes by itself
+	} else if res, err := r.RunCmd(ctx, s.Reload); err != nil {
 		rollback()
 		r.RunCmd(ctx, s.Reload) // bring the service back on the old config
 		return fmt.Errorf("reload after writing %s: %s", s.Path, testOutput(res, err))
@@ -186,6 +190,9 @@ func RemoveConfig(ctx context.Context, fsys FS, r Runner, s RemoveSpec) error {
 		if linkRemoved {
 			fsys.Symlink(s.Path, s.Link)
 		}
+	}
+	if s.Test.Bin == "" {
+		return nil
 	}
 	if res, err := r.RunCmd(ctx, s.Test); err != nil {
 		restore()

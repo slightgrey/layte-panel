@@ -152,6 +152,21 @@ export interface SecretsResponse {
   secrets: Record<string, string>;
 }
 
+export interface CronJob {
+  id: number;
+  site_id: number;
+  site_domain: string;
+  schedule: string;
+  command: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface CronResponse {
+  jobs: CronJob[];
+  wp_cron: Record<string, string>; // site id → suggested WP-Cron command
+}
+
 export interface JobEvent {
   seq: number;
   time: string;
