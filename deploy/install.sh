@@ -61,12 +61,15 @@ ask() { # ask "question" default → echoes answer
 # ---------------------------------------------------------------- checks
 [ "$(id -u)" = 0 ] || die "run as root (sudo bash install.sh)"
 command -v systemctl >/dev/null || die "systemd is required"
-# shellcheck source=/dev/null
-. /etc/os-release
-case "${ID}-${VERSION_ID}" in
+# Read single fields from os-release. Don't source it: it defines VERSION,
+# which would overwrite our own release VERSION.
+os_field() { sed -n "s/^$1=//p" /etc/os-release | tr -d '"'; }
+OS_ID="$(os_field ID)"
+OS_VERSION_ID="$(os_field VERSION_ID)"
+case "${OS_ID}-${OS_VERSION_ID}" in
   ubuntu-24.04) ;;
   debian-12) warn "Debian 12 is supported on a best-effort basis" ;;
-  *) warn "untested OS: ${PRETTY_NAME}. Layte Panel targets Ubuntu 24.04." ;;
+  *) warn "untested OS: $(os_field PRETTY_NAME). Layte Panel targets Ubuntu 24.04." ;;
 esac
 case "$(uname -m)" in
   x86_64)  ARCH=amd64 ;;
