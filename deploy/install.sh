@@ -250,7 +250,17 @@ done
 curl -fsS http://127.0.0.1:8443/api/v1/health >/dev/null 2>&1 || die "layte didn't start: journalctl -u layte -u layte-agent"
 
 # ---------------------------------------------------------------- panel behind nginx
+# Put the vhost where this nginx actually loads it: some servers only include
+# conf.d/*.conf, and a file in sites-enabled would pass `nginx -t` but never load.
 NGINX_CONF=/etc/nginx/sites-available/layte-panel.conf
+NGINX_LINK=/etc/nginx/sites-enabled/layte-panel.conf
+# (nginx -T goes into a variable: piping it into `grep -q` trips pipefail on SIGPIPE.)
+NGINX_DUMP="$(command -v nginx >/dev/null && nginx -T 2>/dev/null || true)"
+if [ -f /etc/nginx/conf.d/layte-panel.conf ] || { [ -n "$NGINX_DUMP" ] &&
+     ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/sites-enabled/' <<<"$NGINX_DUMP"; }; then
+  NGINX_CONF=/etc/nginx/conf.d/layte-panel.conf
+  NGINX_LINK=""
+fi
 panel_vhost() { # panel_vhost http|https
   local allow="" ip
   for ip in "${ALLOW_IPS[@]}"; do allow+="    allow $ip;"$'\n'; done
@@ -292,13 +302,21 @@ panel_vhost() { # panel_vhost http|https
   fi
   [ -f "$NGINX_CONF" ] && cp "$NGINX_CONF" "$TMP/panel.conf.bak"
   install -m 0644 "$TMP/panel.conf" "$NGINX_CONF"
-  ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/layte-panel.conf
+  if [ -n "$NGINX_LINK" ]; then
+    ln -sf "$NGINX_CONF" "$NGINX_LINK"
+  else # drop a copy we wrote earlier in sites-available (never loaded here)
+    local old=/etc/nginx/sites-available/layte-panel.conf
+    if [ -f "$old" ] && head -n1 "$old" | grep -q "^$MARKER"; then rm -f "$old" /etc/nginx/sites-enabled/layte-panel.conf; fi
+  fi
   if ! nginx -t >/dev/null 2>&1; then
-    if [ -f "$TMP/panel.conf.bak" ]; then cp "$TMP/panel.conf.bak" "$NGINX_CONF"; else rm -f "$NGINX_CONF" /etc/nginx/sites-enabled/layte-panel.conf; fi
+    if [ -f "$TMP/panel.conf.bak" ]; then cp "$TMP/panel.conf.bak" "$NGINX_CONF"; else rm -f "$NGINX_CONF" ${NGINX_LINK:+"$NGINX_LINK"}; fi
     nginx -t || true
     die "nginx rejected the panel config; rolled back"
   fi
   systemctl reload nginx
+  NGINX_DUMP="$(nginx -T 2>/dev/null || true)"
+  grep -qF "server_name $PANEL_DOMAIN;" <<<"$NGINX_DUMP" \
+    || warn "nginx doesn't seem to load $NGINX_CONF (check the include lines in /etc/nginx/nginx.conf)"
 }
 
 if [ -z "$PANEL_DOMAIN" ] && [ "$UPGRADE" = 0 ] && command -v nginx >/dev/null; then
