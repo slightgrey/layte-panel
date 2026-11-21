@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/agent"
 )
 
 const apt = "/usr/bin/apt"

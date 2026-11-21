@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"layte-panel/internal/agent"
-	"layte-panel/internal/system"
+	"github.com/slightgrey/layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 // Version is one row of versions.get.

@@ -4,7 +4,7 @@ import (
 	"flag"
 	"path/filepath"
 
-	"layte-panel/internal/config"
+	"github.com/slightgrey/layte-panel/internal/config"
 )
 
 // configFlags are the --config/--dev flags every subcommand shares.

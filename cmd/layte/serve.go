@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"layte-panel/internal/agent"
-	"layte-panel/internal/api"
-	"layte-panel/internal/auth"
-	"layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/api"
+	"github.com/slightgrey/layte-panel/internal/auth"
+	"github.com/slightgrey/layte-panel/internal/store"
 )
 
 func runServe(args []string) error {

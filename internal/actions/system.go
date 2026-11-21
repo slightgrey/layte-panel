@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/agent"
 )
 
 // SystemInfo is the result of system.info.

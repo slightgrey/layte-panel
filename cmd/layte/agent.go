@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"syscall"
 
-	"layte-panel/internal/actions"
-	"layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/actions"
+	"github.com/slightgrey/layte-panel/internal/agent"
 )
 
 func runAgent(args []string) error {

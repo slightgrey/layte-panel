@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
-	"layte-panel/internal/agent"
-	"layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/store"
 )
 
 // storeAuditor adapts *store.Store to the agent.Auditor interface, so neither

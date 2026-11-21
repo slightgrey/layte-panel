@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/agent"
 )
 
 const systemctl = "/usr/bin/systemctl"

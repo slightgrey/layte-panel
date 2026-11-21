@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"layte-panel/internal/config"
-	"layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/config"
+	"github.com/slightgrey/layte-panel/internal/store"
 )
 
 const (

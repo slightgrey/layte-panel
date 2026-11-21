@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"layte-panel/internal/auth"
-	"layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/auth"
+	"github.com/slightgrey/layte-panel/internal/store"
 )
 
 func hashToken(t string) string { return auth.HashToken(t) }

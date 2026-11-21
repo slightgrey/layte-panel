@@ -4,8 +4,8 @@ package actions
 import (
 	"time"
 
-	"layte-panel/internal/agent"
-	"layte-panel/internal/system"
+	"github.com/slightgrey/layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 // Deps are the host interfaces actions use. Real ones in production,

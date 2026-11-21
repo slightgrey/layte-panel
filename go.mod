@@ -1,4 +1,4 @@
-module layte-panel
+module github.com/slightgrey/layte-panel
 
 go 1.26.0
 

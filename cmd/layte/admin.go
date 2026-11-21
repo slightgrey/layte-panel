@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/term"
 
-	"layte-panel/internal/auth"
-	"layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/auth"
+	"github.com/slightgrey/layte-panel/internal/store"
 )
 
 // runAdmin handles `layte admin create|reset-password|reset-2fa --username NAME`.

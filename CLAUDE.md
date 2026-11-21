@@ -99,7 +99,8 @@ docs/
    atomic rename → reload → on failure, restore the backup and reload. One bad template must never take down other sites.
 5. **Imported/unmanaged sites are read-only** until the user explicitly adopts them. Adopting shows a diff first.
 6. Secrets (DB passwords, API keys, TOTP seeds) never appear in logs or API responses after creation. Encrypt TOTP seeds at rest.
-7. Every agent action is written to an **audit log** (who, what, args with secrets redacted, result).
+7. Every **mutating** agent action is written to an **audit log** (who, what, args with secrets redacted, result).
+   Read-only actions (dashboard polling etc.) are logged by the agent (slog/journald) only.
 8. Login: rate limiting + lockout; 2FA required for admins; sessions expire.
 9. Run `govulncheck` and `npm audit` in CI. Pin dependencies.
 

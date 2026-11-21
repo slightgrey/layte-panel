@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"layte-panel/internal/auth"
-	"layte-panel/internal/config"
-	"layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/auth"
+	"github.com/slightgrey/layte-panel/internal/config"
+	"github.com/slightgrey/layte-panel/internal/store"
 )
 
 const testPassword = "correct horse battery staple"

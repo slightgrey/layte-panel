@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"layte-panel/internal/system"
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 // Fixtures: a fake Ubuntu 24.04 host used by tests and `agent --dev`, so the
