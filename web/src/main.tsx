@@ -8,16 +8,18 @@ import { App } from "./App";
 import "./index.css";
 
 // When any request comes back 401 (session expired), re-check /auth/me;
-// RequireAuth then redirects to the login page.
-const onError = (err: unknown) => {
+// RequireAuth then redirects to the login page. Never for /auth/me itself:
+// its 401 just means "not logged in", and re-checking it would loop forever.
+const recheckSession = (err: unknown) => {
   if (err instanceof ApiError && err.status === 401) {
     queryClient.invalidateQueries({ queryKey: meKey });
   }
 };
+const isMeQuery = (key: readonly unknown[]) => key.length === meKey.length && meKey.every((k, i) => key[i] === k);
 
 const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError }),
-  mutationCache: new MutationCache({ onError }),
+  queryCache: new QueryCache({ onError: (err, query) => !isMeQuery(query.queryKey) && recheckSession(err) }),
+  mutationCache: new MutationCache({ onError: recheckSession }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,
