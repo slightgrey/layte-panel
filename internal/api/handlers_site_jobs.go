@@ -45,6 +45,26 @@ func (s *server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": siteID})
 }
 
+// POST /api/v1/sites/{id}/php {version} — switch PHP version. 202 {job_id}.
+func (s *server) handleSwitchPHP(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Version string `json:"version"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.SwitchPHP(r.Context(), actorOf(r), site, req.Version)
+	if err != nil {
+		s.writeSiteError(w, "switch php", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
 // DELETE /api/v1/sites/{id} {confirm_domain, remove_files, drop_db} — 202 {job_id}.
 func (s *server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 	site, ok := s.loadSite(w, r)

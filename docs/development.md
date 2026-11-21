@@ -13,8 +13,12 @@ browser ──▶ Vite dev server :5173 ──/api──▶ layte serve --dev :8
                                               .dev/secret.key                   fixtures, never your machine)
 ```
 `--dev` keeps all state in `./.dev/` (git-ignored), turns off the Secure cookie flag, allows
-the Vite origin, and makes the agent answer from `internal/actions/fixtures/` instead of running
-real commands.
+the Vite origin, and makes the agent work on a **fake root**, `.dev/fakeroot/`:
+- It is seeded from `internal/actions/fixtures/`: a fake Ubuntu host with three existing nginx sites.
+- Commands (`nginx -t`, `useradd`, `mysql`, WP-CLI…) are faked.
+- Files the agent writes (vhosts, pools, site dirs) really land in the fake root, so you can inspect them.
+- Delete `.dev/fakeroot` to start over. Missing fixture files are re-copied on every agent start.
+- On Windows, symlinks are stored as small pointer files, because creating real symlinks needs admin rights.
 
 ## Run it locally
 Each in its own terminal, from the repo root:
@@ -62,6 +66,24 @@ make vm-shell    # then: sudo -u layte layte admin create --username admin
 Reach the panel with `multipass exec layte-dev -- curl -s localhost:8443/api/v1/health`,
 or put `deploy/nginx-proxy.conf.example` in front of it.
 
+`make test-integration` builds `test/integration` (build tag `integration`) for Linux and runs it
+as root in the VM against the real agent. It:
+1. Creates a WordPress site and checks that nginx serves it.
+2. Switches PHP (when two versions are installed).
+3. Deletes the site.
+4. Checks that the user, the database and the configs are gone, that `nginx -t` passes, and that
+   no foreign nginx or PHP config changed (checksums before and after).
+
+## How site jobs work
+Creating a site, deleting it and switching its PHP version are **jobs** ([internal/sites](../internal/sites)).
+- Each job is a sequence of small agent actions (`site.user_create`, `php.pool_write`, `nginx.vhost_write`, …).
+- If a step fails, the completed steps are undone in reverse order.
+- Config files go through `system.WriteConfig`: backup → write → `nginx -t`/`php-fpm -t` → reload,
+  restoring the backup on failure. Files without the `Managed by Layte Panel` marker are never touched.
+- Progress streams to the UI over SSE (`/api/v1/jobs/{id}/events`).
+- Generated passwords are held in memory and can be fetched once (`/api/v1/jobs/{id}/secret`).
+  They are never written to SQLite, logs or command lines.
+
 ## Production layout
 | Path | What | Owner / mode |
 |---|---|---|
@@ -79,5 +101,9 @@ itself; the installer (or `make vm-deploy`) creates it.
    `Validate() error`. Validate **everything** here, even if the API already did.
 2. Register it in `actions.Register` with `agent.Def(name, readOnly, timeout, fn)`.
    Mutating actions (`readOnly=false`) are written to the audit log automatically.
-3. Run binaries with absolute paths through `deps.Runner`; never a shell.
-4. Add fixtures under `internal/actions/fixtures/` so tests and `agent --dev` work.
+3. Run binaries with absolute paths through `deps.Runner`; never a shell. Put the path in
+   `internal/actions/bins.go`. Secrets go in `Cmd.Stdin`, never in `Args`.
+4. Touch files only through `deps.FS` (it's jailed with `os.Root`), and change configs only via
+   `system.WriteConfig` / `system.RemoveConfig`.
+5. Add fixtures under `internal/actions/fixtures/` (and a fake answer in `dev.go`) so tests and
+   `agent --dev` work.

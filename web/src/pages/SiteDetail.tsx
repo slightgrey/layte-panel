@@ -2,14 +2,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, Info, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { siteKey, sitesKey, useDeleteSite, useSite, useSiteVhost } from "@/api/sites";
+import { siteKey, sitesKey, useDeleteSite, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
-import { Checkbox, Field } from "@/components/ui/field";
+import { Checkbox, Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FormError } from "./AuthShell";
 import { SiteBadges } from "./SiteBadges";
@@ -80,7 +80,7 @@ export function SiteDetailPage() {
       {jobId && (
         <Card>
           <CardHeader>
-            <CardTitle>{s.status === "creating" ? "Creating site" : "Job"}</CardTitle>
+            <CardTitle>{s.status === "creating" ? "Creating site" : "Progress"}</CardTitle>
             <Button variant="ghost" size="sm" onClick={() => setParams({}, { replace: true })}>
               Dismiss
             </Button>
@@ -109,6 +109,36 @@ export function SiteDetailPage() {
 
       <OverviewCard site={s} />
       <VhostCard site={s} />
+    </div>
+  );
+}
+
+/** PHP version select + "Switch" for managed sites; progress shows in the job panel. */
+function PHPSwitch({ site }: { site: Site }) {
+  const php = usePHPVersions();
+  const sw = useSwitchPHP(site.id);
+  const [, setParams] = useSearchParams();
+  const [version, setVersion] = useState(site.php_version);
+  const others = php.data?.versions ?? [site.php_version];
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select aria-label="PHP version" className="w-32" value={version} onChange={(e) => setVersion(e.target.value)}>
+        {others.map((v) => (
+          <option key={v} value={v}>
+            PHP {v}
+          </option>
+        ))}
+      </Select>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={version === site.php_version || sw.isPending}
+        onClick={() => sw.mutate(version, { onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }) })}
+      >
+        Switch
+      </Button>
+      {sw.error && <span className="text-xs text-destructive">{sw.error.message}</span>}
     </div>
   );
 }
@@ -219,7 +249,9 @@ function OverviewCard({ site: s }: { site: Site }) {
       <CardContent>
         <dl className="divide-y">
           <Row label="Aliases">{s.aliases.length ? s.aliases.join(", ") : "–"}</Row>
-          <Row label="PHP version">{s.php_version || "none (static)"}</Row>
+          <Row label="PHP version">
+            {s.managed && s.status === "active" ? <PHPSwitch site={s} /> : s.php_version || "none (static)"}
+          </Row>
           <Row label="Web root">
             <span className={mono}>{s.root_path || "–"}</span>
           </Row>

@@ -70,6 +70,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/sites", authed(s.handleListSites))
 	mux.Handle("POST /api/v1/sites", authed(s.handleCreateSite))
 	mux.Handle("DELETE /api/v1/sites/{id}", authed(s.handleDeleteSite))
+	mux.Handle("POST /api/v1/sites/{id}/php", authed(s.handleSwitchPHP))
 	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
 	mux.Handle("GET /api/v1/sites/{id}", authed(s.handleGetSite))
 	mux.Handle("GET /api/v1/sites/{id}/vhost", authed(s.handleSiteVhost))

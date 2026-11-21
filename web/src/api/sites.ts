@@ -11,6 +11,13 @@ export function useCreateSite() {
   });
 }
 
+/** POST /sites/{id}/php: starts a PHP version switch job. */
+export function useSwitchPHP(id: number) {
+  return useMutation({
+    mutationFn: (version: string) => api<JobStarted>("POST", `/sites/${id}/php`, { version }),
+  });
+}
+
 /** DELETE /sites/{id}: starts a deletion job. */
 export function useDeleteSite(id: number) {
   return useMutation({
