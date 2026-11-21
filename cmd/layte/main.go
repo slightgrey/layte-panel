@@ -33,6 +33,8 @@ func main() {
 		err = runAgent(args)
 	case "admin":
 		err = runAdmin(args)
+	case "fsop": // internal: file manager helper, started by the agent
+		err = runFsop()
 	case "version", "--version", "-v":
 		fmt.Println("layte", version)
 	case "help", "--help", "-h":

@@ -185,7 +185,7 @@ func (s *Server) dispatch(ctx context.Context, req Request, rerr *Error) Respons
 
 	start := time.Now()
 	data, err := s.safeHandle(actx, action, req)
-	resp := Response{ID: req.ID, ReadOnly: action.ReadOnly}
+	resp := Response{ID: req.ID, ReadOnly: !action.audited(req.Params)} // ReadOnly tells the client not to audit
 	if err != nil {
 		resp.Error = toAgentError(actx, err)
 		log.Warn("action failed", "dur", time.Since(start), "code", resp.Error.Code, "err", err)

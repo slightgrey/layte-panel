@@ -2,7 +2,9 @@
 package actions
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -12,11 +14,12 @@ import (
 // Deps are the host interfaces actions use. Real ones in production,
 // fakes in tests and `agent --dev`.
 type Deps struct {
-	Runner system.Runner
-	FS     system.FS
-	Users  system.Users
-	WPCLI  WPCLI
-	Now    func() time.Time
+	Runner  system.Runner
+	FS      system.FS
+	Users   system.Users
+	WPCLI   WPCLI
+	FileOps FileOps
+	Now     func() time.Time
 }
 
 // HostDeps returns dependencies that operate on the real machine.
@@ -25,12 +28,17 @@ func HostDeps() (Deps, error) {
 	if err != nil {
 		return Deps{}, err
 	}
+	self, err := os.Executable()
+	if err != nil {
+		return Deps{}, fmt.Errorf("find own binary for the file helper: %w", err)
+	}
 	return Deps{
-		Runner: system.ExecRunner{},
-		FS:     root,
-		Users:  system.HostUsers{},
-		WPCLI:  downloadWPCLI{fs: root, client: &http.Client{Timeout: 2 * time.Minute}},
-		Now:    time.Now,
+		Runner:  system.ExecRunner{},
+		FS:      root,
+		Users:   system.HostUsers{},
+		WPCLI:   downloadWPCLI{fs: root, client: &http.Client{Timeout: 2 * time.Minute}},
+		FileOps: helperFileOps{bin: self, runner: system.ExecRunner{}},
+		Now:     time.Now,
 	}, nil
 }
 
@@ -55,6 +63,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("db.list", true, 15*time.Second, d.dbList),
 		agent.Def("logs.sources", true, 10*time.Second, d.logsSources),
 		agent.Def("logs.read", true, 10*time.Second, d.logsRead).WithQuiet(),
+		agent.Def("fs.read", true, 30*time.Second, d.fsRead),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
@@ -72,5 +81,6 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("ssl.issue", false, 3*time.Minute, d.sslIssue),
 		agent.Def("ssl.revoke", false, time.Minute, d.sslRevoke),
 		agent.Def("cron.write", false, 15*time.Second, d.cronWrite),
+		agent.Def("fs.write", false, 30*time.Second, d.fsWrite).WithAuditSkip(auditFirstChunk),
 	)
 }

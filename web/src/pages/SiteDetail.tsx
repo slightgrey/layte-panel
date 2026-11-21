@@ -74,6 +74,9 @@ export function SiteDetailPage() {
           <Link to={`/logs?site=${s.id}`} className="text-sm text-muted-foreground hover:text-foreground">
             Logs
           </Link>
+          <Link to={`/sites/${s.id}/files`} className="text-sm text-muted-foreground hover:text-foreground">
+            Files
+          </Link>
           {s.managed && s.status !== "creating" && s.status !== "deleting" && (
             <div className="ml-auto">
               <DeleteSite site={s} />

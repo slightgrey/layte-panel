@@ -75,6 +75,13 @@ func New(d Deps) http.Handler {
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
 	mux.Handle("GET /api/v1/ssl", authed(s.handleListSSL))
 
+	mux.Handle("GET /api/v1/sites/{id}/files", authed(s.handleListFiles))
+	mux.Handle("GET /api/v1/sites/{id}/files/content", authed(s.handleReadFile))
+	mux.Handle("PUT /api/v1/sites/{id}/files/content", authed(s.handleSaveFile))
+	mux.Handle("GET /api/v1/sites/{id}/files/download", authed(s.handleDownload))
+	mux.Handle("POST /api/v1/sites/{id}/files/upload", authed(s.handleUpload))
+	mux.Handle("POST /api/v1/sites/{id}/files/{op}", authed(s.handleFileOp))
+
 	mux.Handle("GET /api/v1/logs", authed(s.handleLogSources))
 	mux.Handle("GET /api/v1/logs/stream", authed(s.handleLogStream))
 

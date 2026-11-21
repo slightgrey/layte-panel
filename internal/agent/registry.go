@@ -18,6 +18,20 @@ type Action struct {
 	Quiet    bool // high-frequency read (e.g. live log polling): logged at debug level
 	Timeout  time.Duration
 	handle   func(ctx context.Context, actor Actor, params json.RawMessage) (any, error)
+
+	skipAudit func(params json.RawMessage) bool
+}
+
+// WithAuditSkip lets a mutating action leave some calls out of the audit log
+// (e.g. the 2nd…nth chunk of one upload, when the first chunk was recorded).
+func (a Action) WithAuditSkip(skip func(params json.RawMessage) bool) Action {
+	a.skipAudit = skip
+	return a
+}
+
+// audited reports whether this call goes to the audit log.
+func (a Action) audited(params json.RawMessage) bool {
+	return !a.ReadOnly && (a.skipAudit == nil || !a.skipAudit(params))
 }
 
 // WithQuiet marks a read-only action as high-frequency, so successful calls

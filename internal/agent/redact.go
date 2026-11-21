@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -37,10 +38,18 @@ func redact(v any) any {
 			t[i] = redact(t[i])
 		}
 		return t
+	case string:
+		// Big payloads (file chunks) don't belong in the audit log.
+		if len(t) > maxAuditString {
+			return fmt.Sprintf("[%d bytes]", len(t))
+		}
+		return t
 	default:
 		return v
 	}
 }
+
+const maxAuditString = 512
 
 func isSecretKey(k string) bool {
 	k = strings.ToLower(k)

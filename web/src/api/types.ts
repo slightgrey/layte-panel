@@ -178,6 +178,26 @@ export interface LogSourcesResponse {
   sources: LogSource[];
 }
 
+export interface FileEntry {
+  name: string;
+  type: "dir" | "file" | "symlink" | "other";
+  size: number;
+  mode: string;
+  mtime: string;
+}
+
+export interface FileList {
+  entries: FileEntry[];
+  read_only: boolean;
+  root: string;
+}
+
+export interface FileContent {
+  content: string;
+  size: number;
+  read_only: boolean;
+}
+
 export interface JobEvent {
   seq: number;
   time: string;

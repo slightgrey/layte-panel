@@ -39,6 +39,9 @@ func (HostUsers) Lookup(name string) (Credential, error) {
 type DirUsers struct{ FS FS }
 
 func (d DirUsers) Lookup(name string) (Credential, error) {
+	if name == "www-data" {
+		return Credential{UID: 33, GID: 33}, nil
+	}
 	ok, err := d.FS.Exists("/home/" + name)
 	if err != nil {
 		return Credential{}, err

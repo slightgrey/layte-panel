@@ -9,12 +9,14 @@ export function Dialog({
   title,
   children,
   locked = false,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   locked?: boolean;
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -33,7 +35,7 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-lg rounded-xl border bg-card p-6 shadow-lg"
+        className={`w-full ${wide ? "max-w-5xl" : "max-w-lg"} rounded-xl border bg-card p-6 shadow-lg`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-4">

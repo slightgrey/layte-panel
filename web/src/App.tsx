@@ -4,7 +4,9 @@ import { RequireAuth } from "./components/RequireAuth";
 import { DashboardPage } from "./pages/Dashboard";
 import { CronPage } from "./pages/Cron";
 import { DatabasesPage } from "./pages/Databases";
+import { FilesPage } from "./pages/Files";
 import { LoginPage } from "./pages/Login";
+import { SiteFilesPage } from "./pages/SiteFiles";
 import { LogsPage } from "./pages/Logs";
 import { NewSitePage } from "./pages/NewSite";
 import { SiteDetailPage } from "./pages/SiteDetail";
@@ -27,6 +29,8 @@ export function App() {
           <Route path="databases" element={<DatabasesPage />} />
           <Route path="cron" element={<CronPage />} />
           <Route path="logs" element={<LogsPage />} />
+          <Route path="files" element={<FilesPage />} />
+          <Route path="sites/:id/files" element={<SiteFilesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

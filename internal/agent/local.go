@@ -31,7 +31,7 @@ func (c *LocalClient) Call(ctx context.Context, action string, actor Actor, para
 	actx, cancel := context.WithTimeout(ctx, a.Timeout)
 	defer cancel()
 	data, err := a.handle(actx, actor, raw)
-	if c.Auditor != nil && !a.ReadOnly {
+	if c.Auditor != nil && a.audited(raw) {
 		e := AuditEntry{Time: time.Now(), Actor: actor, Action: action, ArgsJSON: RedactJSON(raw), OK: err == nil}
 		if err != nil {
 			e.Error = err.Error()

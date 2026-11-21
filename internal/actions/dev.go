@@ -26,6 +26,10 @@ var fixturesFS embed.FS
 // normal directory: sites created in dev mode are written there and show up
 // on the next scan. Commands are answered by a fake runner.
 func DevDeps(dir string) (Deps, error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return Deps{}, err
+	}
 	if err := seedFakeRoot(dir); err != nil {
 		return Deps{}, err
 	}
@@ -42,11 +46,12 @@ func DevDeps(dir string) (Deps, error) {
 
 	cmds, _ := fs.Sub(fixturesFS, "fixtures/commands")
 	return Deps{
-		Runner: &system.FakeRunner{Handle: devHandler(cmds, root)},
-		FS:     root,
-		Users:  system.DirUsers{FS: root},
-		WPCLI:  devWPCLI{fs: root},
-		Now:    time.Now,
+		Runner:  &system.FakeRunner{Handle: devHandler(cmds, root)},
+		FS:      root,
+		Users:   system.DirUsers{FS: root},
+		WPCLI:   devWPCLI{fs: root},
+		FileOps: localFileOps{base: absDir},
+		Now:     time.Now,
 	}, nil
 }
 
