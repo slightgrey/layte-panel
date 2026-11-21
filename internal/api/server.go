@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -28,6 +29,7 @@ type Deps struct {
 	Agent   AgentCaller
 	Log     *slog.Logger
 	Version string
+	UI      fs.FS            // built web app (web/dist); nil shows a "not built" page
 	Now     func() time.Time // optional; defaults to time.Now (tests override it)
 }
 
@@ -55,9 +57,14 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/auth/logout", s.requireAnySession(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", s.requireAuth(http.HandlerFunc(s.handleMe)))
 
+	mux.Handle("GET /api/v1/dashboard", s.requireAuth(http.HandlerFunc(s.handleDashboard)))
+
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
+
+	// Everything that isn't /api is the embedded React app.
+	mux.Handle("/", spaHandler(d.UI))
 
 	return chain(mux,
 		s.recoverPanics,

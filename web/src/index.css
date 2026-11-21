@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* Design tokens (shadcn/ui naming). Light by default, dark via the OS setting. */
+:root {
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.21 0.02 260);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.96 0.004 247);
+  --muted-foreground: oklch(0.52 0.02 257);
+  --border: oklch(0.91 0.006 247);
+  --input: var(--border);
+  --primary: oklch(0.51 0.09 186);
+  --primary-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  --success: oklch(0.6 0.15 155);
+  --warning: oklch(0.72 0.16 70);
+  --ring: var(--primary);
+  --radius: 0.6rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.17 0.012 260);
+    --foreground: oklch(0.95 0.005 247);
+    --card: oklch(0.21 0.013 260);
+    --muted: oklch(0.25 0.013 260);
+    --muted-foreground: oklch(0.7 0.015 257);
+    --border: oklch(0.3 0.014 260);
+    --primary: oklch(0.7 0.11 186);
+    --primary-foreground: oklch(0.17 0.012 260);
+    --destructive: oklch(0.66 0.2 25);
+    --success: oklch(0.72 0.15 155);
+    --warning: oklch(0.8 0.15 75);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}

@@ -22,3 +22,6 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
+
+// npm packages sometimes ship .go files; keep them out of ./...
+ignore ./web/node_modules

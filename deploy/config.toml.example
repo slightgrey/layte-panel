@@ -1,0 +1,10 @@
+# /etc/layte/config.toml — every value can also be set with a LAYTE_* environment
+# variable (e.g. LAYTE_LISTEN). Shown values are the defaults.
+
+listen          = "127.0.0.1:8443"          # keep on loopback; nginx proxies to it
+data_dir        = "/var/lib/layte"           # SQLite database
+agent_socket    = "/run/layte/agent.sock"
+secret_key_file = "/etc/layte/secret.key"    # encrypts 2FA secrets; owned by layte, mode 0600; back it up
+trusted_proxies = ["127.0.0.1", "::1"]       # X-Forwarded-For is only trusted from these
+session_idle    = "30m"
+session_max     = "12h"

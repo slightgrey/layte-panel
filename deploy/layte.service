@@ -1,0 +1,43 @@
+# Layte Panel web UI + API. Unprivileged: all system changes go through layte-agent.
+[Unit]
+Description=Layte Panel (web UI and API)
+Documentation=https://github.com/slightgrey/layte-panel
+After=network.target layte-agent.service
+Wants=layte-agent.service
+
+[Service]
+Type=simple
+User=layte
+Group=layte
+ExecStart=/usr/local/bin/layte serve --config /etc/layte/config.toml
+Restart=on-failure
+RestartSec=2s
+
+# /var/lib/layte (SQLite database), created and owned by the layte user.
+StateDirectory=layte
+StateDirectoryMode=0750
+
+# Hardening: serve needs network + its state dir, nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

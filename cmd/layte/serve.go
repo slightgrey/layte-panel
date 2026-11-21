@@ -15,6 +15,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/api"
 	"github.com/slightgrey/layte-panel/internal/auth"
 	"github.com/slightgrey/layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/web"
 )
 
 func runServe(args []string) error {
@@ -58,6 +59,7 @@ func runServe(args []string) error {
 			Agent:   &agent.Client{SocketPath: cfg.AgentSocket, Auditor: storeAuditor{st}},
 			Log:     log,
 			Version: version,
+			UI:      web.Dist(),
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

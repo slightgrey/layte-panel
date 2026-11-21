@@ -1,0 +1,44 @@
+# Example nginx front for Layte Panel. Copy to /etc/nginx/sites-available/layte-panel,
+# adjust, then: ln -s ../sites-available/layte-panel /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx
+#
+# layte serve listens on 127.0.0.1:8443 (plain HTTP, loopback only). nginx terminates
+# TLS and restricts who may reach the panel at all.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name panel.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name panel.example.com;
+
+    # e.g. from: certbot certonly --nginx -d panel.example.com
+    ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
+
+    # IP allowlist: only these addresses can see the login page.
+    allow 203.0.113.10;      # office
+    allow 198.51.100.0/24;   # VPN
+    deny  all;
+
+    client_max_body_size 64m;  # file manager uploads (later)
+
+    location / {
+        proxy_pass http://127.0.0.1:8443;
+        proxy_http_version 1.1;
+
+        # Layte compares Origin with Host for CSRF protection, so Host must be passed through.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        # Live logs and job progress use Server-Sent Events (later): don't buffer.
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}

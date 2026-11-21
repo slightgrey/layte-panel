@@ -30,6 +30,11 @@ type testEnv struct {
 // newTestEnv starts the API with a fresh DB and one admin ("admin").
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
+	return newTestEnvWithAgent(t, nil)
+}
+
+func newTestEnvWithAgent(t *testing.T, ag AgentCaller) *testEnv {
+	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
@@ -53,6 +58,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Config:  cfg,
 		Store:   st,
 		Keyring: kr,
+		Agent:   ag,
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Version: "test",
 		Now:     func() time.Time { return env.now },
