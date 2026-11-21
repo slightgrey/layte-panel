@@ -10,7 +10,11 @@ import (
 	"github.com/slightgrey/layte-panel/internal/store"
 )
 
+// actorOf is who an agent call is made for: the admin, or "api:<key name>".
 func actorOf(r *http.Request) agent.Actor {
+	if k, ok := keyFrom(r.Context()); ok {
+		return agent.Actor{Username: "api:" + k.Name}
+	}
 	si, _ := sessionFrom(r.Context())
 	return agent.Actor{UserID: si.User.ID, Username: si.User.Username}
 }

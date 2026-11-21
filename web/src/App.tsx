@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/Dashboard";
 import { CronPage } from "./pages/Cron";
 import { DatabasesPage } from "./pages/Databases";
 import { FilesPage } from "./pages/Files";
+import { KeysPage } from "./pages/Keys";
 import { LoginPage } from "./pages/Login";
 import { SecurityPage } from "./pages/Security";
 import { SiteFilesPage } from "./pages/SiteFiles";
@@ -32,6 +33,7 @@ export function App() {
           <Route path="logs" element={<LogsPage />} />
           <Route path="files" element={<FilesPage />} />
           <Route path="security" element={<SecurityPage />} />
+          <Route path="keys" element={<KeysPage />} />
           <Route path="sites/:id/files" element={<SiteFilesPage />} />
         </Route>
       </Route>

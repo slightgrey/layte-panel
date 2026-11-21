@@ -95,7 +95,10 @@ func (s *server) sessionExpired(ss store.Session, now time.Time) bool {
 func (s *server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		si, ok := sessionFrom(r.Context())
+		_, isKey := keyFrom(r.Context())
 		switch {
+		case isKey:
+			writeError(w, http.StatusForbidden, "session_required", "this endpoint can't be used with an API key")
 		case !ok:
 			writeError(w, http.StatusUnauthorized, "unauthenticated", "login required")
 		case si.Session.TOTPPending:

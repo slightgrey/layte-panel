@@ -76,6 +76,7 @@ const secretLabels: Record<string, string> = {
   wp_admin_url: "WordPress admin",
   wp_admin_user: "WordPress username",
   wp_admin_password: "WordPress password",
+  api_key: "API key",
 };
 
 /** One-time credentials of a finished job (if it generated any). */

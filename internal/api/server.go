@@ -39,6 +39,7 @@ type Deps struct {
 type server struct {
 	Deps
 	authLimiter *auth.RateLimiter
+	keyLimiter  *auth.RateLimiter
 	sites       *sites.Service
 }
 
@@ -49,7 +50,8 @@ func New(d Deps) http.Handler {
 	}
 	s := &server{
 		Deps:        d,
-		authLimiter: auth.NewRateLimiter(5, 10), // per IP: 5/min, burst 10
+		authLimiter: auth.NewRateLimiter(5, 10),    // per IP: 5/min, burst 10
+		keyLimiter:  auth.NewRateLimiter(120, 240), // per API key
 		sites:       &sites.Service{Store: d.Store, Agent: d.Agent, Jobs: d.Jobs},
 	}
 	mux := http.NewServeMux()
@@ -62,19 +64,37 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/auth/logout", s.requireAnySession(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", s.requireAuth(http.HandlerFunc(s.handleMe)))
 
-	// authed wraps a handler so it needs a fully logged-in session.
+	// authed: a logged-in admin only (sessions). Everything that changes
+	// something, plus files, jobs and key management, is session-only.
 	authed := func(h http.HandlerFunc) http.Handler { return s.requireAuth(h) }
+	// read: a logged-in admin, or an API key with the scope (GET only).
+	read := s.scoped
 
-	mux.Handle("GET /api/v1/dashboard", authed(s.handleDashboard))
+	mux.Handle("GET /api/v1/openapi.json", http.HandlerFunc(s.handleOpenAPI))
 
-	mux.Handle("GET /api/v1/sites", authed(s.handleListSites))
+	// Readable with API keys.
+	mux.Handle("GET /api/v1/dashboard", read("system:read", s.handleDashboard))
+	mux.Handle("GET /api/v1/sites", read("sites:read", s.handleListSites))
+	mux.Handle("GET /api/v1/sites/{id}", read("sites:read", s.handleGetSite))
+	mux.Handle("GET /api/v1/sites/{id}/vhost", read("sites:read", s.handleSiteVhost))
+	mux.Handle("GET /api/v1/php/versions", read("sites:read", s.handlePHPVersions))
+	mux.Handle("GET /api/v1/ssl", read("ssl:read", s.handleListSSL))
+	mux.Handle("GET /api/v1/databases", read("databases:read", s.handleListDatabases))
+	mux.Handle("GET /api/v1/cron", read("cron:read", s.handleListCron))
+	mux.Handle("GET /api/v1/security", read("security:read", s.handleSecurity))
+	mux.Handle("GET /api/v1/logs", read("logs:read", s.handleLogSources))
+	mux.Handle("GET /api/v1/logs/stream", read("logs:read", s.handleLogStream))
+
+	// Sites (session only).
 	mux.Handle("POST /api/v1/sites", authed(s.handleCreateSite))
+	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
 	mux.Handle("DELETE /api/v1/sites/{id}", authed(s.handleDeleteSite))
 	mux.Handle("POST /api/v1/sites/{id}/php", authed(s.handleSwitchPHP))
 	mux.Handle("POST /api/v1/sites/{id}/ssl", authed(s.handleIssueSSL))
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
-	mux.Handle("GET /api/v1/ssl", authed(s.handleListSSL))
+	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
 
+	// Files (session only).
 	mux.Handle("GET /api/v1/sites/{id}/files", authed(s.handleListFiles))
 	mux.Handle("GET /api/v1/sites/{id}/files/content", authed(s.handleReadFile))
 	mux.Handle("PUT /api/v1/sites/{id}/files/content", authed(s.handleSaveFile))
@@ -82,32 +102,24 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/{id}/files/upload", authed(s.handleUpload))
 	mux.Handle("POST /api/v1/sites/{id}/files/{op}", authed(s.handleFileOp))
 
-	mux.Handle("GET /api/v1/security", authed(s.handleSecurity))
+	// Security, cron, databases (session only).
 	mux.Handle("POST /api/v1/security/ufw/rules", authed(s.handleUFWAllow))
 	mux.Handle("DELETE /api/v1/security/ufw/rules/{num}", authed(s.handleUFWDelete))
 	mux.Handle("POST /api/v1/security/ufw/enabled", authed(s.handleUFWEnable))
 	mux.Handle("POST /api/v1/security/updates", authed(s.handleInstallUpdates))
-
-	mux.Handle("GET /api/v1/logs", authed(s.handleLogSources))
-	mux.Handle("GET /api/v1/logs/stream", authed(s.handleLogStream))
-
-	mux.Handle("GET /api/v1/cron", authed(s.handleListCron))
-	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
 	mux.Handle("PATCH /api/v1/cron/{id}", authed(s.handleUpdateCron))
 	mux.Handle("DELETE /api/v1/cron/{id}", authed(s.handleDeleteCron))
-
-	mux.Handle("GET /api/v1/databases", authed(s.handleListDatabases))
 	mux.Handle("POST /api/v1/databases", authed(s.handleCreateDatabase))
 	mux.Handle("DELETE /api/v1/databases/{name}", authed(s.handleDropDatabase))
 	mux.Handle("POST /api/v1/databases/{name}/password", authed(s.handleResetDBPassword))
-	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
-	mux.Handle("GET /api/v1/sites/{id}", authed(s.handleGetSite))
-	mux.Handle("GET /api/v1/sites/{id}/vhost", authed(s.handleSiteVhost))
-	mux.Handle("GET /api/v1/php/versions", authed(s.handlePHPVersions))
 
+	// Jobs and API keys (session only).
 	mux.Handle("GET /api/v1/jobs/{id}", authed(s.handleGetJob))
 	mux.Handle("GET /api/v1/jobs/{id}/events", authed(s.handleJobEvents))
 	mux.Handle("GET /api/v1/jobs/{id}/secret", authed(s.handleJobSecret))
+	mux.Handle("GET /api/v1/keys", authed(s.handleListKeys))
+	mux.Handle("POST /api/v1/keys", authed(s.handleCreateKey))
+	mux.Handle("DELETE /api/v1/keys/{id}", authed(s.handleRevokeKey))
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
@@ -121,6 +133,7 @@ func New(d Deps) http.Handler {
 		s.logRequests,
 		s.securityHeaders,
 		s.devCORS,
+		s.loadAPIKey,
 		s.loadSession,
 		s.csrf,
 	)

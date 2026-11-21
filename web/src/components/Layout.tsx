@@ -3,6 +3,7 @@ import {
   Database,
   FolderOpen,
   Globe,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   type LucideIcon,
@@ -30,6 +31,7 @@ const nav: NavItem[] = [
   { label: "Logs", to: "/logs", icon: ScrollText },
   { label: "Files", to: "/files", icon: FolderOpen },
   { label: "Security", to: "/security", icon: Shield },
+  { label: "API keys", to: "/keys", icon: KeyRound },
 ];
 
 export function Layout() {

@@ -1,0 +1,263 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Layte Panel API",
+    "version": "1",
+    "description": "Read-only API for external apps. Authenticate with an API key (create one under API keys in the panel): `Authorization: Bearer lyt_…`. Each endpoint needs the scope listed in its description. Limit: 120 requests per minute per key. Errors are `{\"error\": {\"code\": \"…\", \"message\": \"…\"}}`."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "security": [{ "apiKey": [] }],
+  "components": {
+    "securitySchemes": {
+      "apiKey": { "type": "http", "scheme": "bearer", "bearerFormat": "lyt_ + 43 base64url characters" }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error (401 invalid_api_key / api_key_expired, 403 insufficient_scope / session_required, 404 not_found, 429 rate_limited, 502 agent errors)",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "parameters": {
+      "SiteID": { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "object", "properties": { "code": { "type": "string" }, "message": { "type": "string" } } } }
+      },
+      "Section": {
+        "type": "object",
+        "description": "One dashboard section: either data or error.",
+        "properties": { "data": {}, "error": { "type": "object", "properties": { "code": { "type": "string" }, "message": { "type": "string" } } } }
+      },
+      "Site": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "domain": { "type": "string", "description": "ASCII (punycode) form" },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "system_user": { "type": "string" },
+          "root_path": { "type": "string" },
+          "php_version": { "type": "string", "examples": ["8.3"] },
+          "managed": { "type": "boolean", "description": "true if created by Layte Panel; imported sites are read-only" },
+          "source": { "type": "string", "enum": ["created", "imported"] },
+          "wordpress": { "type": "boolean" },
+          "ssl": { "type": "boolean" },
+          "db_name": { "type": "string" },
+          "db_user": { "type": "string" },
+          "status": { "type": "string", "enum": ["creating", "active", "failed", "deleting"] },
+          "nginx_conf": { "type": "string" },
+          "fpm_pool": { "type": "string" },
+          "cert_path": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Certificate": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "domains": { "type": "array", "items": { "type": "string" } },
+          "issuer": { "type": "string" },
+          "not_before": { "type": "string", "format": "date-time" },
+          "not_after": { "type": "string", "format": "date-time" },
+          "managed": { "type": "boolean" },
+          "path": { "type": "string" },
+          "days_left": { "type": "integer" },
+          "state": { "type": "string", "enum": ["ok", "expiring", "expired"], "description": "expiring = under 21 days (renewal should have happened at 30)" },
+          "site_id": { "type": "integer" },
+          "site_domain": { "type": "string" }
+        }
+      },
+      "Database": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "size": { "type": "integer", "description": "bytes (data + indexes)" },
+          "system": { "type": "boolean" },
+          "managed": { "type": "boolean" },
+          "user": { "type": "string" },
+          "site_id": { "type": "integer" },
+          "site_domain": { "type": "string" },
+          "wordpress": { "type": "boolean" }
+        }
+      },
+      "CronJob": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "site_id": { "type": "integer" },
+          "site_domain": { "type": "string" },
+          "schedule": { "type": "string", "examples": ["*/5 * * * *", "@daily"] },
+          "command": { "type": "string" },
+          "enabled": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "LogSource": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "label": { "type": "string" },
+          "domain": { "type": "string" },
+          "site_id": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/dashboard": {
+      "get": {
+        "summary": "Server overview",
+        "description": "Scope: `system:read`. Each section has `data` or `error`.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "system": { "$ref": "#/components/schemas/Section" },
+                    "services": { "$ref": "#/components/schemas/Section" },
+                    "versions": { "$ref": "#/components/schemas/Section" },
+                    "updates": { "$ref": "#/components/schemas/Section" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/sites": {
+      "get": {
+        "summary": "List sites",
+        "description": "Scope: `sites:read`. Managed and imported sites, ordered by domain.",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "sites": { "type": "array", "items": { "$ref": "#/components/schemas/Site" } } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/sites/{id}": {
+      "get": {
+        "summary": "Get a site",
+        "description": "Scope: `sites:read`.",
+        "parameters": [{ "$ref": "#/components/parameters/SiteID" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Site" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/sites/{id}/vhost": {
+      "get": {
+        "summary": "A site's nginx config",
+        "description": "Scope: `sites:read`.",
+        "parameters": [{ "$ref": "#/components/parameters/SiteID" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "path": { "type": "string" }, "content": { "type": "string" }, "managed": { "type": "boolean" } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/php/versions": {
+      "get": {
+        "summary": "Installed PHP-FPM versions",
+        "description": "Scope: `sites:read`.",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "versions": { "type": "array", "items": { "type": "string" } } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ssl": {
+      "get": {
+        "summary": "Certificates and expiry",
+        "description": "Scope: `ssl:read`. Every certbot certificate on the server, soonest expiry first.",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "certificates": { "type": "array", "items": { "$ref": "#/components/schemas/Certificate" } }, "email": { "type": "string" } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/databases": {
+      "get": {
+        "summary": "Databases",
+        "description": "Scope: `databases:read`. No passwords are ever returned.",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "engine": { "type": "string", "enum": ["mysql", "mariadb"] }, "databases": { "type": "array", "items": { "$ref": "#/components/schemas/Database" } } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/cron": {
+      "get": {
+        "summary": "Cron jobs",
+        "description": "Scope: `cron:read`.",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "jobs": { "type": "array", "items": { "$ref": "#/components/schemas/CronJob" } }, "wp_cron": { "type": "object", "additionalProperties": { "type": "string" } } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/security": {
+      "get": {
+        "summary": "Firewall, failed logins, updates",
+        "description": "Scope: `security:read`.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "overview": {
+                      "type": "object",
+                      "properties": {
+                        "ufw": { "type": "object", "properties": { "installed": { "type": "boolean" }, "active": { "type": "boolean" }, "default_incoming": { "type": "string" }, "rules": { "type": "array", "items": { "type": "object" } } } },
+                        "ssh_ports": { "type": "array", "items": { "type": "string" } },
+                        "reboot_required": { "type": "boolean" },
+                        "failed_logins": { "type": "array", "items": { "type": "object", "properties": { "ip": { "type": "string" }, "count": { "type": "integer" }, "last": { "type": "string" }, "users": { "type": "array", "items": { "type": "string" } } } } },
+                        "failed_total": { "type": "integer" }
+                      }
+                    },
+                    "updates": { "type": "object", "properties": { "total": { "type": "integer" }, "security": { "type": "integer" }, "packages": { "type": "array", "items": { "type": "object" } }, "checked_at": { "type": "string", "format": "date-time" } } }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/logs": {
+      "get": {
+        "summary": "Log files",
+        "description": "Scope: `logs:read`.",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "sources": { "type": "array", "items": { "$ref": "#/components/schemas/LogSource" } } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/logs/stream": {
+      "get": {
+        "summary": "Tail a log (Server-Sent Events)",
+        "description": "Scope: `logs:read`. First a `tail` event `{data}` with the last lines, then `append` events `{data, rotated}` as the file grows. `path` must be one of the paths from `/logs`.",
+        "parameters": [
+          { "name": "path", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "lines", "in": "query", "schema": { "type": "integer", "default": 200, "maximum": 2000 } }
+        ],
+        "responses": {
+          "200": { "description": "text/event-stream", "content": { "text/event-stream": { "schema": { "type": "string" } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  }
+}

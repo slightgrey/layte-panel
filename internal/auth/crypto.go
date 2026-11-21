@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -94,6 +95,30 @@ func NewToken() (token, hash string, err error) {
 	}
 	token = hex.EncodeToString(b)
 	return token, HashToken(token), nil
+}
+
+// APIKeyPrefix starts every API key, so leaked keys are easy to recognise
+// (and to find with secret scanners).
+const APIKeyPrefix = "lyt_"
+
+// NewAPIKey returns a new API key ("lyt_" + 43 base64url chars, 256 bits),
+// its hash for storage, and a short display prefix.
+func NewAPIKey() (token, hash, display string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", "", err
+	}
+	token = APIKeyPrefix + base64.RawURLEncoding.EncodeToString(b)
+	return token, HashToken(token), token[:len(APIKeyPrefix)+6], nil
+}
+
+// LooksLikeAPIKey checks the format before any database lookup.
+func LooksLikeAPIKey(s string) bool {
+	if len(s) != len(APIKeyPrefix)+43 || s[:len(APIKeyPrefix)] != APIKeyPrefix {
+		return false
+	}
+	_, err := base64.RawURLEncoding.DecodeString(s[len(APIKeyPrefix):])
+	return err == nil
 }
 
 // HashToken is the stored form of a token.
