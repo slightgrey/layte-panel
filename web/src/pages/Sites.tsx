@@ -1,6 +1,6 @@
-import { Lock, RefreshCw, Search } from "lucide-react";
+import { Lock, Plus, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useScanSites, useSites } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
@@ -14,6 +14,7 @@ import { SiteBadges } from "./SiteBadges";
 export function SitesPage() {
   const sites = useSites();
   const scan = useScanSites();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const autoScanned = useRef(false);
 
@@ -41,6 +42,9 @@ export function SitesPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => scan.mutate()} disabled={scan.isPending}>
             <RefreshCw className={scan.isPending ? "animate-spin" : ""} /> Scan server
+          </Button>
+          <Button onClick={() => navigate("/sites/new")}>
+            <Plus /> New site
           </Button>
         </div>
       </div>

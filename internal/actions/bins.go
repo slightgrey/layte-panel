@@ -10,6 +10,7 @@ const (
 	useraddBin = "/usr/sbin/useradd"
 	usermodBin = "/usr/sbin/usermod"
 	userdelBin = "/usr/sbin/userdel"
+	gpasswdBin = "/usr/bin/gpasswd"
 )
 
 // phpBin is /usr/bin/phpX.Y; phpFPMBin is /usr/sbin/php-fpmX.Y. The version

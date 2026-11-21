@@ -1,6 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { Site, SitesResponse, ScanResponse, Vhost } from "./types";
+import type { CreateSiteRequest, DeleteSiteRequest, JobStarted, Site, SitesResponse, ScanResponse, Vhost } from "./types";
+
+/** POST /sites: starts a creation job. */
+export function useCreateSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateSiteRequest) => api<JobStarted>("POST", "/sites", req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sitesKey }),
+  });
+}
+
+/** DELETE /sites/{id}: starts a deletion job. */
+export function useDeleteSite(id: number) {
+  return useMutation({
+    mutationFn: (req: DeleteSiteRequest) => api<JobStarted>("DELETE", `/sites/${id}`, req),
+  });
+}
 
 export const sitesKey = ["sites"] as const;
 export const siteKey = (id: number) => ["sites", id] as const;

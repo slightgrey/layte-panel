@@ -1,15 +1,42 @@
-import { ArrowLeft, ExternalLink, Info } from "lucide-react";
-import type { ReactNode } from "react";
-import { Link, useParams } from "react-router";
-import { useSite, useSiteVhost } from "@/api/sites";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ExternalLink, Info, Trash2 } from "lucide-react";
+import { type FormEvent, type ReactNode, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { siteKey, sitesKey, useDeleteSite, useSite, useSiteVhost } from "@/api/sites";
 import type { Site } from "@/api/types";
+import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
+import { Checkbox, Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { FormError } from "./AuthShell";
 import { SiteBadges } from "./SiteBadges";
 
 export function SiteDetailPage() {
   const id = Number(useParams().id);
   const site = useSite(id);
+  const [params, setParams] = useSearchParams();
+  const jobId = params.get("job");
+  const qc = useQueryClient();
+
+  if (jobId && site.error) {
+    // The site row is removed when creation fails and is fully rolled back.
+    return (
+      <div className="mx-auto max-w-5xl">
+        <BackLink />
+        <Card>
+          <CardHeader>
+            <CardTitle>Creating site</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <JobProgress jobId={jobId} />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (site.isPending) {
     return (
@@ -42,8 +69,33 @@ export function SiteDetailPage() {
           >
             Visit <ExternalLink className="size-3.5" />
           </a>
+          {s.managed && s.status !== "creating" && s.status !== "deleting" && (
+            <div className="ml-auto">
+              <DeleteSite site={s} />
+            </div>
+          )}
         </div>
       </div>
+
+      {jobId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{s.status === "creating" ? "Creating site" : "Job"}</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setParams({}, { replace: true })}>
+              Dismiss
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <JobProgress
+              jobId={jobId}
+              onDone={() => {
+                qc.invalidateQueries({ queryKey: siteKey(id) });
+                qc.invalidateQueries({ queryKey: sitesKey });
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {!s.managed && (
         <div className="flex items-start gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-sm">
@@ -58,6 +110,84 @@ export function SiteDetailPage() {
       <OverviewCard site={s} />
       <VhostCard site={s} />
     </div>
+  );
+}
+
+/** Delete button + confirmation dialog; shows the deletion job's progress. */
+function DeleteSite({ site }: { site: Site }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [removeFiles, setRemoveFiles] = useState(true);
+  const [dropDb, setDropDb] = useState(true);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [finished, setFinished] = useState(false);
+  const del = useDeleteSite(site.id);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    del.mutate({ confirm_domain: confirm, remove_files: removeFiles, drop_db: dropDb }, { onSuccess: (r) => setJobId(r.job_id) });
+  };
+  const close = () => {
+    setOpen(false);
+    setJobId(null);
+    setFinished(false);
+    setConfirm("");
+    del.reset();
+  };
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="text-destructive">
+        <Trash2 /> Delete
+      </Button>
+      <Dialog open={open} onClose={close} title={`Delete ${site.domain}`} locked={Boolean(jobId) && !finished}>
+        {jobId ? (
+          <JobProgress
+            jobId={jobId}
+            onDone={(ok) => {
+              setFinished(true);
+              qc.invalidateQueries({ queryKey: sitesKey });
+              qc.invalidateQueries({ queryKey: siteKey(site.id) });
+              if (ok) navigate("/sites", { replace: true });
+            }}
+          />
+        ) : (
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              This removes the nginx config and PHP-FPM pool, so the site stops being served.
+            </p>
+            <Checkbox
+              label="Delete all site files"
+              description={`Removes the Linux user ${site.system_user} and /home/${site.system_user}. This can't be undone.`}
+              checked={removeFiles}
+              onChange={(e) => setRemoveFiles(e.target.checked)}
+            />
+            {site.db_name && (
+              <Checkbox
+                label={`Drop database ${site.db_name}`}
+                description="Deletes the database and its user. This can't be undone."
+                checked={dropDb}
+                onChange={(e) => setDropDb(e.target.checked)}
+              />
+            )}
+            <Field label={`Type ${site.domain} to confirm`} htmlFor="confirm">
+              <Input id="confirm" autoComplete="off" spellCheck={false} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </Field>
+            <FormError message={del.error?.message} />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={close}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-destructive hover:bg-destructive/90" disabled={confirm.trim().toLowerCase() !== site.domain || del.isPending}>
+                Delete site
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+    </>
   );
 }
 

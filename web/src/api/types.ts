@@ -112,6 +112,47 @@ export interface Vhost {
   managed: boolean;
 }
 
+export interface JobEvent {
+  seq: number;
+  time: string;
+  type: "step" | "log" | "done";
+  step?: string;
+  status?: "running" | "done" | "failed" | "succeeded";
+  message?: string;
+}
+
+export interface JobInfo {
+  id: string;
+  kind: string;
+  site_id?: number;
+  status: "running" | "succeeded" | "failed";
+  error?: string;
+  events: JobEvent[];
+  has_secret: boolean;
+  created_at: string;
+  finished_at?: string;
+}
+
+export interface CreateSiteRequest {
+  domain: string;
+  aliases: string[];
+  username?: string;
+  php_version: string;
+  create_db: boolean;
+  wordpress?: { title: string; admin_user: string; admin_email: string };
+}
+
+export interface DeleteSiteRequest {
+  confirm_domain: string;
+  remove_files: boolean;
+  drop_db: boolean;
+}
+
+export interface JobStarted {
+  job_id: string;
+  site_id: number;
+}
+
 export interface Dashboard {
   system: Section<SystemInfo>;
   services: Section<Service[]>;

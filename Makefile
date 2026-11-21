@@ -49,9 +49,12 @@ vm-deploy: build-linux
 		install -m 0644 /tmp/layte.service /tmp/layte-agent.service /etc/systemd/system/; \
 		systemctl daemon-reload; systemctl enable --now layte-agent layte'
 
-# Placeholder: integration tests (test/integration) arrive with Phase 2.
+# Real system tests: build a linux test binary here, run it as root in the VM
+# against the running layte-agent (make vm-deploy first).
 test-integration:
-	@echo "no integration tests yet"
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags integration -o dist/layte-integration.test ./test/integration
+	multipass transfer dist/layte-integration.test $(VM):/tmp/layte-integration.test
+	multipass exec $(VM) -- sudo /tmp/layte-integration.test -test.v
 
 clean:
 	rm -rf layte layte.exe dist .dev

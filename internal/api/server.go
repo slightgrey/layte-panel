@@ -13,6 +13,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/auth"
 	"github.com/slightgrey/layte-panel/internal/config"
 	"github.com/slightgrey/layte-panel/internal/jobs"
+	"github.com/slightgrey/layte-panel/internal/sites"
 	"github.com/slightgrey/layte-panel/internal/store"
 )
 
@@ -38,6 +39,7 @@ type Deps struct {
 type server struct {
 	Deps
 	authLimiter *auth.RateLimiter
+	sites       *sites.Service
 }
 
 // New builds the full HTTP handler: routes wrapped in middleware.
@@ -48,6 +50,7 @@ func New(d Deps) http.Handler {
 	s := &server{
 		Deps:        d,
 		authLimiter: auth.NewRateLimiter(5, 10), // per IP: 5/min, burst 10
+		sites:       &sites.Service{Store: d.Store, Agent: d.Agent, Jobs: d.Jobs},
 	}
 	mux := http.NewServeMux()
 
@@ -65,6 +68,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/dashboard", authed(s.handleDashboard))
 
 	mux.Handle("GET /api/v1/sites", authed(s.handleListSites))
+	mux.Handle("POST /api/v1/sites", authed(s.handleCreateSite))
+	mux.Handle("DELETE /api/v1/sites/{id}", authed(s.handleDeleteSite))
 	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
 	mux.Handle("GET /api/v1/sites/{id}", authed(s.handleGetSite))
 	mux.Handle("GET /api/v1/sites/{id}/vhost", authed(s.handleSiteVhost))
