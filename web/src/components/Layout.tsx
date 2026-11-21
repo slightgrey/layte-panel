@@ -23,7 +23,7 @@ interface NavItem {
 
 const nav: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
-  { label: "Sites", icon: Globe },
+  { label: "Sites", to: "/sites", icon: Globe },
   { label: "SSL", icon: ShieldCheck },
   { label: "Databases", icon: Database },
   { label: "Cron", icon: Clock },
@@ -53,7 +53,7 @@ export function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 md:px-8">
           <Brand className="md:hidden" />
-          <span className="hidden text-sm text-muted-foreground md:block">Server overview</span>
+          <span className="hidden md:block" />
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{me.data?.user.username}</span>
             <Button variant="ghost" size="sm" onClick={onLogout} disabled={logout.isPending}>
@@ -84,7 +84,7 @@ function NavEntry({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={item.to}
-      end
+      end={item.to === "/"}
       className={({ isActive }) =>
         cn(base, isActive ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")
       }

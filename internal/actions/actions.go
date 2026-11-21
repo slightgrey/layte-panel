@@ -37,5 +37,9 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("services.status", true, 10*time.Second, d.servicesStatus),
 		agent.Def("versions.get", true, 20*time.Second, d.versions),
 		agent.Def("updates.pending", true, 60*time.Second, u.pending),
+
+		agent.Def("sites.discover", true, 20*time.Second, d.sitesDiscover),
+		agent.Def("php.versions", true, 5*time.Second, d.phpVersionsAction),
+		agent.Def("nginx.vhost_read", true, 5*time.Second, d.vhostRead),
 	)
 }

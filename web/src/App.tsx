@@ -3,6 +3,8 @@ import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
 import { DashboardPage } from "./pages/Dashboard";
 import { LoginPage } from "./pages/Login";
+import { SiteDetailPage } from "./pages/SiteDetail";
+import { SitesPage } from "./pages/Sites";
 import { TwoFactorPage } from "./pages/TwoFactor";
 
 export function App() {
@@ -13,6 +15,8 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="sites" element={<SitesPage />} />
+          <Route path="sites/:id" element={<SiteDetailPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

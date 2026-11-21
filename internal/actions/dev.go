@@ -21,8 +21,6 @@ import (
 //go:embed all:fixtures
 var fixturesFS embed.FS
 
-const seededMarker = ".layte-seeded"
-
 // DevDeps returns fake dependencies rooted at dir (e.g. ./.dev/fakeroot).
 // On first use dir is seeded with the embedded fake host, after which it is a
 // normal directory: sites created in dev mode are written there and show up
@@ -48,11 +46,10 @@ func DevDeps(dir string) (Deps, error) {
 	}, nil
 }
 
-// seedFakeRoot copies the embedded fixtures (except commands/) into dir once.
+// seedFakeRoot copies embedded fixtures (except commands/) that are missing
+// from dir. Existing files are left alone, so dev changes survive restarts
+// and new fixtures appear after an upgrade.
 func seedFakeRoot(dir string) error {
-	if _, err := os.Stat(filepath.Join(dir, seededMarker)); err == nil {
-		return nil
-	}
 	err := fs.WalkDir(fixturesFS, "fixtures", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -65,6 +62,9 @@ func seedFakeRoot(dir string) error {
 		if d.IsDir() {
 			return os.MkdirAll(dst, 0o755)
 		}
+		if _, err := os.Lstat(dst); err == nil {
+			return nil // already there
+		}
 		b, err := fixturesFS.ReadFile(p)
 		if err != nil {
 			return err
@@ -74,7 +74,7 @@ func seedFakeRoot(dir string) error {
 	if err != nil {
 		return fmt.Errorf("seed fake root %s: %w", dir, err)
 	}
-	return os.WriteFile(filepath.Join(dir, seededMarker), nil, 0o644)
+	return nil
 }
 
 // fixtureCommands maps "bin args" → fixture file under commands/.

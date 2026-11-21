@@ -76,6 +76,42 @@ export interface Updates {
   checked_at: string;
 }
 
+export interface Site {
+  id: number;
+  domain: string;
+  aliases: string[];
+  system_user: string;
+  root_path: string;
+  php_version: string;
+  managed: boolean;
+  source: "created" | "imported";
+  wordpress: boolean;
+  ssl: boolean;
+  db_name: string;
+  db_user: string;
+  status: "creating" | "active" | "failed" | "deleting";
+  nginx_conf: string;
+  fpm_pool: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SitesResponse {
+  sites: Site[];
+}
+
+export interface ScanResponse extends SitesResponse {
+  found: number;
+  added: number;
+  removed: number;
+}
+
+export interface Vhost {
+  path: string;
+  content: string;
+  managed: boolean;
+}
+
 export interface Dashboard {
   system: Section<SystemInfo>;
   services: Section<Service[]>;

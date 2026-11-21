@@ -29,6 +29,8 @@ type FS interface {
 	Exists(name string) (bool, error)
 	// LinkTarget reports whether name is a symlink and where it points.
 	LinkTarget(name string) (target string, isLink bool, err error)
+	// Resolve follows symlinks and returns the real (absolute) path.
+	Resolve(name string) (string, error)
 	WriteFileAtomic(name string, data []byte, perm fs.FileMode) error
 	MkdirAll(name string, perm fs.FileMode) error
 	Remove(name string) error
@@ -76,11 +78,11 @@ const devLinkMagic = "LAYTE-DEV-SYMLINK\n"
 
 const maxLinkHops = 8
 
-// resolve follows symlinks in the final path component. os.Root treats
+// Resolve follows symlinks in the final path component and returns the real path. os.Root treats
 // absolute link targets as escaping the root, but on a real server most
 // sites-enabled links are absolute (/etc/nginx/sites-available/...), so they
 // are resolved here: an absolute target is re-read relative to our root.
-func (r *RootFS) resolve(name string) (string, error) {
+func (r *RootFS) Resolve(name string) (string, error) {
 	p := "/" + rel(name)
 	for i := 0; i < maxLinkHops; i++ {
 		target, isLink, err := r.LinkTarget(p)
@@ -96,7 +98,7 @@ func (r *RootFS) resolve(name string) (string, error) {
 }
 
 func (r *RootFS) ReadFile(name string) ([]byte, error) {
-	p, err := r.resolve(name)
+	p, err := r.Resolve(name)
 	if err != nil {
 		return nil, err
 	}
