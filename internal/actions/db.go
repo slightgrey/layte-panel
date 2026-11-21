@@ -84,6 +84,61 @@ func (d Deps) dbDrop(ctx context.Context, _ agent.Actor, p DBDropParams) (any, e
 	return map[string]bool{"dropped": true}, nil
 }
 
+// DBInfo is one database on the server.
+type DBInfo struct {
+	Name   string `json:"name"`
+	Size   int64  `json:"size"` // bytes (data + indexes)
+	System bool   `json:"system"`
+}
+
+// dbList lists every database with its size (read-only).
+func (d Deps) dbList(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any, error) {
+	engine, err := d.dbEngine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out, err := d.mysqlQuery(ctx, "SELECT s.schema_name, COALESCE(SUM(t.data_length + t.index_length), 0)\n"+
+		"FROM information_schema.schemata s LEFT JOIN information_schema.tables t ON t.table_schema = s.schema_name\n"+
+		"GROUP BY s.schema_name ORDER BY s.schema_name;\n")
+	if err != nil {
+		return nil, err
+	}
+	dbs := []DBInfo{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		name, size, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		var n int64
+		fmt.Sscan(size, &n)
+		dbs = append(dbs, DBInfo{Name: name, Size: n, System: slices.Contains(systemDatabases, name)})
+	}
+	return map[string]any{"engine": engine, "databases": dbs}, nil
+}
+
+type DBPasswordParams struct {
+	User     string `json:"user"`
+	Password string `json:"password"` // redacted in audit
+}
+
+func (p DBPasswordParams) Validate() error {
+	if err := validate.DBIdent(p.User); err != nil {
+		return err
+	}
+	if p.User == "root" {
+		return fmt.Errorf("refusing to change root")
+	}
+	return validate.Password(p.Password)
+}
+
+// dbPasswordReset sets a new password for a database user.
+func (d Deps) dbPasswordReset(ctx context.Context, _ agent.Actor, p DBPasswordParams) (any, error) {
+	if err := d.mysql(ctx, fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';\n", p.User, p.Password)); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"changed": true}, nil
+}
+
 // dbEngine reports "mysql" or "mariadb", or an error if neither is installed.
 func (d Deps) dbEngine(ctx context.Context) (string, error) {
 	v := d.probe(ctx, "mysql", mysqlBin, []string{"--version"}, parseMySQLVersion)
@@ -95,6 +150,12 @@ func (d Deps) dbEngine(ctx context.Context) (string, error) {
 
 // mysql runs SQL as root over the local socket (Ubuntu's default auth for root).
 func (d Deps) mysql(ctx context.Context, sql string) error {
+	_, err := d.mysqlQuery(ctx, sql)
+	return err
+}
+
+// mysqlQuery is mysql returning the (tab-separated) output.
+func (d Deps) mysqlQuery(ctx context.Context, sql string) (string, error) {
 	res, err := d.Runner.RunCmd(ctx, system.Cmd{
 		Bin:   mysqlBin,
 		Args:  []string{"--batch", "--skip-column-names", "--user=root"},
@@ -104,9 +165,9 @@ func (d Deps) mysql(ctx context.Context, sql string) error {
 	if err != nil {
 		var ee *system.ExitError
 		if errors.As(err, &ee) {
-			return fmt.Errorf("mysql: %s", strings.TrimSpace(string(res.Stderr)))
+			return "", fmt.Errorf("mysql: %s", strings.TrimSpace(string(res.Stderr)))
 		}
-		return err
+		return "", err
 	}
-	return nil
+	return string(res.Stdout), nil
 }

@@ -82,7 +82,12 @@ const secretLabels: Record<string, string> = {
 function Credentials({ jobId }: { jobId: string }) {
   const secret = useJobSecret(jobId, true);
   if (secret.isPending || secret.error) return null; // 404 = none, or already shown
-  const entries = Object.entries(secret.data.secrets);
+  return <CredentialsPanel secrets={secret.data.secrets} />;
+}
+
+/** One-time credentials with copy buttons and a "shown once" warning. */
+export function CredentialsPanel({ secrets }: { secrets: Record<string, string> }) {
+  const entries = Object.entries(secrets);
   if (entries.length === 0) return null;
   return (
     <div className="rounded-lg border border-warning/40 bg-warning/5 p-4">

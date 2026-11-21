@@ -66,7 +66,7 @@ func TestParamValidation(t *testing.T) {
 func TestDBCreateUsesStdin(t *testing.T) {
 	d := devDeps(t)
 	pw := "Secret0Secret0Secret0Secret0AB"
-	if _, err := d.dbCreate(ctx, agent.Actor{}, DBCreateParams{Name: "shop", User: "shop", Password: pw}); err != nil {
+	if _, err := d.dbCreate(ctx, agent.Actor{}, DBCreateParams{Name: "shopx", User: "shopx", Password: pw}); err != nil {
 		t.Fatal(err)
 	}
 	fr := d.Runner.(*system.FakeRunner)

@@ -125,7 +125,9 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		case c.Bin == userdelBin && len(args) > 0:
 			u := args[len(args)-1]
 			return system.Result{}, root.RemoveAll("/home/" + u)
-		case c.Bin == usermodBin, c.Bin == gpasswdBin, c.Bin == mysqlBin:
+		case c.Bin == mysqlBin:
+			return fakeMySQL(root, c)
+		case c.Bin == usermodBin, c.Bin == gpasswdBin:
 			return system.Result{}, nil
 		case strings.HasPrefix(c.Bin, "/usr/bin/php") && len(args) > 0 && strings.HasSuffix(args[0], ".phar"):
 			return fakeWP(root, c)

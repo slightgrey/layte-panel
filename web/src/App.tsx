@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
 import { DashboardPage } from "./pages/Dashboard";
+import { DatabasesPage } from "./pages/Databases";
 import { LoginPage } from "./pages/Login";
 import { NewSitePage } from "./pages/NewSite";
 import { SiteDetailPage } from "./pages/SiteDetail";
@@ -21,6 +22,7 @@ export function App() {
           <Route path="sites/new" element={<NewSitePage />} />
           <Route path="sites/:id" element={<SiteDetailPage />} />
           <Route path="ssl" element={<SSLPage />} />
+          <Route path="databases" element={<DatabasesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

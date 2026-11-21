@@ -249,8 +249,12 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 			return err
 		}
 		undo.push("drop database", func(ctx context.Context) error {
+			s.Store.RemoveDatabase(ctx, site.DBName)
 			return s.Agent.Call(ctx, "db.drop", actor, actions.DBDropParams{Name: site.DBName, User: site.DBUser}, nil)
 		})
+		if err := s.Store.AddDatabase(context.WithoutCancel(ctx), store.Database{Name: site.DBName, User: site.DBUser, SiteID: site.ID}); err != nil {
+			return err
+		}
 		secrets["db_name"], secrets["db_user"], secrets["db_password"] = site.DBName, site.DBUser, pw
 	}
 
@@ -328,6 +332,7 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 			if err := call("db.drop", actions.DBDropParams{Name: site.DBName, User: site.DBUser}); err != nil {
 				return fail(err)
 			}
+			s.Store.RemoveDatabase(context.WithoutCancel(ctx), site.DBName)
 		}
 		if req.RemoveFiles {
 			j.Step("Remove Linux user " + site.SystemUser + " and all site files")

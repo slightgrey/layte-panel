@@ -74,6 +74,11 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/{id}/ssl", authed(s.handleIssueSSL))
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
 	mux.Handle("GET /api/v1/ssl", authed(s.handleListSSL))
+
+	mux.Handle("GET /api/v1/databases", authed(s.handleListDatabases))
+	mux.Handle("POST /api/v1/databases", authed(s.handleCreateDatabase))
+	mux.Handle("DELETE /api/v1/databases/{name}", authed(s.handleDropDatabase))
+	mux.Handle("POST /api/v1/databases/{name}/password", authed(s.handleResetDBPassword))
 	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
 	mux.Handle("GET /api/v1/sites/{id}", authed(s.handleGetSite))
 	mux.Handle("GET /api/v1/sites/{id}/vhost", authed(s.handleSiteVhost))

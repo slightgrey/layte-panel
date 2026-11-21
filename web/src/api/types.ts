@@ -132,6 +132,26 @@ export interface CertificatesResponse {
   email: string;
 }
 
+export interface DatabaseRow {
+  name: string;
+  size: number;
+  system: boolean;
+  managed: boolean;
+  user?: string;
+  site_id?: number;
+  site_domain?: string;
+  wordpress?: boolean;
+}
+
+export interface DatabasesResponse {
+  engine: string;
+  databases: DatabaseRow[];
+}
+
+export interface SecretsResponse {
+  secrets: Record<string, string>;
+}
+
 export interface JobEvent {
   seq: number;
   time: string;

@@ -25,7 +25,7 @@ const nav: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
   { label: "Sites", to: "/sites", icon: Globe },
   { label: "SSL", to: "/ssl", icon: ShieldCheck },
-  { label: "Databases", icon: Database },
+  { label: "Databases", to: "/databases", icon: Database },
   { label: "Cron", icon: Clock },
   { label: "Logs", icon: ScrollText },
   { label: "Files", icon: FolderOpen },
