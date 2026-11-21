@@ -21,7 +21,8 @@ type Site struct {
 	Aliases    []string
 	User       string
 	PHPVersion string
-	SSL        bool // serve HTTPS with the Let's Encrypt cert CertName()
+	SSL        bool   // serve HTTPS with the Let's Encrypt cert CertName()
+	WebUser    string // nginx's worker user, owns the FPM socket ("" = www-data)
 }
 
 // CertName is the certbot certificate name Layte uses for the site. The

@@ -87,7 +87,7 @@ func Domains(primary string, list []string) ([]string, error) {
 func Username(s string) error { return auth.ValidateUsername(s) }
 
 // reservedUsers can never be used as site users.
-var reservedUsers = []string{"root", "www-data", "layte", "mysql", "nobody", "admin", "ubuntu", "daemon", "bin", "sys", "sync", "games", "man", "mail", "news", "backup", "list", "irc", "proxy", "syslog", "messagebus", "sshd"}
+var reservedUsers = []string{"root", "www-data", "nginx", "layte", "mysql", "nobody", "admin", "ubuntu", "daemon", "bin", "sys", "sync", "games", "man", "mail", "news", "backup", "list", "irc", "proxy", "syslog", "messagebus", "sshd"}
 
 // SiteUsername is Username plus a list of names that belong to the system.
 func SiteUsername(s string) error {

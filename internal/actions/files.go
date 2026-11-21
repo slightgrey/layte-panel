@@ -158,7 +158,7 @@ func (d Deps) jail(ctx context.Context, p FSParams) (root string, as system.Cred
 	if owner, ok := system.Owner(fi); ok && owner.UID != 0 {
 		return p.WebRoot, owner, true, nil
 	}
-	as, err = d.Users.Lookup("www-data")
+	as, err = d.Users.Lookup(d.webUser())
 	return p.WebRoot, as, true, err
 }
 

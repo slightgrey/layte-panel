@@ -74,7 +74,9 @@ func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParam
 	if _, err := d.Users.Lookup(p.Username); err != nil {
 		return nil, err
 	}
-	content, err := templates.Pool(p.site())
+	site := p.site()
+	site.WebUser = d.webUser() // the socket must be reachable by nginx's workers
+	content, err := templates.Pool(site)
 	if err != nil {
 		return nil, err
 	}

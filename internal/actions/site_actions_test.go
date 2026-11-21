@@ -150,3 +150,54 @@ func TestVhostWriteRemoveConfDOnly(t *testing.T) {
 		t.Error("vhost not removed")
 	}
 }
+
+func TestWebUserFromNginxConf(t *testing.T) {
+	tests := []struct {
+		name, nginxConf, existingUser, want string
+	}{
+		{"no nginx.conf", "", "", "www-data"},
+		{"ubuntu default", "user www-data;\nworker_processes auto;\n", "", "www-data"},
+		{"nginx user", "user nginx;\nworker_processes auto;\n", "nginx", "nginx"},
+		{"user with group", "user  nginx nginx;\n", "nginx", "nginx"},
+		{"commented out", "# user nginx;\n", "nginx", "www-data"},
+		{"user doesn't exist", "user ghost;\n", "", "www-data"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := devDeps(t)
+			d.FS.Remove("/etc/nginx/nginx.conf")
+			if tt.nginxConf != "" {
+				d.FS.WriteFileAtomic("/etc/nginx/nginx.conf", []byte(tt.nginxConf), 0o644)
+			}
+			if tt.existingUser != "" {
+				d.FS.MkdirAll("/home/"+tt.existingUser, 0o755) // DirUsers: a home dir = the user exists
+			}
+			if got := d.webUser(); got != tt.want {
+				t.Errorf("webUser() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// When nginx runs as "nginx", that user must own the FPM socket and join
+// the site's group; otherwise nginx gets "permission denied" (a 404 page).
+func TestSiteUsesNginxWorkerUser(t *testing.T) {
+	d := devDeps(t)
+	d.FS.WriteFileAtomic("/etc/nginx/nginx.conf", []byte("user nginx;\nhttp { include /etc/nginx/sites-enabled/*; }\n"), 0o644)
+	d.FS.MkdirAll("/home/nginx", 0o755)
+
+	if _, err := d.siteUserCreate(ctx, agent.Actor{}, UserParams{Username: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	fr := d.Runner.(*system.FakeRunner)
+	if last := fr.Cmds[len(fr.Cmds)-1].String(); !strings.Contains(last, "--groups acme nginx") {
+		t.Errorf("last cmd = %s", last)
+	}
+	if _, err := d.phpPoolWrite(ctx, agent.Actor{}, SiteConfigParams{Domain: "a.test", Username: "acme", PHPVersion: "8.3"}); err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := d.FS.ReadFile("/etc/php/8.3/fpm/pool.d/layte-a.test.conf")
+	if !strings.Contains(string(pool), "listen.owner = nginx\nlisten.group = nginx\n") {
+		t.Errorf("pool:\n%s", pool)
+	}
+}

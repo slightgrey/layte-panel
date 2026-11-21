@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"regexp"
+	"slices"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/system"
@@ -22,8 +24,25 @@ type UserParams struct {
 
 func (p UserParams) Validate() error { return validate.SiteUsername(p.Username) }
 
+// nginxUserDirective matches the `user` line in nginx.conf (worker user).
+var nginxUserDirective = regexp.MustCompile(`(?m)^[ \t]*user[ \t]+([a-z_][a-z0-9_-]{0,31})[ \t;]`)
+
+// webUser is the Linux user nginx's workers run as: the `user` directive in
+// nginx.conf if that user exists (some installs use "nginx"), else www-data.
+// It must be able to read site files and connect to the PHP-FPM socket.
+func (d Deps) webUser() string {
+	if b, err := d.FS.ReadFile(nginxDir + "/nginx.conf"); err == nil {
+		if m := nginxUserDirective.FindSubmatch(b); m != nil {
+			if _, err := d.Users.Lookup(string(m[1])); err == nil {
+				return string(m[1])
+			}
+		}
+	}
+	return "www-data"
+}
+
 // siteUserCreate creates the Linux user for a site (no login shell) and lets
-// nginx (www-data) read its files through group membership. Calling it again
+// nginx (webUser) read its files through group membership. Calling it again
 // for a user Layte already created is a no-op.
 func (d Deps) siteUserCreate(ctx context.Context, _ agent.Actor, p UserParams) (any, error) {
 	home := "/home/" + p.Username
@@ -45,8 +64,9 @@ func (d Deps) siteUserCreate(ctx context.Context, _ agent.Actor, p UserParams) (
 	if err := d.FS.WriteFileAtomic(home+"/"+siteUserMarker, []byte("created by Layte Panel\n"), 0o644); err != nil {
 		return nil, err
 	}
-	if res, err := d.Runner.Run(ctx, usermodBin, "--append", "--groups", p.Username, "www-data"); err != nil {
-		return nil, fmt.Errorf("add www-data to group %s: %s", p.Username, res.Output())
+	web := d.webUser()
+	if res, err := d.Runner.Run(ctx, usermodBin, "--append", "--groups", p.Username, web); err != nil {
+		return nil, fmt.Errorf("add %s to group %s: %s", web, p.Username, res.Output())
 	}
 	return map[string]bool{"created": true}, nil
 }
@@ -62,8 +82,11 @@ func (d Deps) siteUserRemove(ctx context.Context, _ agent.Actor, p UserParams) (
 	if ok, _ := d.FS.Exists("/home/" + p.Username + "/" + siteUserMarker); !ok {
 		return nil, agent.Errorf(agent.CodeInvalidParams, "user %q wasn't created by Layte Panel; refusing to delete it", p.Username)
 	}
-	// Drop www-data from the user's group first, so userdel can remove the group.
-	d.Runner.Run(ctx, gpasswdBin, "--delete", "www-data", p.Username)
+	// Drop the web user from the user's group first, so userdel can remove the
+	// group. (Both names: nginx's user may have changed since the site was made.)
+	for _, web := range slices.Compact([]string{d.webUser(), "www-data"}) {
+		d.Runner.Run(ctx, gpasswdBin, "--delete", web, p.Username)
+	}
 	if res, err := d.Runner.Run(ctx, userdelBin, "--force", "--remove", p.Username); err != nil {
 		return nil, fmt.Errorf("userdel %s: %s", p.Username, res.Output())
 	}
