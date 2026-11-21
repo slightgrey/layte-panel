@@ -22,4 +22,7 @@ export const useDeleteRule = () =>
 
 export const useSetFirewall = () => useSecurityMutation((enable: boolean) => api<void>("POST", "/security/ufw/enabled", { enable }));
 
+/** POST /security/cloudflare: turn "Behind Cloudflare" on (or update its list) or off. */
+export const useSetCloudflare = () => useSecurityMutation((enabled: boolean) => api<void>("POST", "/security/cloudflare", { enabled }));
+
 export const useInstallUpdates = () => useMutation({ mutationFn: () => api<JobStarted>("POST", "/security/updates") });

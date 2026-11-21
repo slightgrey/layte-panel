@@ -51,6 +51,8 @@ Every change made through the agent (who, what, arguments with secrets redacted,
 - **Restrict the panel:** use `--allow-ip` (or edit `allow` lines in `layte-panel.conf`) so only your IPs can reach it, or skip the domain and use an SSH tunnel.
 - **SSH:** use key-only logins (`PasswordAuthentication no`) and consider fail2ban.
 - **Firewall:** keep ufw on. The Security page won't let you remove the rules for SSH, 80 or 443.
+- **Sites behind Cloudflare's proxy:** turn on **Behind Cloudflare** on the Security page, so nginx, PHP and WordPress see real visitor IPs (logs and login lockouts depend on them). It writes `/etc/nginx/conf.d/layte-cloudflare-realip.conf`, which trusts the `CF-Connecting-IP` header only on requests from Cloudflare's address ranges, so direct visitors can't fake an IP. The list ships with each release; after an upgrade, the page offers to update it.
+- **Keep the panel off the CDN:** point the panel's domain straight at the server (Cloudflare "DNS only"), not through a proxy.
 - **Backups:** back up `/etc/layte/secret.key` and the database (see [upgrade.md](upgrade.md)).
 
 ## Reporting a vulnerability

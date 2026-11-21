@@ -215,6 +215,16 @@ export interface FailedLogin {
   users: string[];
 }
 
+/** "Behind Cloudflare": real visitor IPs for sites using Cloudflare's proxy. */
+export interface CloudflareStatus {
+  enabled: boolean;
+  up_to_date: boolean; // the file matches this version's list of Cloudflare ranges
+  ranges: number;
+  list_date: string;
+  conflicts?: string[]; // other nginx files that already set this up for all sites
+  problem?: string; // why it can't be turned on here
+}
+
 export interface SecurityResponse {
   overview: {
     ufw: { installed: boolean; active: boolean; default_incoming: string; rules: UFWRule[] };
@@ -222,6 +232,7 @@ export interface SecurityResponse {
     reboot_required: boolean;
     failed_logins: FailedLogin[];
     failed_total: number;
+    cloudflare: CloudflareStatus;
   };
   updates: Updates;
   updates_error?: SectionError;

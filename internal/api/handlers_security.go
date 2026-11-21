@@ -80,6 +80,16 @@ func (s *server) handleUFWEnable(w http.ResponseWriter, r *http.Request) {
 	s.securityCall(w, r, "ufw.set_enabled", p)
 }
 
+// POST /api/v1/security/cloudflare {enabled} — "Behind Cloudflare" (real
+// visitor IPs). enabled=true also rewrites the file with this version's list.
+func (s *server) handleCloudflare(w http.ResponseWriter, r *http.Request) {
+	var p actions.CloudflareParams
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	s.securityCall(w, r, "cloudflare.set_realip", p)
+}
+
 // POST /api/v1/security/updates — install security updates (job).
 func (s *server) handleInstallUpdates(w http.ResponseWriter, r *http.Request) {
 	actor := actorOf(r)

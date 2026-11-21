@@ -1,7 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Download, Lock, Plus, RotateCw, Shield, ShieldOff, Trash2 } from "lucide-react";
+import { Cloud, Download, Lock, Plus, RefreshCw, RotateCw, Shield, ShieldOff, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { securityKey, useAllowRule, useDeleteRule, useInstallUpdates, useSecurity, useSetFirewall } from "@/api/security";
+import {
+  securityKey,
+  useAllowRule,
+  useDeleteRule,
+  useInstallUpdates,
+  useSecurity,
+  useSetCloudflare,
+  useSetFirewall,
+} from "@/api/security";
 import type { SecurityResponse } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
@@ -23,7 +31,7 @@ export function SecurityPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Security</h1>
-        <p className="text-sm text-muted-foreground">Firewall, security updates and failed SSH logins.</p>
+        <p className="text-sm text-muted-foreground">Firewall, security updates, failed SSH logins and Cloudflare.</p>
       </div>
       {ov.reboot_required && (
         <div role="alert" className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
@@ -35,7 +43,61 @@ export function SecurityPage() {
         <FailedLoginsCard data={sec.data} />
       </div>
       <FirewallCard data={sec.data} />
+      <CloudflareCard data={sec.data} />
     </div>
+  );
+}
+
+function CloudflareCard({ data }: { data: SecurityResponse }) {
+  const cf = data.overview.cloudflare;
+  const set = useSetCloudflare();
+  const blocked = !!cf.problem || (cf.conflicts?.length ?? 0) > 0;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Behind Cloudflare</CardTitle>
+        <div className="flex items-center gap-2">
+          {cf.enabled ? <Badge variant="success">on</Badge> : <Badge>off</Badge>}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={set.isPending || (!cf.enabled && blocked)}
+            onClick={() => {
+              if (cf.enabled && !confirm("Turn off real visitor IPs? Sites behind Cloudflare's proxy will see Cloudflare's addresses again.")) return;
+              set.mutate(!cf.enabled);
+            }}
+          >
+            <Cloud /> {cf.enabled ? "Turn off" : "Turn on"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Turn this on if any site uses Cloudflare's proxy (orange cloud). nginx, PHP and WordPress then see your visitors' real IP
+          addresses instead of Cloudflare's, which logs and login lockouts need. Only requests that really come from Cloudflare are
+          trusted, so it's safe for sites that don't use the proxy.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {cf.ranges} Cloudflare address ranges, list from {cf.list_date}. It's updated with Layte Panel releases.
+        </p>
+        {cf.enabled && !cf.up_to_date && (
+          <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+            This version of Layte Panel has a newer list of Cloudflare addresses.
+            <Button size="sm" disabled={set.isPending} onClick={() => set.mutate(true)}>
+              <RefreshCw /> Update
+            </Button>
+          </div>
+        )}
+        {cf.problem && <p className="text-sm text-destructive">Can't turn this on: {cf.problem}.</p>}
+        {!cf.enabled && (cf.conflicts?.length ?? 0) > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Real visitor IPs are already set up in <span className="font-mono text-xs">{cf.conflicts!.join(", ")}</span>. Remove that
+            file to let Layte Panel manage it (and keep its list up to date).
+          </p>
+        )}
+        <FormError message={set.error?.message} />
+      </CardContent>
+    </Card>
   );
 }
 

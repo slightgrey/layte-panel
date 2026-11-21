@@ -134,3 +134,28 @@ func TestProtectsRule(t *testing.T) {
 		}
 	}
 }
+
+func TestCloudflareToggle(t *testing.T) {
+	_, c, _ := siteEnv(t)
+	cf := func() map[string]any {
+		return getSecurity(t, c).body["overview"].(map[string]any)["cloudflare"].(map[string]any)
+	}
+	if st := cf(); st["enabled"] != false || st["ranges"].(float64) < 10 || st["list_date"] == "" {
+		t.Fatalf("initial: %v", st)
+	}
+	if st, b := c.do("POST", "/api/v1/security/cloudflare", map[string]bool{"enabled": true}); st != 204 {
+		t.Fatalf("enable: %d %v", st, b)
+	}
+	if st := cf(); st["enabled"] != true || st["up_to_date"] != true {
+		t.Errorf("after enable: %v", st)
+	}
+	if st, b := c.do("POST", "/api/v1/security/cloudflare", map[string]any{"enabled": "yes"}); st != 400 {
+		t.Errorf("bad body: %d %v", st, b)
+	}
+	if st, b := c.do("POST", "/api/v1/security/cloudflare", map[string]bool{"enabled": false}); st != 204 {
+		t.Fatalf("disable: %d %v", st, b)
+	}
+	if st := cf(); st["enabled"] != false {
+		t.Errorf("after disable: %v", st)
+	}
+}

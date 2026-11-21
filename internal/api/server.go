@@ -106,6 +106,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/security/ufw/rules", authed(s.handleUFWAllow))
 	mux.Handle("DELETE /api/v1/security/ufw/rules/{num}", authed(s.handleUFWDelete))
 	mux.Handle("POST /api/v1/security/ufw/enabled", authed(s.handleUFWEnable))
+	mux.Handle("POST /api/v1/security/cloudflare", authed(s.handleCloudflare))
 	mux.Handle("POST /api/v1/security/updates", authed(s.handleInstallUpdates))
 	mux.Handle("PATCH /api/v1/cron/{id}", authed(s.handleUpdateCron))
 	mux.Handle("DELETE /api/v1/cron/{id}", authed(s.handleDeleteCron))

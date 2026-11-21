@@ -222,7 +222,8 @@
                         "ssh_ports": { "type": "array", "items": { "type": "string" } },
                         "reboot_required": { "type": "boolean" },
                         "failed_logins": { "type": "array", "items": { "type": "object", "properties": { "ip": { "type": "string" }, "count": { "type": "integer" }, "last": { "type": "string" }, "users": { "type": "array", "items": { "type": "string" } } } } },
-                        "failed_total": { "type": "integer" }
+                        "failed_total": { "type": "integer" },
+                        "cloudflare": { "type": "object", "description": "Behind Cloudflare: real visitor IPs for proxied sites.", "properties": { "enabled": { "type": "boolean" }, "up_to_date": { "type": "boolean" }, "ranges": { "type": "integer" }, "list_date": { "type": "string" }, "conflicts": { "type": "array", "items": { "type": "string" } }, "problem": { "type": "string" } } }
                       }
                     },
                     "updates": { "type": "object", "properties": { "total": { "type": "integer" }, "security": { "type": "integer" }, "packages": { "type": "array", "items": { "type": "object" } }, "checked_at": { "type": "string", "format": "date-time" } } }

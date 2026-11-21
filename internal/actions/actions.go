@@ -86,6 +86,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("ufw.allow", false, 20*time.Second, d.ufwAllow),
 		agent.Def("ufw.delete", false, 20*time.Second, d.ufwDelete),
 		agent.Def("ufw.set_enabled", false, 30*time.Second, d.ufwSetEnabled),
+		agent.Def("cloudflare.set_realip", false, 30*time.Second, d.cloudflareSet),
 		agent.Def("updates.install", false, 30*time.Minute, u.install),
 	)
 }
