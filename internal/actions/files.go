@@ -42,7 +42,7 @@ func (h helperFileOps) Run(ctx context.Context, as system.Credential, req fileop
 	defer cancel()
 	res, err := h.runner.RunCmd(ctx, system.Cmd{Bin: h.bin, Args: []string{"fsop"}, Stdin: in, As: &as})
 	if err != nil {
-		return fileops.Response{}, fmt.Errorf("file helper: %s", lastLines(res.Output(), 3))
+		return fileops.Response{}, fmt.Errorf("file helper: %s", failure(res, err, 3))
 	}
 	var out fileops.Response
 	if err := json.Unmarshal(res.Stdout, &out); err != nil {

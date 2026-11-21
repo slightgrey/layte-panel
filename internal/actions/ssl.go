@@ -124,7 +124,7 @@ func (d Deps) sslIssue(ctx context.Context, _ agent.Actor, p SSLIssueParams) (an
 		"--domains", strings.Join(append([]string{p.Domain}, p.Aliases...), ",")}
 	res, err := d.Runner.RunCmd(ctx, system.Cmd{Bin: certbot, Args: args})
 	if err != nil {
-		return nil, agent.Errorf("certbot_failed", "certbot: %s", lastLines(res.Output(), 6))
+		return nil, agent.Errorf("certbot_failed", "certbot: %s", failure(res, err, 6))
 	}
 	return map[string]string{"cert": templates.CertDir(p.Domain)}, nil
 }
@@ -152,7 +152,7 @@ func (d Deps) sslRevoke(ctx context.Context, _ agent.Actor, p DomainParams) (any
 	res, err := d.Runner.Run(ctx, certbot, "revoke", "--cert-name", templates.CertName(p.Domain),
 		"--non-interactive", "--delete-after-revoke", "--reason", "cessationofoperation")
 	if err != nil {
-		return nil, agent.Errorf("certbot_failed", "certbot revoke: %s", lastLines(res.Output(), 6))
+		return nil, agent.Errorf("certbot_failed", "certbot revoke: %s", failure(res, err, 6))
 	}
 	return map[string]bool{"revoked": true}, nil
 }
@@ -200,7 +200,7 @@ func (d Deps) wpSetURL(ctx context.Context, _ agent.Actor, p WPURLParams) (any, 
 			As:   &cred,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("wp option update %s: %s", opt, lastLines(res.Output(), 3))
+			return nil, fmt.Errorf("wp option update %s: %s", opt, failure(res, err, 3))
 		}
 	}
 	return map[string]string{"url": p.URL}, nil

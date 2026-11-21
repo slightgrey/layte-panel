@@ -47,6 +47,7 @@ func (s *Service) SwitchPHP(ctx context.Context, actor agent.Actor, site store.S
 		var undo undoStack
 		defer func() {
 			if err != nil {
+				j.FailStep()
 				j.Step("Rolling back")
 				undo.run(j)
 				j.Log("%s still runs on PHP %s.", site.Domain, oldVersion)

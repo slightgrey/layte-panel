@@ -225,6 +225,16 @@ func (j *Job) Step(name string) {
 	j.emit(Event{Type: "step", Step: name, Status: "running"})
 }
 
+// FailStep marks the running step as failed (e.g. before rolling back).
+func (j *Job) FailStep() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.current != "" {
+		j.emit(Event{Type: "step", Step: j.current, Status: "failed"})
+		j.current = ""
+	}
+}
+
 // Log adds a progress message.
 func (j *Job) Log(format string, args ...any) {
 	j.mu.Lock()

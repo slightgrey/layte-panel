@@ -334,7 +334,7 @@ func (u *updates) install(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 		return nil, agent.Errorf(agent.CodeNotFound, "unattended-upgrades is not installed (apt install unattended-upgrades)")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unattended-upgrade: %s", lastLines(res.Output(), 8))
+		return nil, fmt.Errorf("unattended-upgrade: %s", failure(res, err, 8))
 	}
 	return map[string]string{"output": lastLines(res.Output(), 15)}, nil
 }

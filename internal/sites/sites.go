@@ -197,6 +197,7 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 		if err == nil {
 			return
 		}
+		j.FailStep()
 		j.Step("Rolling back")
 		if undo.run(j) {
 			s.Store.DeleteSite(context.WithoutCancel(ctx), site.ID)

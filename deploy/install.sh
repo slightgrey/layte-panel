@@ -25,7 +25,7 @@ DATA=/var/lib/layte
 UNIT_DIR=/etc/systemd/system
 MARKER="# Managed by Layte Panel"
 
-VERSION="" LOCAL_BINARY="" STACK="ask" ADMIN="" PANEL_DOMAIN="" EMAIL="" YES=0
+VERSION="" LOCAL_BINARY="" STACK="ask" ADMIN="" ADMIN_SET=0 PANEL_DOMAIN="" EMAIL="" YES=0
 ALLOW_IPS=()
 
 say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -38,7 +38,8 @@ while [ $# -gt 0 ]; do
     --binary)       LOCAL_BINARY="${2:?}"; shift 2 ;;
     --with-stack)   STACK="yes"; shift ;;
     --no-stack)     STACK="no"; shift ;;
-    --admin)        ADMIN="${2:?}"; shift 2 ;;
+    --admin)        [ $# -ge 2 ] || die "--admin needs a value ('' = don't create one)"
+                    ADMIN="$2"; ADMIN_SET=1; shift 2 ;;
     --panel-domain) PANEL_DOMAIN="${2:?}"; shift 2 ;;
     --email)        EMAIL="${2:?}"; shift 2 ;;
     --allow-ip)     ALLOW_IPS+=("${2:?}"); shift 2 ;;
@@ -171,7 +172,9 @@ Description=Layte Panel agent (privileged helper)
 After=network.target
 
 [Service]
-User=root
+# Runs as root (the default). Don't set User=root explicitly: together with
+# NoNewPrivileges, systemd then drops CAP_SETUID and the agent can't start
+# helpers as site users.
 Group=layte
 ExecStart=$BIN agent --config $ETC/config.toml
 Restart=on-failure
@@ -329,7 +332,7 @@ if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
 fi
 
 # ---------------------------------------------------------------- first admin
-if [ -z "$ADMIN" ] && [ "$UPGRADE" = 0 ]; then
+if [ -z "$ADMIN" ] && [ "$ADMIN_SET" = 0 ] && [ "$UPGRADE" = 0 ]; then
   ADMIN="$(ask "Create an admin user now? Username (empty = later)" "admin")"
 fi
 if [ -n "$ADMIN" ]; then

@@ -145,7 +145,7 @@ func (d Deps) wpInstall(ctx context.Context, _ agent.Actor, p WPInstallParams) (
 			As:    &cred,
 		})
 		if err != nil {
-			return fmt.Errorf("wp %s: %s", args[0]+" "+args[1], lastLines(res.Output(), 5))
+			return fmt.Errorf("wp %s: %s", args[0]+" "+args[1], failure(res, err, 5))
 		}
 		return nil
 	}
@@ -205,4 +205,13 @@ func fakeWP(root system.FS, c system.Cmd) (system.Result, error) {
 	}
 	time.Sleep(300 * time.Millisecond) // feel a little like real work in the UI
 	return system.Result{Stdout: []byte("Success.\n")}, nil
+}
+
+// failure describes a failed command: its last output lines, or — when it
+// printed nothing (e.g. it couldn't even start) — the error itself.
+func failure(res system.Result, err error, n int) string {
+	if out := lastLines(res.Output(), n); out != "" {
+		return out
+	}
+	return err.Error()
 }
