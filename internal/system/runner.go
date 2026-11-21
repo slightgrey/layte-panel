@@ -1,6 +1,6 @@
 // Package system holds thin wrappers around the host: running commands and
-// reading files. Actions depend on the small interfaces here, so tests (and
-// `agent --dev`) can swap in fakes and never touch the real machine.
+// reading/writing files. Actions depend on the small interfaces here, so tests
+// (and `agent --dev`) can swap in fakes and never touch the real machine.
 package system
 
 import (
@@ -29,12 +29,32 @@ type Result struct {
 	ExitCode int
 }
 
+// Credential runs a command as another user (e.g. a site's user for WP-CLI).
+type Credential struct {
+	UID, GID uint32
+}
+
+// Cmd describes one program invocation. Secrets go in Stdin, never in Args:
+// arguments are visible to every user in `ps`.
+type Cmd struct {
+	Bin   string   // absolute path
+	Args  []string // passed as-is, never through a shell
+	Stdin []byte
+	Env   []string    // extra KEY=value pairs on top of the clean base env
+	Dir   string      // working directory; default "/"
+	As    *Credential // nil = run as the agent (root)
+}
+
+// String renders the command for logs. It never includes Stdin.
+func (c Cmd) String() string { return strings.TrimSpace(c.Bin + " " + strings.Join(c.Args, " ")) }
+
 // Runner runs a program. An interface is just a set of method signatures; any
 // type with these methods satisfies it automatically (no "implements" keyword).
 // It's declared here because both the real and the fake runner live here, and
 // actions accept it so they can be unit-tested.
 type Runner interface {
 	Run(ctx context.Context, bin string, args ...string) (Result, error)
+	RunCmd(ctx context.Context, c Cmd) (Result, error)
 }
 
 // ExitError is returned when the command ran but exited non-zero.
@@ -49,6 +69,11 @@ func (e *ExitError) Error() string {
 	return fmt.Sprintf("%s exited %d: %s", e.Bin, e.ExitCode, e.Stderr)
 }
 
+// Output returns combined stdout+stderr of a result, trimmed, for error messages.
+func (r Result) Output() string {
+	return strings.TrimSpace(string(r.Stdout) + "\n" + string(r.Stderr))
+}
+
 // ExecRunner runs real commands. Never through a shell: bin must be an absolute
 // path and args are passed as a list, so nothing is ever re-parsed.
 type ExecRunner struct{}
@@ -61,12 +86,16 @@ var cleanEnv = []string{
 	"LC_ALL=C.UTF-8",
 }
 
-func (ExecRunner) Run(ctx context.Context, bin string, args ...string) (Result, error) {
-	if !filepath.IsAbs(bin) {
-		return Result{}, fmt.Errorf("run %s: binary path must be absolute", bin)
+func (r ExecRunner) Run(ctx context.Context, bin string, args ...string) (Result, error) {
+	return r.RunCmd(ctx, Cmd{Bin: bin, Args: args})
+}
+
+func (ExecRunner) RunCmd(ctx context.Context, c Cmd) (Result, error) {
+	if !filepath.IsAbs(c.Bin) {
+		return Result{}, fmt.Errorf("run %s: binary path must be absolute", c.Bin)
 	}
-	if _, err := os.Stat(bin); errors.Is(err, fs.ErrNotExist) {
-		return Result{}, fmt.Errorf("run %s: %w", bin, ErrNotFound)
+	if _, err := os.Stat(c.Bin); errors.Is(err, fs.ErrNotExist) {
+		return Result{}, fmt.Errorf("run %s: %w", c.Bin, ErrNotFound)
 	}
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -74,9 +103,20 @@ func (ExecRunner) Run(ctx context.Context, bin string, args ...string) (Result, 
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = cleanEnv
-	cmd.Dir = "/"
+	cmd := exec.CommandContext(ctx, c.Bin, c.Args...)
+	cmd.Env = append(append([]string{}, cleanEnv...), c.Env...)
+	cmd.Dir = c.Dir
+	if cmd.Dir == "" {
+		cmd.Dir = "/"
+	}
+	if c.As != nil {
+		if err := setCredential(cmd, *c.As); err != nil {
+			return Result{}, err
+		}
+	}
+	if c.Stdin != nil {
+		cmd.Stdin = bytes.NewReader(c.Stdin)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -88,12 +128,12 @@ func (ExecRunner) Run(ctx context.Context, bin string, args ...string) (Result, 
 	case err == nil:
 		return res, nil
 	case ctx.Err() != nil:
-		return res, fmt.Errorf("run %s: %w", bin, ctx.Err())
+		return res, fmt.Errorf("run %s: %w", c.Bin, ctx.Err())
 	case errors.As(err, &ee):
 		res.ExitCode = ee.ExitCode()
-		return res, &ExitError{Bin: bin, ExitCode: res.ExitCode, Stderr: strings.TrimSpace(firstLine(stderr.String()))}
+		return res, &ExitError{Bin: c.Bin, ExitCode: res.ExitCode, Stderr: strings.TrimSpace(firstLine(stderr.String()))}
 	default:
-		return res, fmt.Errorf("run %s: %w", bin, err)
+		return res, fmt.Errorf("run %s: %w", c.Bin, err)
 	}
 }
 

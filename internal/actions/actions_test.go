@@ -13,7 +13,7 @@ import (
 var ctx = context.Background()
 
 func TestSystemInfo(t *testing.T) {
-	out, err := DevDeps().systemInfo(ctx, agent.Actor{}, agent.NoParams{})
+	out, err := devDeps(t).systemInfo(ctx, agent.Actor{}, agent.NoParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestSystemInfo(t *testing.T) {
 }
 
 func TestServicesStatus(t *testing.T) {
-	d := DevDeps()
+	d := devDeps(t)
 	out, err := d.servicesStatus(ctx, agent.Actor{}, agent.NoParams{})
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestParseSystemctlDedup(t *testing.T) {
 }
 
 func TestVersions(t *testing.T) {
-	out, err := DevDeps().versions(ctx, agent.Actor{}, agent.NoParams{})
+	out, err := devDeps(t).versions(ctx, agent.Actor{}, agent.NoParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestVersions(t *testing.T) {
 }
 
 func TestVersionsNotInstalled(t *testing.T) {
-	d := DevDeps()
+	d := devDeps(t)
 	d.Runner = &system.FakeRunner{} // nothing installed
 	out, err := d.versions(ctx, agent.Actor{}, agent.NoParams{})
 	if err != nil {
@@ -113,7 +113,7 @@ func TestParseMySQLVersion(t *testing.T) {
 }
 
 func TestUpdatesPendingCached(t *testing.T) {
-	d := DevDeps()
+	d := devDeps(t)
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	d.Now = func() time.Time { return now }
 	u := &updates{deps: d}
@@ -137,7 +137,7 @@ func TestUpdatesPendingCached(t *testing.T) {
 
 func TestRegister(t *testing.T) {
 	reg := agent.NewRegistry()
-	Register(reg, DevDeps())
+	Register(reg, devDeps(t))
 	for _, name := range []string{"system.info", "services.status", "versions.get", "updates.pending"} {
 		a, ok := reg.Lookup(name)
 		if !ok || !a.ReadOnly {

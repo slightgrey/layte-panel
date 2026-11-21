@@ -4,6 +4,10 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,14 +21,60 @@ import (
 //go:embed all:fixtures
 var fixturesFS embed.FS
 
-// DevDeps returns fake dependencies backed by the embedded fixtures.
-func DevDeps() Deps {
-	root, _ := fs.Sub(fixturesFS, "fixtures")
-	return Deps{
-		Runner: &system.FakeRunner{Handle: fixtureHandler(root)},
-		FS:     system.FixtureFS{Root: root},
-		Now:    time.Now,
+const seededMarker = ".layte-seeded"
+
+// DevDeps returns fake dependencies rooted at dir (e.g. ./.dev/fakeroot).
+// On first use dir is seeded with the embedded fake host, after which it is a
+// normal directory: sites created in dev mode are written there and show up
+// on the next scan. Commands are answered by a fake runner.
+func DevDeps(dir string) (Deps, error) {
+	if err := seedFakeRoot(dir); err != nil {
+		return Deps{}, err
 	}
+	root, err := system.OpenRootFS(dir)
+	if err != nil {
+		return Deps{}, err
+	}
+	root.NoChown = true
+	// Windows needs a special privilege for real symlinks.
+	root.EmulateSymlinks = runtime.GOOS == "windows"
+
+	cmds, _ := fs.Sub(fixturesFS, "fixtures/commands")
+	return Deps{
+		Runner: &system.FakeRunner{Handle: devHandler(cmds, root)},
+		FS:     root,
+		Users:  system.DirUsers{FS: root},
+		Now:    time.Now,
+	}, nil
+}
+
+// seedFakeRoot copies the embedded fixtures (except commands/) into dir once.
+func seedFakeRoot(dir string) error {
+	if _, err := os.Stat(filepath.Join(dir, seededMarker)); err == nil {
+		return nil
+	}
+	err := fs.WalkDir(fixturesFS, "fixtures", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath := strings.TrimPrefix(strings.TrimPrefix(p, "fixtures"), "/")
+		if relPath == "commands" && d.IsDir() {
+			return fs.SkipDir
+		}
+		dst := filepath.Join(dir, filepath.FromSlash(relPath))
+		if d.IsDir() {
+			return os.MkdirAll(dst, 0o755)
+		}
+		b, err := fixturesFS.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dst, b, 0o644)
+	})
+	if err != nil {
+		return fmt.Errorf("seed fake root %s: %w", dir, err)
+	}
+	return os.WriteFile(filepath.Join(dir, seededMarker), nil, 0o644)
 }
 
 // fixtureCommands maps "bin args" → fixture file under commands/.
@@ -38,23 +88,42 @@ var fixtureCommands = map[string]string{
 	"/usr/bin/apt list --upgradable": "apt-upgradable.txt",
 }
 
-func fixtureHandler(root fs.FS) func(string, []string) (system.Result, error) {
-	return func(bin string, args []string) (system.Result, error) {
-		key := strings.TrimSpace(bin + " " + strings.Join(args, " "))
-		file, ok := fixtureCommands[key]
-		if bin == systemctl && len(args) > 0 && args[0] == "show" {
-			file, ok = "systemctl-show.txt", true
+// devHandler answers read commands from fixtures and pretends mutating
+// commands (config tests, reloads, useradd, mysql, wp-cli) succeed. Commands
+// that create or delete users mirror the change in the fake root, so DirUsers
+// sees them.
+func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, error) {
+	return func(c system.Cmd) (system.Result, error) {
+		if file, ok := fixtureCommands[c.String()]; ok {
+			b, err := fs.ReadFile(cmds, file)
+			if err != nil {
+				return system.Result{}, err
+			}
+			if strings.HasSuffix(file, ".stderr.txt") {
+				return system.Result{Stderr: b}, nil
+			}
+			return system.Result{Stdout: b}, nil
 		}
-		if !ok {
-			return system.Result{}, fmt.Errorf("run %s: %w", bin, system.ErrNotFound)
+		args := c.Args
+		switch {
+		case c.Bin == systemctl && len(args) > 0 && args[0] == "show":
+			b, err := fs.ReadFile(cmds, "systemctl-show.txt")
+			return system.Result{Stdout: b}, err
+		case c.Bin == systemctl: // reload/restart
+			return system.Result{}, nil
+		case c.Bin == nginxBin && len(args) == 1 && args[0] == "-t":
+			return system.Result{Stderr: []byte("nginx: configuration file /etc/nginx/nginx.conf test is successful\n")}, nil
+		case strings.HasPrefix(path.Base(c.Bin), "php-fpm") && len(args) == 1 && args[0] == "-t":
+			return system.Result{Stderr: []byte("NOTICE: configuration file test is successful\n")}, nil
+		case c.Bin == useraddBin && len(args) > 0:
+			u := args[len(args)-1]
+			return system.Result{}, root.MkdirAll("/home/"+u, 0o750)
+		case c.Bin == userdelBin && len(args) > 0:
+			u := args[len(args)-1]
+			return system.Result{}, root.RemoveAll("/home/" + u)
+		case c.Bin == usermodBin, c.Bin == mysqlBin:
+			return system.Result{}, nil
 		}
-		b, err := fs.ReadFile(root, "commands/"+file)
-		if err != nil {
-			return system.Result{}, err
-		}
-		if strings.HasSuffix(file, ".stderr.txt") {
-			return system.Result{Stderr: b}, nil
-		}
-		return system.Result{Stdout: b}, nil
+		return system.Result{}, fmt.Errorf("run %s: %w", c.Bin, system.ErrNotFound)
 	}
 }

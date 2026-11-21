@@ -13,12 +13,17 @@ import (
 type Deps struct {
 	Runner system.Runner
 	FS     system.FS
+	Users  system.Users
 	Now    func() time.Time
 }
 
 // HostDeps returns dependencies that operate on the real machine.
-func HostDeps() Deps {
-	return Deps{Runner: system.ExecRunner{}, FS: system.HostFS{}, Now: time.Now}
+func HostDeps() (Deps, error) {
+	root, err := system.OpenRootFS("/")
+	if err != nil {
+		return Deps{}, err
+	}
+	return Deps{Runner: system.ExecRunner{}, FS: root, Users: system.HostUsers{}, Now: time.Now}, nil
 }
 
 // Register adds every action to the registry.

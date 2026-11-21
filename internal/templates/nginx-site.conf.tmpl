@@ -1,0 +1,46 @@
+# Managed by Layte Panel — do not edit by hand (site: {{.Domain}})
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
+
+    root {{.Dir}}/public;
+    index index.php index.html index.htm;
+
+    access_log {{.Dir}}/logs/access.log;
+    error_log  {{.Dir}}/logs/error.log;
+
+    client_max_body_size 64m;
+
+    # Never serve dotfiles (.git, .env, .htaccess), except ACME challenges.
+    location ~ /\.(?!well-known/) {
+        deny all;
+    }
+    location = /wp-config.php {
+        deny all;
+    }
+    # No PHP execution inside upload folders.
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTPS $https if_not_empty;
+        fastcgi_pass unix:{{.Socket}};
+        fastcgi_read_timeout 300;
+    }
+
+    location ~* \.(?:css|js|jpe?g|png|gif|ico|svg|webp|avif|woff2?)$ {
+        expires 30d;
+        access_log off;
+        try_files $uri =404;
+    }
+}

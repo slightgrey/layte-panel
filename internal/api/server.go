@@ -12,6 +12,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/auth"
 	"github.com/slightgrey/layte-panel/internal/config"
+	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/store"
 )
 
@@ -27,6 +28,7 @@ type Deps struct {
 	Store   *store.Store
 	Keyring *auth.Keyring
 	Agent   AgentCaller
+	Jobs    *jobs.Runner
 	Log     *slog.Logger
 	Version string
 	UI      fs.FS            // built web app (web/dist); nil shows a "not built" page
@@ -57,7 +59,14 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/auth/logout", s.requireAnySession(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", s.requireAuth(http.HandlerFunc(s.handleMe)))
 
-	mux.Handle("GET /api/v1/dashboard", s.requireAuth(http.HandlerFunc(s.handleDashboard)))
+	// authed wraps a handler so it needs a fully logged-in session.
+	authed := func(h http.HandlerFunc) http.Handler { return s.requireAuth(h) }
+
+	mux.Handle("GET /api/v1/dashboard", authed(s.handleDashboard))
+
+	mux.Handle("GET /api/v1/jobs/{id}", authed(s.handleGetJob))
+	mux.Handle("GET /api/v1/jobs/{id}/events", authed(s.handleJobEvents))
+	mux.Handle("GET /api/v1/jobs/{id}/secret", authed(s.handleJobSecret))
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")

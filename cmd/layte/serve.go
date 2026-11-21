@@ -14,6 +14,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/api"
 	"github.com/slightgrey/layte-panel/internal/auth"
+	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/store"
 	"github.com/slightgrey/layte-panel/web"
 )
@@ -50,6 +51,14 @@ func runServe(args []string) error {
 	}
 	go api.CleanupSessions(ctx, st, cfg, log, 10*time.Minute)
 
+	if n, err := st.FailInterruptedJobs(ctx); err != nil {
+		return err
+	} else if n > 0 {
+		log.Warn("marked jobs interrupted by the last restart as failed", "count", n)
+	}
+	runner := jobs.New(ctx, st, log, 2)
+	defer runner.Wait() // after shutdown, let jobs record their final state
+
 	srv := &http.Server{
 		Addr: cfg.Listen,
 		Handler: api.New(api.Deps{
@@ -57,6 +66,7 @@ func runServe(args []string) error {
 			Store:   st,
 			Keyring: kr,
 			Agent:   &agent.Client{SocketPath: cfg.AgentSocket, Auditor: storeAuditor{st}},
+			Jobs:    runner,
 			Log:     log,
 			Version: version,
 			UI:      web.Dist(),

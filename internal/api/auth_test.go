@@ -15,6 +15,7 @@ import (
 
 	"github.com/slightgrey/layte-panel/internal/auth"
 	"github.com/slightgrey/layte-panel/internal/config"
+	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/store"
 )
 
@@ -25,6 +26,18 @@ type testEnv struct {
 	st     *store.Store
 	secret string
 	now    time.Time
+	jobs   *jobs.Runner
+}
+
+// loggedIn returns a client that has completed password + TOTP.
+func (e *testEnv) loggedIn(t *testing.T) *client {
+	t.Helper()
+	c := e.client(t)
+	c.do("POST", "/api/v1/auth/login", map[string]string{"username": "admin", "password": testPassword})
+	if st, body := c.do("POST", "/api/v1/auth/totp", map[string]string{"code": c.code(0)}); st != 200 {
+		t.Fatalf("login: %d %v", st, body)
+	}
+	return c
 }
 
 // newTestEnv starts the API with a fresh DB and one admin ("admin").
@@ -52,14 +65,20 @@ func newTestEnvWithAgent(t *testing.T, ag AgentCaller) *testEnv {
 		t.Fatal(err)
 	}
 
-	env := &testEnv{st: st, secret: enr.Secret, now: time.Now()}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	jobsCtx, stopJobs := context.WithCancel(ctx)
+	runner := jobs.New(jobsCtx, st, log, 2)
+	t.Cleanup(func() { stopJobs(); runner.Wait() })
+
+	env := &testEnv{st: st, secret: enr.Secret, now: time.Now(), jobs: runner}
 	cfg := config.DevDefaults()
 	h := New(Deps{
 		Config:  cfg,
 		Store:   st,
 		Keyring: kr,
 		Agent:   ag,
-		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Jobs:    runner,
+		Log:     log,
 		Version: "test",
 		Now:     func() time.Time { return env.now },
 	})
