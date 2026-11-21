@@ -10,6 +10,9 @@ A lightweight, self-hosted control panel for unmanaged VPS running WordPress/PHP
 >   - Database management. Layte-created databases are editable; all others are read-only.
 >   - Per-site cron jobs, run as the site user.
 >   - Live log viewer for nginx, PHP-FPM and site logs.
+> - Phase 4 is done:
+>   - File manager: browse, edit, upload and download, always as the site's own user and jailed to the site folder. Imported sites are browse/download only.
+>   - Security page: ufw rules (with lockout protection), one-click security updates, and failed SSH logins.
 
 ## Design in one paragraph
 `layte serve` (unprivileged) serves the API and UI behind nginx. Anything that needs root goes over a Unix socket to `layte agent`, which runs only a fixed list of validated actions; there is no generic "run a command" action. Built for Ubuntu 24.04 servers with 1 vCPU and 1 GB RAM.

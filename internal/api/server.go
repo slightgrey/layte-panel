@@ -82,6 +82,12 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/{id}/files/upload", authed(s.handleUpload))
 	mux.Handle("POST /api/v1/sites/{id}/files/{op}", authed(s.handleFileOp))
 
+	mux.Handle("GET /api/v1/security", authed(s.handleSecurity))
+	mux.Handle("POST /api/v1/security/ufw/rules", authed(s.handleUFWAllow))
+	mux.Handle("DELETE /api/v1/security/ufw/rules/{num}", authed(s.handleUFWDelete))
+	mux.Handle("POST /api/v1/security/ufw/enabled", authed(s.handleUFWEnable))
+	mux.Handle("POST /api/v1/security/updates", authed(s.handleInstallUpdates))
+
 	mux.Handle("GET /api/v1/logs", authed(s.handleLogSources))
 	mux.Handle("GET /api/v1/logs/stream", authed(s.handleLogStream))
 

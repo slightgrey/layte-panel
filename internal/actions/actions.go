@@ -64,6 +64,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("logs.sources", true, 10*time.Second, d.logsSources),
 		agent.Def("logs.read", true, 10*time.Second, d.logsRead).WithQuiet(),
 		agent.Def("fs.read", true, 30*time.Second, d.fsRead),
+		agent.Def("security.overview", true, 15*time.Second, d.securityOverview),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
@@ -82,5 +83,9 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("ssl.revoke", false, time.Minute, d.sslRevoke),
 		agent.Def("cron.write", false, 15*time.Second, d.cronWrite),
 		agent.Def("fs.write", false, 30*time.Second, d.fsWrite).WithAuditSkip(auditFirstChunk),
+		agent.Def("ufw.allow", false, 20*time.Second, d.ufwAllow),
+		agent.Def("ufw.delete", false, 20*time.Second, d.ufwDelete),
+		agent.Def("ufw.set_enabled", false, 30*time.Second, d.ufwSetEnabled),
+		agent.Def("updates.install", false, 30*time.Minute, u.install),
 	)
 }

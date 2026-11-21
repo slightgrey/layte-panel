@@ -24,10 +24,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/sites"
 	"github.com/slightgrey/layte-panel/internal/store"
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 const domain = "layte-it.test"
@@ -39,15 +41,19 @@ type env struct {
 	actor  agent.Actor
 }
 
+func agentSocket() string {
+	if s := os.Getenv("LAYTE_AGENT_SOCKET"); s != "" {
+		return s
+	}
+	return "/run/layte/agent.sock"
+}
+
 func setup(t *testing.T) *env {
 	t.Helper()
 	if os.Geteuid() != 0 {
 		t.Skip("run as root inside the test VM")
 	}
-	sock := os.Getenv("LAYTE_AGENT_SOCKET")
-	if sock == "" {
-		sock = "/run/layte/agent.sock"
-	}
+	sock := agentSocket()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "it.db"))
 	if err != nil {
@@ -157,6 +163,22 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 	cronFile, err := os.ReadFile("/etc/cron.d/layte-layte-it_test")
 	if err != nil || !strings.Contains(string(cronFile), "*/5 * * * * layteittest cd ") {
 		t.Errorf("cron file: %v\n%s", err, cronFile)
+	}
+
+	// File manager: writes go through `layte fsop` as the site user.
+	ag := &agent.Client{SocketPath: agentSocket()}
+	fsp := actions.FSParams{Domain: domain, Username: "layteittest", Op: "write", Path: "public/it.txt", Chunk: []byte("hello"), Final: true}
+	if err := ag.Call(ctx, "fs.write", e.actor, actions.FSWriteParams(fsp), nil); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat("/home/layteittest/" + domain + "/public/it.txt"); err != nil {
+		t.Error(err)
+	} else if owner, _ := system.Owner(fi); owner.UID == 0 {
+		t.Error("file manager wrote a file as root")
+	}
+	fsp.Op, fsp.Path, fsp.Chunk = "list", "../..", nil
+	if err := ag.Call(ctx, "fs.read", e.actor, actions.FSReadParams(fsp), nil); err == nil {
+		t.Error("file manager escaped the site folder")
 	}
 
 	// Databases: create a standalone one, list it, drop it.

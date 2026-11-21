@@ -117,6 +117,24 @@ itself; the installer (or `make vm-deploy`) creates it.
   - The live tail is serve polling the agent once a second, pushed to the browser over SSE.
   - The poll action is "quiet" (debug-level logging), so it doesn't flood the journal.
 
+## File manager
+- Every operation (list, read, write chunk, mkdir, rename, delete) runs in a short-lived helper, `layte fsop`. The agent starts it with the site user's uid/gid, so the kernel enforces that user's permissions. The helper refuses to run as root.
+- The helper opens the site folder with `os.Root`, so no path or symlink can leave it. `..` is rejected outright.
+- **Layte sites:** the jail is `/home/<user>/<domain>`, with read and write access.
+- **Imported sites:** the jail is the web root from the nginx vhost. The agent checks that the root really belongs to that domain. Access is read-only, as the folder's owner (or `www-data` if root owns it).
+- Uploads and saves are sent in 512 KB chunks to a temp file that replaces the target only after the last chunk, so a broken upload never corrupts a file.
+- Only the first chunk of each file goes to the audit log, and file data is never stored there.
+- In dev mode the operations run in-process on `.dev/fakeroot`.
+
+## Security page
+- **Firewall:**
+  - `ufw status` is parsed; rules can be added (`ufw allow proto … from … to any port …`) or deleted by number.
+  - A delete only goes ahead if the rule text still matches what the user saw.
+  - Allow rules for the SSH port(s) (read from `sshd_config`), 80 and 443 can't be deleted.
+  - Enabling ufw first allows those ports.
+- **Updates:** "Install security updates" runs `unattended-upgrade` as a job (security pocket only, per the default config).
+- **Failed SSH logins:** read from the last 2 MB of `/var/log/auth.log` and grouped by IP.
+
 ## Adding an agent action
 1. Add a handler in `internal/actions/<domain>.go` with a typed params struct that implements
    `Validate() error`. Validate **everything** here, even if the API already did.

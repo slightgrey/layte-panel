@@ -198,6 +198,35 @@ export interface FileContent {
   read_only: boolean;
 }
 
+export interface UFWRule {
+  num: number;
+  to: string;
+  action: string;
+  from: string;
+  v6: boolean;
+  text: string;
+  locked: boolean;
+}
+
+export interface FailedLogin {
+  ip: string;
+  count: number;
+  last: string;
+  users: string[];
+}
+
+export interface SecurityResponse {
+  overview: {
+    ufw: { installed: boolean; active: boolean; default_incoming: string; rules: UFWRule[] };
+    ssh_ports: string[];
+    reboot_required: boolean;
+    failed_logins: FailedLogin[];
+    failed_total: number;
+  };
+  updates: Updates;
+  updates_error?: SectionError;
+}
+
 export interface JobEvent {
   seq: number;
   time: string;

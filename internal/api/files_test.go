@@ -132,8 +132,14 @@ func TestFileManagerImportedIsReadOnly(t *testing.T) {
 		t.Errorf("read imported file: %d", st)
 	}
 	for _, try := range []func() int{
-		func() int { st, _ := c.do("PUT", blog+"/content?path=x.php", map[string]string{"content": "x"}); return st },
-		func() int { st, _ := c.do("POST", blog+"/delete", map[string]string{"path": "wp-config.php"}); return st },
+		func() int {
+			st, _ := c.do("PUT", blog+"/content?path=x.php", map[string]string{"content": "x"})
+			return st
+		},
+		func() int {
+			st, _ := c.do("POST", blog+"/delete", map[string]string{"path": "wp-config.php"})
+			return st
+		},
 		func() int { st, _ := c.upload(t, blog+"/upload", map[string][]byte{"x.php": []byte("x")}); return st },
 	} {
 		if st := try(); st != 409 {

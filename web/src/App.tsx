@@ -6,6 +6,7 @@ import { CronPage } from "./pages/Cron";
 import { DatabasesPage } from "./pages/Databases";
 import { FilesPage } from "./pages/Files";
 import { LoginPage } from "./pages/Login";
+import { SecurityPage } from "./pages/Security";
 import { SiteFilesPage } from "./pages/SiteFiles";
 import { LogsPage } from "./pages/Logs";
 import { NewSitePage } from "./pages/NewSite";
@@ -30,6 +31,7 @@ export function App() {
           <Route path="cron" element={<CronPage />} />
           <Route path="logs" element={<LogsPage />} />
           <Route path="files" element={<FilesPage />} />
+          <Route path="security" element={<SecurityPage />} />
           <Route path="sites/:id/files" element={<SiteFilesPage />} />
         </Route>
       </Route>

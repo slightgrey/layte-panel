@@ -29,7 +29,7 @@ const nav: NavItem[] = [
   { label: "Cron", to: "/cron", icon: Clock },
   { label: "Logs", to: "/logs", icon: ScrollText },
   { label: "Files", to: "/files", icon: FolderOpen },
-  { label: "Security", icon: Shield },
+  { label: "Security", to: "/security", icon: Shield },
 ];
 
 export function Layout() {
