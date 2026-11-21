@@ -43,7 +43,7 @@ The installer checks the release's SHA-256 checksum. If [cosign](https://docs.si
 ## Reaching the panel
 The panel only listens on `127.0.0.1:8443`, so it is never exposed directly.
 
-- **With a domain** (`--panel-domain`): nginx serves it at `https://panel.example.com`. The nginx config is `/etc/nginx/sites-available/layte-panel.conf`; it is written by the installer and marked as managed by Layte Panel. Use `--allow-ip` to limit who can see the login page.
+- **With a domain** (`--panel-domain`): nginx serves it at `https://panel.example.com`. The nginx config is `/etc/nginx/sites-available/layte-panel.conf` (or `/etc/nginx/conf.d/layte-panel.conf` when your `nginx.conf` only includes `conf.d`); it is written by the installer and marked as managed by Layte Panel. Use `--allow-ip` to limit who can see the login page.
 - **Without a domain**: use an SSH tunnel from your computer, then open <http://localhost:8443>.
   ```bash
   ssh -L 8443:127.0.0.1:8443 you@your-server

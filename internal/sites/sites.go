@@ -235,8 +235,14 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 	})
 
 	j.Step("Configure nginx")
-	if err := call("nginx.vhost_write", cfg); err != nil {
+	var vhost struct {
+		Path string `json:"path"`
+	}
+	if err := s.Agent.Call(ctx, "nginx.vhost_write", actor, cfg, &vhost); err != nil {
 		return err
+	}
+	if vhost.Path != "" {
+		site.NginxConf = vhost.Path // the agent picks sites-available or conf.d
 	}
 	undo.push("remove nginx config", func(ctx context.Context) error {
 		return s.Agent.Call(ctx, "nginx.vhost_remove", actor, actions.DomainParams{Domain: site.Domain}, nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/system"
@@ -114,6 +115,28 @@ func (d Deps) phpPoolRemove(ctx context.Context, _ agent.Actor, p PoolRemovePara
 	return map[string]bool{"removed": true}, nil
 }
 
+// sitesEnabledInclude matches an active (not commented) include of sites-enabled.
+var sitesEnabledInclude = regexp.MustCompile(`(?m)^[ \t]*include[ \t]+(/etc/nginx/)?sites-enabled/`)
+
+// vhostFiles says where the site's vhost lives, plus its sites-enabled link
+// ("" for none). An existing vhost stays where it is. A new one goes to
+// sites-available + a sites-enabled link, unless nginx.conf doesn't include
+// sites-enabled: then to conf.d. (A file nginx never loads still passes
+// `nginx -t`, so the site would silently not be served.)
+func (d Deps) vhostFiles(domain string) (path, link string) {
+	confd := templates.VhostConfD(domain)
+	if ok, _ := d.FS.Exists(confd); ok {
+		return confd, ""
+	}
+	if ok, _ := d.FS.Exists(templates.VhostPath(domain)); ok {
+		return templates.VhostPath(domain), templates.VhostLink(domain)
+	}
+	if b, err := d.FS.ReadFile(nginxDir + "/nginx.conf"); err == nil && !sitesEnabledInclude.Match(b) {
+		return confd, ""
+	}
+	return templates.VhostPath(domain), templates.VhostLink(domain)
+}
+
 // nginxVhostWrite renders and safely installs + enables the site's vhost.
 func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigParams) (any, error) {
 	if err := d.requireInstalledPHP(p.PHPVersion); err != nil {
@@ -130,9 +153,9 @@ func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigPa
 	if err != nil {
 		return nil, err
 	}
-	path := templates.VhostPath(p.Domain)
+	path, link := d.vhostFiles(p.Domain)
 	err = system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
-		Path: path, Content: content, Link: templates.VhostLink(p.Domain), Test: nginxTest, Reload: nginxReload,
+		Path: path, Content: content, Link: link, Test: nginxTest, Reload: nginxReload,
 	})
 	if err != nil {
 		return nil, configError(err)
@@ -148,8 +171,9 @@ func (p DomainParams) Validate() error { return validDomain(p.Domain) }
 
 // nginxVhostRemove disables and removes the site's vhost (idempotent).
 func (d Deps) nginxVhostRemove(ctx context.Context, _ agent.Actor, p DomainParams) (any, error) {
+	path, link := d.vhostFiles(p.Domain)
 	err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{
-		Path: templates.VhostPath(p.Domain), Link: templates.VhostLink(p.Domain), Test: nginxTest, Reload: nginxReload,
+		Path: path, Link: link, Test: nginxTest, Reload: nginxReload,
 	})
 	if err != nil {
 		return nil, configError(err)

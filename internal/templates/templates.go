@@ -46,9 +46,12 @@ func (s Site) Socket() string {
 	return fmt.Sprintf("/run/php/layte-%s-php%s.sock", s.Domain, s.PHPVersion)
 }
 
-// Config file locations.
-func VhostPath(domain string) string { return "/etc/nginx/sites-available/layte-" + domain + ".conf" }
-func VhostLink(domain string) string { return "/etc/nginx/sites-enabled/layte-" + domain + ".conf" }
+// Config file locations. A vhost normally lives in sites-available with a
+// sites-enabled link; on servers whose nginx.conf only includes conf.d it
+// lives at VhostConfD instead (the agent picks, see actions.vhostFiles).
+func VhostPath(domain string) string  { return "/etc/nginx/sites-available/layte-" + domain + ".conf" }
+func VhostLink(domain string) string  { return "/etc/nginx/sites-enabled/layte-" + domain + ".conf" }
+func VhostConfD(domain string) string { return "/etc/nginx/conf.d/layte-" + domain + ".conf" }
 func PoolPath(phpVersion, domain string) string {
 	return fmt.Sprintf("/etc/php/%s/fpm/pool.d/layte-%s.conf", phpVersion, domain)
 }

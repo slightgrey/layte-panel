@@ -36,14 +36,14 @@ This removes the panel and keeps your sites running:
 sudo systemctl disable --now layte layte-agent
 sudo rm /etc/systemd/system/layte.service /etc/systemd/system/layte-agent.service
 sudo systemctl daemon-reload
-sudo rm -f /usr/local/bin/layte /etc/nginx/sites-enabled/layte-panel.conf /etc/nginx/sites-available/layte-panel.conf
+sudo rm -f /usr/local/bin/layte /etc/nginx/sites-enabled/layte-panel.conf /etc/nginx/sites-available/layte-panel.conf /etc/nginx/conf.d/layte-panel.conf
 sudo nginx -t && sudo systemctl reload nginx
 # Panel data and the system user (optional):
 sudo rm -rf /etc/layte /var/lib/layte && sudo userdel layte
 ```
 
 Sites created by Layte Panel keep working after an uninstall. Their configs are normal files:
-- `/etc/nginx/sites-available/layte-*.conf`
+- `/etc/nginx/sites-available/layte-*.conf` (or `/etc/nginx/conf.d/layte-*.conf`)
 - `/etc/php/*/fpm/pool.d/layte-*.conf`
 - `/etc/cron.d/layte-*`
 

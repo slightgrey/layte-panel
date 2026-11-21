@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"path"
 	"strings"
 	"testing"
 
@@ -85,5 +86,67 @@ func TestPoolAndVhostNeedInstalledPHP(t *testing.T) {
 	}
 	if _, err := d.nginxVhostWrite(ctx, agent.Actor{}, p); !agent.IsCode(err, agent.CodeInvalidParams) {
 		t.Errorf("vhost for missing PHP: %v", err)
+	}
+}
+
+func TestVhostFilesFollowsNginxIncludes(t *testing.T) {
+	const avail, link, confd = "/etc/nginx/sites-available/layte-a.test.conf", "/etc/nginx/sites-enabled/layte-a.test.conf", "/etc/nginx/conf.d/layte-a.test.conf"
+	tests := []struct {
+		name, nginxConf, existing string
+		wantPath, wantLink        string
+	}{
+		{"no nginx.conf: default layout", "", "", avail, link},
+		{"includes sites-enabled", "http {\n    include /etc/nginx/conf.d/*.conf;\n    include /etc/nginx/sites-enabled/*;\n}\n", "", avail, link},
+		{"relative include", "http {\n\tinclude sites-enabled/*;\n}\n", "", avail, link},
+		{"conf.d only", "http {\n    include /etc/nginx/conf.d/*.conf;\n}\n", "", confd, ""},
+		{"sites-enabled commented out", "http {\n    include /etc/nginx/conf.d/*.conf;\n    # include /etc/nginx/sites-enabled/*;\n}\n", "", confd, ""},
+		{"existing conf.d vhost stays", "http { include /etc/nginx/sites-enabled/*; }\n", confd, confd, ""},
+		{"existing sites-available vhost stays", "http {\n    include /etc/nginx/conf.d/*.conf;\n}\n", avail, avail, link},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := devDeps(t)
+			d.FS.Remove("/etc/nginx/nginx.conf")
+			if tt.nginxConf != "" {
+				d.FS.WriteFileAtomic("/etc/nginx/nginx.conf", []byte(tt.nginxConf), 0o644)
+			}
+			if tt.existing != "" {
+				d.FS.MkdirAll(path.Dir(tt.existing), 0o755)
+				d.FS.WriteFileAtomic(tt.existing, []byte(system.Marker+"\n"), 0o644)
+			}
+			if p, l := d.vhostFiles("a.test"); p != tt.wantPath || l != tt.wantLink {
+				t.Errorf("got (%q, %q), want (%q, %q)", p, l, tt.wantPath, tt.wantLink)
+			}
+		})
+	}
+}
+
+// On a server whose nginx only loads conf.d, the vhost must land there (and
+// get no sites-enabled link), and removal must find it again.
+func TestVhostWriteRemoveConfDOnly(t *testing.T) {
+	d := devDeps(t)
+	d.FS.WriteFileAtomic("/etc/nginx/nginx.conf", []byte("http {\n    include /etc/nginx/conf.d/*.conf;\n}\n"), 0o644)
+	d.FS.MkdirAll("/etc/nginx/conf.d", 0o755)
+	d.siteUserCreate(ctx, agent.Actor{}, UserParams{Username: "acme"})
+	p := SiteConfigParams{Domain: "a.test", Username: "acme", PHPVersion: "8.3"}
+
+	out, err := d.nginxVhostWrite(ctx, agent.Actor{}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const confd = "/etc/nginx/conf.d/layte-a.test.conf"
+	if got := out.(map[string]string)["path"]; got != confd {
+		t.Errorf("path = %q", got)
+	}
+	for _, f := range []string{"/etc/nginx/sites-available/layte-a.test.conf", "/etc/nginx/sites-enabled/layte-a.test.conf"} {
+		if ok, _ := d.FS.Exists(f); ok {
+			t.Errorf("%s written on a conf.d-only server", f)
+		}
+	}
+	if _, err := d.nginxVhostRemove(ctx, agent.Actor{}, DomainParams{Domain: "a.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := d.FS.Exists(confd); ok {
+		t.Error("vhost not removed")
 	}
 }

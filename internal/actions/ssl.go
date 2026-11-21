@@ -106,7 +106,8 @@ func (d Deps) certbotBin() (string, error) {
 // the existing HTTP vhost serves. certbot never edits nginx configs here;
 // Layte adds the HTTPS block to its own vhost afterwards.
 func (d Deps) sslIssue(ctx context.Context, _ agent.Actor, p SSLIssueParams) (any, error) {
-	vhost, err := d.FS.ReadFile(templates.VhostPath(p.Domain))
+	vhostPath, _ := d.vhostFiles(p.Domain)
+	vhost, err := d.FS.ReadFile(vhostPath)
 	if err != nil || !system.IsManaged(vhost) {
 		return nil, agent.Errorf(agent.CodeInvalidParams, "%s has no Layte-managed nginx config", p.Domain)
 	}
