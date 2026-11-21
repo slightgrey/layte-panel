@@ -6,6 +6,7 @@ import { LoginPage } from "./pages/Login";
 import { NewSitePage } from "./pages/NewSite";
 import { SiteDetailPage } from "./pages/SiteDetail";
 import { SitesPage } from "./pages/Sites";
+import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
 
 export function App() {
@@ -19,6 +20,7 @@ export function App() {
           <Route path="sites" element={<SitesPage />} />
           <Route path="sites/new" element={<NewSitePage />} />
           <Route path="sites/:id" element={<SiteDetailPage />} />
+          <Route path="ssl" element={<SSLPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -92,6 +92,7 @@ export interface Site {
   status: "creating" | "active" | "failed" | "deleting";
   nginx_conf: string;
   fpm_pool: string;
+  cert_path: string;
   created_at: string;
   updated_at: string;
 }
@@ -110,6 +111,25 @@ export interface Vhost {
   path: string;
   content: string;
   managed: boolean;
+}
+
+export interface Certificate {
+  name: string;
+  domains: string[];
+  issuer: string;
+  not_before: string;
+  not_after: string;
+  managed: boolean;
+  path: string;
+  days_left: number;
+  state: "ok" | "expiring" | "expired";
+  site_id?: number;
+  site_domain?: string;
+}
+
+export interface CertificatesResponse {
+  certificates: Certificate[];
+  email: string;
 }
 
 export interface JobEvent {

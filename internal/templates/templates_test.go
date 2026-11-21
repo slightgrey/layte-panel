@@ -16,11 +16,14 @@ var update = flag.Bool("update", false, "rewrite testdata/*.golden")
 
 func TestGolden(t *testing.T) {
 	site := Site{Domain: "example.com", Aliases: []string{"www.example.com"}, User: "examplecom", PHPVersion: "8.3"}
+	sslSite := site
+	sslSite.SSL = true
 	tests := []struct {
 		golden string
 		render func(Site) ([]byte, error)
 	}{
 		{"nginx-site.golden", Vhost},
+		{"nginx-site-ssl.golden", func(Site) ([]byte, error) { return Vhost(sslSite) }},
 		{"fpm-pool.golden", Pool},
 	}
 	for _, tt := range tests {

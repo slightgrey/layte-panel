@@ -311,6 +311,12 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		if err := call("nginx.vhost_remove", actions.DomainParams{Domain: site.Domain}); err != nil {
 			return fail(err)
 		}
+		if site.SSL {
+			j.Step("Revoke certificate")
+			if err := call("ssl.revoke", actions.DomainParams{Domain: site.Domain}); err != nil {
+				j.Log("Warning: revoking failed (%v); the certificate will simply expire.", err)
+			}
+		}
 		j.Step("Remove PHP-FPM pool")
 		if site.PHPVersion != "" {
 			if err := call("php.pool_remove", actions.PoolRemoveParams{Domain: site.Domain, PHPVersion: site.PHPVersion}); err != nil {

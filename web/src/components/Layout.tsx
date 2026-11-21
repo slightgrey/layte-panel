@@ -24,7 +24,7 @@ interface NavItem {
 const nav: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard },
   { label: "Sites", to: "/sites", icon: Globe },
-  { label: "SSL", icon: ShieldCheck },
+  { label: "SSL", to: "/ssl", icon: ShieldCheck },
   { label: "Databases", icon: Database },
   { label: "Cron", icon: Clock },
   { label: "Logs", icon: ScrollText },

@@ -41,7 +41,7 @@ func (s *Service) SwitchPHP(ctx context.Context, actor agent.Actor, site store.S
 
 	oldVersion := site.PHPVersion
 	cfg := func(v string) actions.SiteConfigParams {
-		return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: v}
+		return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: v, SSL: site.SSL}
 	}
 	jobID, err := s.Jobs.Start("site.php_switch", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) (err error) {
 		var undo undoStack

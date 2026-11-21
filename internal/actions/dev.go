@@ -36,6 +36,9 @@ func DevDeps(dir string) (Deps, error) {
 	root.NoChown = true
 	// Windows needs a special privilege for real symlinks.
 	root.EmulateSymlinks = runtime.GOOS == "windows"
+	if err := seedFakeCerts(root); err != nil {
+		return Deps{}, err
+	}
 
 	cmds, _ := fs.Sub(fixturesFS, "fixtures/commands")
 	return Deps{
@@ -126,6 +129,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{}, nil
 		case strings.HasPrefix(c.Bin, "/usr/bin/php") && len(args) > 0 && strings.HasSuffix(args[0], ".phar"):
 			return fakeWP(root, c)
+		case c.Bin == "/usr/bin/certbot" && len(args) > 0 && args[0] != "--version":
+			return fakeCertbot(root, c)
 		}
 		return system.Result{}, fmt.Errorf("run %s: %w", c.Bin, system.ErrNotFound)
 	}

@@ -17,6 +17,7 @@ type SiteConfigParams struct {
 	Aliases    []string `json:"aliases,omitempty"`
 	Username   string   `json:"username"`
 	PHPVersion string   `json:"php_version"`
+	SSL        bool     `json:"ssl,omitempty"`
 }
 
 func (p SiteConfigParams) Validate() error {
@@ -39,7 +40,7 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL}
 }
 
 // requireInstalledPHP checks the version against what's really installed.
@@ -117,6 +118,13 @@ func (d Deps) phpPoolRemove(ctx context.Context, _ agent.Actor, p PoolRemovePara
 func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigParams) (any, error) {
 	if err := d.requireInstalledPHP(p.PHPVersion); err != nil {
 		return nil, err
+	}
+	if p.SSL {
+		for _, f := range []string{"fullchain.pem", "privkey.pem"} {
+			if ok, _ := d.FS.Exists(templates.CertDir(p.Domain) + "/" + f); !ok {
+				return nil, agent.Errorf(agent.CodeInvalidParams, "no certificate for %s yet (%s missing)", p.Domain, f)
+			}
+		}
 	}
 	content, err := templates.Vhost(p.site())
 	if err != nil {

@@ -1,7 +1,34 @@
 # Managed by Layte Panel — do not edit by hand (site: {{.Domain}})
+{{- if .SSL}}
+# HTTP: only ACME challenges (renewals); everything else goes to HTTPS.
 server {
     listen 80;
     listen [::]:80;
+    server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root {{.Dir}}/public;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+{{- end}}
+server {
+{{- if .SSL}}
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+
+    ssl_certificate     /etc/letsencrypt/live/{{.CertName}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{.CertName}}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:LayteSSL:10m;
+    ssl_session_timeout 1d;
+{{- else}}
+    listen 80;
+    listen [::]:80;
+{{- end}}
     server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
 
     root {{.Dir}}/public;

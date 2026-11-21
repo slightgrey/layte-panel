@@ -3,6 +3,7 @@ import { ArrowLeft, ExternalLink, Info, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { siteKey, sitesKey, useDeleteSite, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
+import { certsKey } from "@/api/ssl";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
@@ -13,6 +14,7 @@ import { Checkbox, Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FormError } from "./AuthShell";
 import { SiteBadges } from "./SiteBadges";
+import { SiteSSLCard } from "./SiteSSL";
 
 export function SiteDetailPage() {
   const id = Number(useParams().id);
@@ -91,6 +93,7 @@ export function SiteDetailPage() {
               onDone={() => {
                 qc.invalidateQueries({ queryKey: siteKey(id) });
                 qc.invalidateQueries({ queryKey: sitesKey });
+                qc.invalidateQueries({ queryKey: certsKey });
               }}
             />
           </CardContent>
@@ -108,6 +111,7 @@ export function SiteDetailPage() {
       )}
 
       <OverviewCard site={s} />
+      <SiteSSLCard site={s} />
       <VhostCard site={s} />
     </div>
   );

@@ -21,7 +21,18 @@ type Site struct {
 	Aliases    []string
 	User       string
 	PHPVersion string
+	SSL        bool // serve HTTPS with the Let's Encrypt cert CertName()
 }
+
+// CertName is the certbot certificate name Layte uses for the site. The
+// "layte-" prefix keeps it apart from certificates the admin made by hand.
+func (s Site) CertName() string { return CertName(s.Domain) }
+
+// CertName for a domain.
+func CertName(domain string) string { return "layte-" + domain }
+
+// CertDir is where certbot puts the live certificate files.
+func CertDir(domain string) string { return "/etc/letsencrypt/live/" + CertName(domain) }
 
 // Home is the site user's home directory.
 func (s Site) Home() string { return "/home/" + s.User }

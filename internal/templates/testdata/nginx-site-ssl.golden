@@ -1,0 +1,66 @@
+# Managed by Layte Panel — do not edit by hand (site: example.com)
+# HTTP: only ACME challenges (renewals); everything else goes to HTTPS.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name example.com www.example.com;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /home/examplecom/example.com/public;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+
+    ssl_certificate     /etc/letsencrypt/live/layte-example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/layte-example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:LayteSSL:10m;
+    ssl_session_timeout 1d;
+    server_name example.com www.example.com;
+
+    root /home/examplecom/example.com/public;
+    index index.php index.html index.htm;
+
+    access_log /home/examplecom/example.com/logs/access.log;
+    error_log  /home/examplecom/example.com/logs/error.log;
+
+    client_max_body_size 64m;
+
+    # Never serve dotfiles (.git, .env, .htaccess), except ACME challenges.
+    location ~ /\.(?!well-known/) {
+        deny all;
+    }
+    location = /wp-config.php {
+        deny all;
+    }
+    # No PHP execution inside upload folders.
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTPS $https if_not_empty;
+        fastcgi_pass unix:/run/php/layte-example.com-php8.3.sock;
+        fastcgi_read_timeout 300;
+    }
+
+    location ~* \.(?:css|js|jpe?g|png|gif|ico|svg|webp|avif|woff2?)$ {
+        expires 30d;
+        access_log off;
+        try_files $uri =404;
+    }
+}

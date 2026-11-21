@@ -51,6 +51,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("sites.discover", true, 20*time.Second, d.sitesDiscover),
 		agent.Def("php.versions", true, 5*time.Second, d.phpVersionsAction),
 		agent.Def("nginx.vhost_read", true, 5*time.Second, d.vhostRead),
+		agent.Def("ssl.list", true, 10*time.Second, d.sslList),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
@@ -63,5 +64,8 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("db.create", false, 30*time.Second, d.dbCreate),
 		agent.Def("db.drop", false, 30*time.Second, d.dbDrop),
 		agent.Def("wp.install", false, 5*time.Minute, d.wpInstall),
+		agent.Def("wp.set_url", false, time.Minute, d.wpSetURL),
+		agent.Def("ssl.issue", false, 3*time.Minute, d.sslIssue),
+		agent.Def("ssl.revoke", false, time.Minute, d.sslRevoke),
 	)
 }

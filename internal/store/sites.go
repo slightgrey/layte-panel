@@ -25,19 +25,20 @@ type Site struct {
 	Status     string    `json:"status"`
 	NginxConf  string    `json:"nginx_conf"`
 	FPMPool    string    `json:"fpm_pool"`
+	CertPath   string    `json:"cert_path"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 const siteCols = `id, domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl,
-	db_name, db_user, status, nginx_conf, fpm_pool, created_at, updated_at`
+	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, created_at, updated_at`
 
 func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
 	var aliases string
 	var created, updated int64
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.SystemUser, &s.RootPath, &s.PHPVersion, &s.Managed, &s.Source,
-		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &created, &updated)
+		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Site{}, ErrNotFound
 	}
@@ -63,10 +64,10 @@ func aliasesJSON(a []string) string {
 func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 	now := time.Now().Unix()
 	res, err := s.DB.ExecContext(ctx, `INSERT INTO sites
-		(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, db_name, db_user, status, nginx_conf, fpm_pool, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, db_name, db_user, status, nginx_conf, fpm_pool, cert_path, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		x.Domain, aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.Source, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, now, now)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, now, now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return 0, fmt.Errorf("site %s: %w", x.Domain, ErrExists)
@@ -79,9 +80,9 @@ func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 // UpdateSite saves every mutable column of x (matched by id).
 func (s *Store) UpdateSite(ctx context.Context, x Site) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, managed=?,
-		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, updated_at=? WHERE id=?`,
+		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, updated_at=? WHERE id=?`,
 		aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, time.Now().Unix(), x.ID)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, time.Now().Unix(), x.ID)
 	if err != nil {
 		return fmt.Errorf("update site %s: %w", x.Domain, err)
 	}
@@ -146,9 +147,9 @@ func (s *Store) ReplaceImported(ctx context.Context, found []Site) (added, remov
 			switch {
 			case errors.Is(err, sql.ErrNoRows):
 				_, err = tx.ExecContext(ctx, `INSERT INTO sites
-					(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, status, nginx_conf, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?, 0, 'imported', ?, ?, 'active', ?, ?, ?)`,
-					x.Domain, aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.WordPress, x.SSL, x.NginxConf, now, now)
+					(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, status, nginx_conf, cert_path, created_at, updated_at)
+					VALUES (?, ?, ?, ?, ?, 0, 'imported', ?, ?, 'active', ?, ?, ?, ?)`,
+					x.Domain, aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.WordPress, x.SSL, x.NginxConf, x.CertPath, now, now)
 				if err != nil {
 					return err
 				}
@@ -156,9 +157,9 @@ func (s *Store) ReplaceImported(ctx context.Context, found []Site) (added, remov
 			case err != nil:
 				return err
 			case !managed:
-				_, err = tx.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, wordpress=?, ssl=?, nginx_conf=?, updated_at=?
+				_, err = tx.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, wordpress=?, ssl=?, nginx_conf=?, cert_path=?, updated_at=?
 					WHERE domain=? AND managed=0`,
-					aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.WordPress, x.SSL, x.NginxConf, now, x.Domain)
+					aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.WordPress, x.SSL, x.NginxConf, x.CertPath, now, x.Domain)
 				if err != nil {
 					return err
 				}

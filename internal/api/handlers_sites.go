@@ -66,7 +66,7 @@ func (s *server) handleScanSites(w http.ResponseWriter, r *http.Request) {
 	for _, f := range found {
 		rows = append(rows, store.Site{
 			Domain: f.Domain, Aliases: f.Aliases, RootPath: f.Root, PHPVersion: f.PHPVersion,
-			WordPress: f.WordPress, SSL: f.SSL, NginxConf: f.ConfigFile, Source: "imported",
+			WordPress: f.WordPress, SSL: f.SSL, NginxConf: f.ConfigFile, CertPath: f.CertPath, Source: "imported",
 		})
 	}
 	added, removed, err := s.Store.ReplaceImported(r.Context(), rows)
