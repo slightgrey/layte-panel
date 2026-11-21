@@ -255,7 +255,8 @@ curl -fsS http://127.0.0.1:8443/api/v1/health >/dev/null 2>&1 || die "layte didn
 NGINX_CONF=/etc/nginx/sites-available/layte-panel.conf
 NGINX_LINK=/etc/nginx/sites-enabled/layte-panel.conf
 # (nginx -T goes into a variable: piping it into `grep -q` trips pipefail on SIGPIPE.)
-NGINX_DUMP="$(command -v nginx >/dev/null && nginx -T 2>/dev/null || true)"
+NGINX_DUMP=""
+if command -v nginx >/dev/null; then NGINX_DUMP="$(nginx -T 2>/dev/null || true)"; fi
 if [ -f /etc/nginx/conf.d/layte-panel.conf ] || { [ -n "$NGINX_DUMP" ] &&
      ! grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/sites-enabled/' <<<"$NGINX_DUMP"; }; then
   NGINX_CONF=/etc/nginx/conf.d/layte-panel.conf
