@@ -1,0 +1,21 @@
+# build output
+/layte
+/layte.exe
+/dist/
+
+# local dev state (db, secret key, socket)
+/.dev/
+
+# web
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# local Claude settings
+.claude/settings.local.json
