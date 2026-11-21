@@ -1,7 +1,7 @@
 # Development
 
 ## Requirements
-- Go 1.26+ (see `go.mod`)
+- Go 1.27+ (see `go.mod`; CI and releases use the latest 1.27.x patch release)
 - Node.js 22+ and npm
 - For real system testing: an Ubuntu 24.04 VM ([Multipass](https://multipass.run/) is easiest)
 
