@@ -335,6 +335,8 @@ fi
 if [ -n "$ADMIN" ]; then
   if [ -r "$TTY" ]; then
     say "Creating admin $ADMIN (you'll set a password and scan a 2FA code)"
+    # Root opens the terminal and hands it to the admin command on purpose.
+    # shellcheck disable=SC2024
     sudo -u layte "$BIN" admin create --config "$ETC/config.toml" --username "$ADMIN" < "$TTY" \
       || warn "admin not created; run: sudo -u layte layte admin create --username $ADMIN"
   else
