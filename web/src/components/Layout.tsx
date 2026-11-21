@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { useLogout, useMe } from "@/api/auth";
+import { formatVersion, useHealth } from "@/api/health";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -43,13 +44,14 @@ export function Layout() {
 
   return (
     <div className="flex min-h-svh">
-      <aside className="hidden w-56 shrink-0 flex-col border-r bg-card md:flex">
+      <aside className="sticky top-0 hidden h-svh w-56 shrink-0 flex-col border-r bg-card md:flex">
         <Brand className="h-14 px-5" />
-        <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2" aria-label="Main">
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2" aria-label="Main">
           {nav.map((item) => (
             <NavEntry key={item.label} item={item} />
           ))}
         </nav>
+        <VersionFooter />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -94,6 +96,34 @@ function NavEntry({ item }: { item: NavItem }) {
       <Icon className="size-4" />
       {item.label}
     </NavLink>
+  );
+}
+
+const RELEASES_URL = "https://github.com/slightgrey/layte-panel/releases";
+
+/** Bottom of the sidebar: the running version, linked to its release notes. */
+function VersionFooter() {
+  const health = useHealth();
+  const v = health.data?.version;
+  if (!v) return null;
+  const isRelease = /^\d+\.\d+\.\d+$/.test(v);
+  const label = formatVersion(v);
+  return (
+    <div className="border-t px-5 py-3 text-xs text-muted-foreground">
+      {isRelease ? (
+        <a
+          href={`${RELEASES_URL}/tag/${label}`}
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-foreground hover:underline"
+          title="Release notes"
+        >
+          Layte Panel {label}
+        </a>
+      ) : (
+        <span title="Development build">Layte Panel {label}</span>
+      )}
+    </div>
   );
 }
 
