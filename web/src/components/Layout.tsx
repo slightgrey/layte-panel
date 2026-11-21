@@ -27,7 +27,7 @@ const nav: NavItem[] = [
   { label: "SSL", to: "/ssl", icon: ShieldCheck },
   { label: "Databases", to: "/databases", icon: Database },
   { label: "Cron", to: "/cron", icon: Clock },
-  { label: "Logs", icon: ScrollText },
+  { label: "Logs", to: "/logs", icon: ScrollText },
   { label: "Files", icon: FolderOpen },
   { label: "Security", icon: Shield },
 ];

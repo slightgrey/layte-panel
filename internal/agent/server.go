@@ -197,7 +197,11 @@ func (s *Server) dispatch(ctx context.Context, req Request, rerr *Error) Respons
 		return resp
 	}
 	resp.OK, resp.Data = true, b
-	log.Info("action ok", "dur", time.Since(start))
+	if action.Quiet {
+		log.Debug("action ok", "dur", time.Since(start))
+	} else {
+		log.Info("action ok", "dur", time.Since(start))
+	}
 	return resp
 }
 

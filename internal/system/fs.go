@@ -31,6 +31,8 @@ type FS interface {
 	LinkTarget(name string) (target string, isLink bool, err error)
 	// Resolve follows symlinks and returns the real (absolute) path.
 	Resolve(name string) (string, error)
+	// ReadRange reads up to n bytes from offset and returns the file size.
+	ReadRange(name string, offset int64, n int) (data []byte, size int64, err error)
 	WriteFileAtomic(name string, data []byte, perm fs.FileMode) error
 	MkdirAll(name string, perm fs.FileMode) error
 	Remove(name string) error
@@ -103,6 +105,31 @@ func (r *RootFS) ReadFile(name string) ([]byte, error) {
 		return nil, err
 	}
 	return r.root.ReadFile(rel(p))
+}
+
+func (r *RootFS) ReadRange(name string, offset int64, n int) ([]byte, int64, error) {
+	f, err := r.root.Open(rel(name))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+	size := fi.Size()
+	if offset >= size || n <= 0 {
+		return nil, size, nil
+	}
+	if int64(n) > size-offset {
+		n = int(size - offset)
+	}
+	buf := make([]byte, n)
+	read, err := f.ReadAt(buf, offset)
+	if err != nil && read == 0 {
+		return nil, size, err
+	}
+	return buf[:read], size, nil
 }
 
 func (r *RootFS) Glob(pattern string) ([]string, error) {

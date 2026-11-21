@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -148,6 +149,28 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 	}
 
 	site, _ := e.st.SiteByID(ctx, siteID)
+
+	// Cron: a job lands in /etc/cron.d, running as the site user.
+	if _, err := e.svc.AddCron(ctx, e.actor, site, "*/5 * * * *", "echo layte-it"); err != nil {
+		t.Fatal(err)
+	}
+	cronFile, err := os.ReadFile("/etc/cron.d/layte-layte-it_test")
+	if err != nil || !strings.Contains(string(cronFile), "*/5 * * * * layteittest cd ") {
+		t.Errorf("cron file: %v\n%s", err, cronFile)
+	}
+
+	// Databases: create a standalone one, list it, drop it.
+	if _, err := e.svc.CreateDatabase(ctx, e.actor, "layteit_extra", 0); err != nil {
+		t.Fatal(err)
+	}
+	_, dbs, err := e.svc.ListDatabases(ctx, e.actor)
+	if err != nil || !slices.ContainsFunc(dbs, func(d sites.DatabaseView) bool { return d.Name == "layteit_extra" && d.Managed }) {
+		t.Errorf("database not listed: %v %v", err, dbs)
+	}
+	if err := e.svc.DropDatabase(ctx, e.actor, "layteit_extra", "layteit_extra"); err != nil {
+		t.Error(err)
+	}
+
 	if len(versions) > 1 {
 		t.Run("switch PHP", func(t *testing.T) {
 			testSwitchPHP(t, e, site, versions[0])
@@ -161,6 +184,9 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 	}
 	e.wait(t, delJob)
 	nginxTestOK(t)
+	if _, err := os.Stat("/etc/cron.d/layte-layte-it_test"); !os.IsNotExist(err) {
+		t.Error("cron file still exists")
+	}
 	if _, err := os.Stat("/home/layteittest"); !os.IsNotExist(err) {
 		t.Error("home directory still exists")
 	}

@@ -53,6 +53,8 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("nginx.vhost_read", true, 5*time.Second, d.vhostRead),
 		agent.Def("ssl.list", true, 10*time.Second, d.sslList),
 		agent.Def("db.list", true, 15*time.Second, d.dbList),
+		agent.Def("logs.sources", true, 10*time.Second, d.logsSources),
+		agent.Def("logs.read", true, 10*time.Second, d.logsRead).WithQuiet(),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),

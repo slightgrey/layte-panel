@@ -96,6 +96,27 @@ Creating a site, deleting it and switching its PHP version are **jobs** ([intern
 `layte serve` runs with `ProtectSystem=strict`, so it can't create `/etc/layte/secret.key`
 itself; the installer (or `make vm-deploy`) creates it.
 
+## SSL, databases, cron, logs
+- **SSL**:
+  - `certbot certonly --webroot` with the cert name `layte-<domain>`. certbot only drops a challenge file into `public/`; it never edits nginx configs.
+  - Layte then re-renders its own vhost with the HTTPS block.
+  - A deploy hook (`/etc/letsencrypt/renewal-hooks/deploy/layte-reload-nginx`) reloads nginx after certbot's timer renews a cert.
+  - Certificates under 21 days are flagged, because certbot renews at 30 days.
+  - Dev mode writes self-signed certs; the imported blog site's cert "expires" in 20 days.
+- **Databases**:
+  - Every database is listed with its size.
+  - Only databases recorded in Layte's `databases` table can be dropped or have their password reset.
+  - Site databases are dropped together with their site.
+  - WordPress databases can't have their password reset here, because that would break `wp-config.php`.
+- **Cron**:
+  - One `/etc/cron.d/layte-<domain_with_underscores>` file per site.
+  - Each line runs as the site user, from the site folder, appending output to `logs/cron.log`.
+  - `%` characters are escaped automatically.
+- **Logs**:
+  - `logs.read` opens only nginx logs, `php*-fpm.log` and `/home/<user>/<domain>/logs/*.log`. Paths are checked again after following symlinks.
+  - The live tail is serve polling the agent once a second, pushed to the browser over SSE.
+  - The poll action is "quiet" (debug-level logging), so it doesn't flood the journal.
+
 ## Adding an agent action
 1. Add a handler in `internal/actions/<domain>.go` with a typed params struct that implements
    `Validate() error`. Validate **everything** here, even if the API already did.

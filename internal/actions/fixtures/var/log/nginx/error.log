@@ -1,0 +1,1 @@
+2026/11/21 09:10:44 [error] 1234#1234: *57 open() "/var/www/html/favicon.ico" failed (2: No such file or directory)

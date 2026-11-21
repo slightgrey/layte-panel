@@ -15,8 +15,16 @@ import (
 type Action struct {
 	Name     string
 	ReadOnly bool
+	Quiet    bool // high-frequency read (e.g. live log polling): logged at debug level
 	Timeout  time.Duration
 	handle   func(ctx context.Context, actor Actor, params json.RawMessage) (any, error)
+}
+
+// WithQuiet marks a read-only action as high-frequency, so successful calls
+// are logged at debug level instead of flooding the journal.
+func (a Action) WithQuiet() Action {
+	a.Quiet = a.ReadOnly
+	return a
 }
 
 // Validator is implemented by every params struct.

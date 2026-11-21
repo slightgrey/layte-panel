@@ -71,6 +71,9 @@ export function SiteDetailPage() {
           >
             Visit <ExternalLink className="size-3.5" />
           </a>
+          <Link to={`/logs?site=${s.id}`} className="text-sm text-muted-foreground hover:text-foreground">
+            Logs
+          </Link>
           {s.managed && s.status !== "creating" && s.status !== "deleting" && (
             <div className="ml-auto">
               <DeleteSite site={s} />

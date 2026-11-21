@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/Dashboard";
 import { CronPage } from "./pages/Cron";
 import { DatabasesPage } from "./pages/Databases";
 import { LoginPage } from "./pages/Login";
+import { LogsPage } from "./pages/Logs";
 import { NewSitePage } from "./pages/NewSite";
 import { SiteDetailPage } from "./pages/SiteDetail";
 import { SitesPage } from "./pages/Sites";
@@ -25,6 +26,7 @@ export function App() {
           <Route path="ssl" element={<SSLPage />} />
           <Route path="databases" element={<DatabasesPage />} />
           <Route path="cron" element={<CronPage />} />
+          <Route path="logs" element={<LogsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

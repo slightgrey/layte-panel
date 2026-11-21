@@ -167,6 +167,17 @@ export interface CronResponse {
   wp_cron: Record<string, string>; // site id → suggested WP-Cron command
 }
 
+export interface LogSource {
+  path: string;
+  label: string;
+  domain?: string;
+  site_id?: number;
+}
+
+export interface LogSourcesResponse {
+  sources: LogSource[];
+}
+
 export interface JobEvent {
   seq: number;
   time: string;
