@@ -9,6 +9,16 @@ permissions:
   contents: read
 
 jobs:
+  installer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck deploy/install.sh
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
   web:
     runs-on: ubuntu-24.04
     defaults:

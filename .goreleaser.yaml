@@ -1,0 +1,59 @@
+# GoReleaser: `git tag v0.1.0 && git push --tags` → the release workflow runs this.
+version: 2
+project_name: layte
+
+before:
+  hooks:
+    - sh -c "cd web && npm ci && npm run build"   # the UI is embedded into the binary
+    - go mod verify
+
+builds:
+  - id: layte
+    main: ./cmd/layte
+    binary: layte
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+    mod_timestamp: "{{ .CommitTimestamp }}"   # reproducible builds
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - deploy/install.sh
+      - deploy/config.toml.example
+      - deploy/nginx-proxy.conf.example
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# Keyless signing with Sigstore cosign, using the workflow's GitHub OIDC identity.
+# install.sh verifies it when cosign is installed on the server.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--yes", "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+
+sboms:
+  - artifacts: archive
+
+changelog:
+  use: github
+  filters:
+    exclude: ["^chore:", "^test:", "^docs:"]
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    Install or upgrade:
+    ```
+    curl -fsSL https://raw.githubusercontent.com/slightgrey/layte-panel/main/deploy/install.sh | sudo bash
+    ```

@@ -1,29 +1,51 @@
 # Layte Panel
 
-A lightweight, self-hosted control panel for unmanaged VPS running WordPress/PHP sites. A cPanel alternative that ships as one Go binary with the web UI embedded. *By Web of D.*
+**A lightweight control panel for unmanaged VPS.** *By Web of D.*
 
-> Status: early development.
-> - Phase 1 (foundation) is done: login with 2FA and a read-only server dashboard (services, software versions, CPU/RAM/disk, pending updates).
-> - Phase 2 (sites) is done: import existing nginx sites read-only; create sites (Linux user, PHP-FPM pool, nginx vhost, MySQL/MariaDB database, WordPress via WP-CLI); delete sites; switch PHP version per site. Each operation runs as a job with live progress and automatic rollback.
-> - Phase 3 is done:
->   - Let's Encrypt SSL via certbot webroot, with auto-renewal and an expiry overview.
->   - Database management. Layte-created databases are editable; all others are read-only.
->   - Per-site cron jobs, run as the site user.
->   - Live log viewer for nginx, PHP-FPM and site logs.
-> - Phase 4 is done:
->   - File manager: browse, edit, upload and download, always as the site's own user and jailed to the site folder. Imported sites are browse/download only.
->   - Security page: ufw rules (with lockout protection), one-click security updates, and failed SSH logins.
-> - Phase 5 is done: a read-only public API with scoped, expiring, revocable API keys. See [docs/api.md](docs/api.md).
+Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on your own Ubuntu server. It ships as one Go binary (about 12 MB) with the web UI built in, and uses about 15 MB of RAM. It's comfortable on a 1 vCPU / 1 GB server.
 
-## Design in one paragraph
-`layte serve` (unprivileged) serves the API and UI behind nginx. Anything that needs root goes over a Unix socket to `layte agent`, which runs only a fixed list of validated actions; there is no generic "run a command" action. Built for Ubuntu 24.04 servers with 1 vCPU and 1 GB RAM.
+## Features
+- **Sites:**
+  - Create sites in one step: Linux user, PHP-FPM pool, nginx vhost, MySQL/MariaDB database, and optionally WordPress via WP-CLI.
+  - Switch PHP version per site without downtime.
+  - Delete sites.
+  - Existing sites are imported read-only.
+- **SSL:** Let's Encrypt certificates via certbot, renewed automatically, with an expiry overview for every certificate on the server.
+- **Databases:** create databases, reset passwords (shown once), drop, and see sizes.
+- **Cron:** per-site jobs that run as the site's own user, with WP-Cron in one click.
+- **Logs:** live tail of nginx, PHP-FPM and site logs.
+- **File manager:** browse, edit, upload and download. It always runs as the site's user, inside the site folder.
+- **Security:** ufw rules with lockout protection, security updates in one click, failed SSH logins.
+- **API:** a read-only REST API with scoped, expiring API keys and an OpenAPI spec.
+- **Safe by design:**
+  - The web process has no privileges; a root helper runs only a fixed list of validated actions.
+  - Every config change is tested (`nginx -t`) and rolled back on failure.
+  - Configs it didn't create are never touched.
+  - 2FA is mandatory.
+  - See [docs/security.md](docs/security.md).
+
+## Install
+On a fresh or existing **Ubuntu 24.04** server:
+```bash
+curl -fsSL https://raw.githubusercontent.com/slightgrey/layte-panel/main/deploy/install.sh | sudo bash
+```
+See [docs/install.md](docs/install.md) for options: the panel domain, IP allowlist, unattended installs, and access over an SSH tunnel.
+
+## Documentation
+[Install](docs/install.md) · [Upgrade & backup](docs/upgrade.md) · [Security](docs/security.md) · [Troubleshooting](docs/troubleshooting.md) · [API](docs/api.md) · [Development](docs/development.md)
+
+## Status
+Early releases (0.x). Built and tested against Ubuntu 24.04 with nginx, PHP-FPM, and MySQL 8 or MariaDB.
+
+**Not included yet:** email hosting, DNS hosting, multiple servers, Docker apps.
 
 ## Development
-
-See [docs/development.md](docs/development.md).
-
 ```bash
 go run ./cmd/layte agent --dev    # fake server data, never touches your machine
 go run ./cmd/layte serve --dev
 cd web && npm install && npm run dev
 ```
+See [docs/development.md](docs/development.md).
+
+## License
+[AGPL-3.0](LICENSE). You can use, modify and self-host Layte Panel freely. If you offer a modified version to others as a service, you must publish your changes under the same license.

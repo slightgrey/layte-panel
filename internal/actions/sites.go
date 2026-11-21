@@ -47,7 +47,7 @@ func (d Deps) sitesDiscover(ctx context.Context, _ agent.Actor, _ agent.NoParams
 	var order []string
 	for _, f := range files {
 		base := path.Base(f)
-		if strings.HasPrefix(base, ".") || strings.HasSuffix(base, ".layte-bak") || strings.HasSuffix(base, "~") {
+		if strings.HasPrefix(base, ".") || strings.HasSuffix(base, ".layte-bak") || strings.HasSuffix(base, "~") || base == "layte-panel.conf" {
 			continue
 		}
 		real, err := d.FS.Resolve(f)

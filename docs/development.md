@@ -60,7 +60,7 @@ On a server, run these as the `layte` user so the database stays owned by it:
 
 ```bash
 make vm-up       # Ubuntu 24.04, 1 vCPU / 1 GB, with nginx, php-fpm, mysql, certbot
-make vm-deploy   # builds linux/amd64, installs binary + systemd units, starts both
+make vm-deploy   # builds linux/amd64 and runs deploy/install.sh --binary in the VM (also tests the installer)
 make vm-shell    # then: sudo -u layte layte admin create --username admin
 ```
 Reach the panel with `multipass exec layte-dev -- curl -s localhost:8443/api/v1/health`,
@@ -94,7 +94,7 @@ Creating a site, deleting it and switching its PHP version are **jobs** ([intern
 | `/run/layte/agent.sock` | serve → agent socket | root:layte, 0660 |
 
 `layte serve` runs with `ProtectSystem=strict`, so it can't create `/etc/layte/secret.key`
-itself; the installer (or `make vm-deploy`) creates it.
+itself; `deploy/install.sh` creates it (and the systemd units).
 
 ## SSL, databases, cron, logs
 - **SSL**:

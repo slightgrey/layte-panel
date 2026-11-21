@@ -84,7 +84,7 @@ internal/
   store/              SQLite, migrations, queries
   jobs/               job runner + SSE progress
 web/                  React app (Vite). Build output → web/dist (embedded)
-deploy/               systemd units, nginx proxy example, install.sh
+deploy/               install.sh (writes the systemd units), config + nginx proxy examples
 test/integration/     tests run inside an Ubuntu VM/container
 docs/
 ```
@@ -151,6 +151,10 @@ siteherd is a separate Next.js app. It connects to Layte Panel with an API key (
 `https://<layte-host>/api/v1`, or over localhost if both run on the same server. Don't add anything specific
 to siteherd to Layte Panel; keep the API generic.
 
-## Open decisions
-- License (MIT vs AGPL-3.0)
-- MariaDB support level in v1
+## Decisions made
+- License: **AGPL-3.0**.
+- MariaDB: supported alongside MySQL 8, auto-detected (same SQL).
+- Site layout: `/home/<user>/<domain>/{public,logs,tmp}`, one Linux user per site.
+- Audit log: mutating agent actions only (see rule 7).
+- API keys: read-only scopes only in v1.
+- Docs: Markdown in `docs/` (no separate docs site).

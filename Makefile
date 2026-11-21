@@ -31,23 +31,16 @@ dev-web:
 # Ubuntu 24.04 VM for testing real system actions (never run the agent on your own machine).
 vm-up:
 	multipass launch 24.04 --name $(VM) --cpus 1 --memory 1G --disk 10G
-	multipass exec $(VM) -- sudo apt-get update
-	multipass exec $(VM) -- sudo apt-get install -y nginx php-fpm mysql-server certbot
 
 vm-shell:
 	multipass shell $(VM)
 
+# Installs (or upgrades) the locally built binary with the real installer, so
+# install.sh is tested too. The first run also installs the web stack.
 vm-deploy: build-linux
 	multipass transfer dist/layte-linux-amd64 $(VM):/tmp/layte
-	multipass transfer deploy/layte.service deploy/layte-agent.service $(VM):/tmp/
-	multipass exec $(VM) -- sudo sh -ec '\
-		install -m 0755 /tmp/layte /usr/local/bin/layte; \
-		getent group layte >/dev/null || groupadd --system layte; \
-		id layte >/dev/null 2>&1 || useradd --system --gid layte --home-dir /var/lib/layte --shell /usr/sbin/nologin layte; \
-		install -d -m 0750 -o root -g layte /etc/layte; \
-		test -f /etc/layte/secret.key || { head -c 32 /dev/urandom > /etc/layte/secret.key; chown layte:layte /etc/layte/secret.key; chmod 0600 /etc/layte/secret.key; }; \
-		install -m 0644 /tmp/layte.service /tmp/layte-agent.service /etc/systemd/system/; \
-		systemctl daemon-reload; systemctl enable --now layte-agent layte'
+	multipass transfer deploy/install.sh $(VM):/tmp/install.sh
+	multipass exec $(VM) -- sudo bash /tmp/install.sh --binary /tmp/layte --with-stack --yes --admin ''
 
 # Real system tests: build a linux test binary here, run it as root in the VM
 # against the running layte-agent (make vm-deploy first).
