@@ -12,9 +12,9 @@ jobs:
   installer:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: shellcheck deploy/install.sh
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: check
@@ -25,8 +25,8 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -35,7 +35,7 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: web/dist
@@ -45,12 +45,12 @@ jobs:
     runs-on: ubuntu-24.04
     needs: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: web-dist
           path: web/dist
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: test -z "$(gofmt -l cmd internal web)" || (gofmt -l cmd internal web; exit 1)
@@ -59,6 +59,8 @@ jobs:
       - uses: golang/govulncheck-action@v1
         with:
           go-version-file: go.mod
+          go-version-input: ""   # otherwise "stable" overrides go-version-file
+          repo-checkout: false   # keep the downloaded web/dist for the cross-build
       - name: Cross-build (linux amd64 + arm64, static)
         env:
           CGO_ENABLED: "0"
