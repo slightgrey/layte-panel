@@ -2,6 +2,8 @@ module github.com/slightgrey/layte-panel
 
 go 1.26.0
 
+toolchain go1.27.4
+
 require (
 	github.com/BurntSushi/toml v1.6.0
 	modernc.org/sqlite v1.62.0
