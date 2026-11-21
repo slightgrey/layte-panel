@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"layte-panel/internal/agent"
 	"layte-panel/internal/api"
 	"layte-panel/internal/store"
 )
@@ -39,8 +40,14 @@ func runServe(args []string) error {
 	defer st.Close()
 
 	srv := &http.Server{
-		Addr:              cfg.Listen,
-		Handler:           api.New(api.Deps{Config: cfg, Store: st, Log: log, Version: version}),
+		Addr: cfg.Listen,
+		Handler: api.New(api.Deps{
+			Config:  cfg,
+			Store:   st,
+			Agent:   &agent.Client{SocketPath: cfg.AgentSocket, Auditor: storeAuditor{st}},
+			Log:     log,
+			Version: version,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,

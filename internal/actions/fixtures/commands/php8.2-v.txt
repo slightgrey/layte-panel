@@ -1,0 +1,2 @@
+PHP 8.2.24 (cli) (built: Sep 27 2024 04:07:07) (NTS)
+Copyright (c) The PHP Group

@@ -1,0 +1,55 @@
+Id=nginx.service
+Description=A high performance web server and a reverse proxy server
+LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=enabled
+
+Id=mysql.service
+Description=MySQL Community Server
+LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=enabled
+
+Id=mariadb.service
+Description=mariadb.service
+LoadState=not-found
+ActiveState=inactive
+SubState=dead
+UnitFileState=
+
+Id=cron.service
+Description=Regular background program processing daemon
+LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=enabled
+
+Id=ssh.service
+Description=OpenBSD Secure Shell server
+LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=disabled
+
+Id=ufw.service
+Description=Uncomplicated firewall
+LoadState=loaded
+ActiveState=active
+SubState=exited
+UnitFileState=enabled
+
+Id=php8.2-fpm.service
+Description=The PHP 8.2 FastCGI Process Manager
+LoadState=loaded
+ActiveState=failed
+SubState=failed
+UnitFileState=enabled
+
+Id=php8.3-fpm.service
+Description=The PHP 8.3 FastCGI Process Manager
+LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=enabled

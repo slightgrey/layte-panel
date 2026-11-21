@@ -1,0 +1,6 @@
+Listing...
+libssl3t64/noble-updates,noble-security 3.0.13-0ubuntu3.4 amd64 [upgradable from: 3.0.13-0ubuntu3.1]
+openssl/noble-updates,noble-security 3.0.13-0ubuntu3.4 amd64 [upgradable from: 3.0.13-0ubuntu3.1]
+nginx/noble-updates 1.24.0-2ubuntu7.1 amd64 [upgradable from: 1.24.0-2ubuntu7]
+nginx-common/noble-updates 1.24.0-2ubuntu7.1 all [upgradable from: 1.24.0-2ubuntu7]
+tzdata/noble-updates 2024a-3ubuntu1.1 all [upgradable from: 2024a-2ubuntu1]

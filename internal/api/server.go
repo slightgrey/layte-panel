@@ -3,18 +3,26 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
+	"layte-panel/internal/agent"
 	"layte-panel/internal/config"
 	"layte-panel/internal/store"
 )
+
+// AgentCaller is the part of agent.Client the API uses. Tests pass a fake.
+type AgentCaller interface {
+	Call(ctx context.Context, action string, actor agent.Actor, params, out any) error
+}
 
 // Deps are the things handlers need. Passing them in a struct (instead of
 // globals) keeps handlers easy to test.
 type Deps struct {
 	Config  config.Config
 	Store   *store.Store
+	Agent   AgentCaller
 	Log     *slog.Logger
 	Version string
 }
