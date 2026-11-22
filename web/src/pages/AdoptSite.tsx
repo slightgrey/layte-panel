@@ -1,4 +1,4 @@
-import { AlertTriangle, ShieldCheck, UserPlus } from "lucide-react";
+import { ShieldCheck, UserPlus } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useAdoptPreview, useAdoptSite } from "@/api/sites";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { FormError } from "./AuthShell";
 
@@ -66,8 +67,7 @@ function AdoptDialog({ site, onClose }: { site: Site; onClose: () => void }) {
             </p>
 
             {blocked && (
-              <div className="flex gap-2 rounded-[14px] bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <Notice tone="danger">
                 <div>
                   This site can't be adopted yet:
                   <ul className="mt-1 list-disc pl-5">
@@ -76,12 +76,11 @@ function AdoptDialog({ site, onClose }: { site: Site; onClose: () => void }) {
                     ))}
                   </ul>
                 </div>
-              </div>
+              </Notice>
             )}
 
             {!!p.unsafe?.length && (
-              <div className="flex gap-2 rounded-[14px] bg-warning/10 px-4 py-3 text-sm">
-                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-warning" />
+              <Notice tone="warning" icon={ShieldCheck}>
                 <div>
                   The site currently runs as <code className="font-mono">{p.old_user}</code>, which Layte Panel must never use
                   for a site:
@@ -92,7 +91,7 @@ function AdoptDialog({ site, onClose }: { site: Site; onClose: () => void }) {
                   </ul>
                   That's why it gets its own new user below.
                 </div>
-              </div>
+              </Notice>
             )}
 
             <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm">

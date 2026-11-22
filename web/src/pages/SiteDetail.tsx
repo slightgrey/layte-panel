@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Info, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { databasesKey, useDatabases } from "@/api/databases";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Checkbox, Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
 import { formatBytes } from "@/lib/format";
 import { AdoptSite } from "./AdoptSite";
 import { FormError } from "./AuthShell";
@@ -63,24 +64,16 @@ export function SiteDetailPage() {
       <SiteJobCard site={s} />
 
       {!s.managed && !s.adopted && (
-        <div className="flex flex-wrap items-start gap-3 rounded-[14px] bg-background px-4 shadow-inset py-3 text-sm">
-          <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <p className="min-w-0 flex-1">
-            This site was found in your nginx config. Layte Panel shows it <strong>read-only</strong> and never changes
-            files it didn't create. Adopt it to manage it here: it gets its own Linux user, and its nginx config stays
-            yours.
-          </p>
-          {s.status === "active" && s.root_path && <AdoptSite site={s} />}
-        </div>
+        <Notice action={s.status === "active" && s.root_path && <AdoptSite site={s} />}>
+          This site was found in your nginx config. Layte Panel shows it <strong>read-only</strong> and never changes files
+          it didn't create. Adopt it to manage it here: it gets its own Linux user, and its nginx config stays yours.
+        </Notice>
       )}
       {s.adopted && (
-        <div className="flex items-start gap-2 rounded-[14px] bg-background px-4 shadow-inset py-3 text-sm">
-          <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <p>
-            Adopted: this site runs as <code className="font-mono">{s.system_user}</code> with a Layte-managed PHP-FPM pool.
-            Its nginx config is still yours and is never rewritten by Layte Panel.
-          </p>
-        </div>
+        <Notice>
+          Adopted: this site runs as <code className="font-mono">{s.system_user}</code> with a Layte-managed PHP-FPM pool. Its
+          nginx config is still yours and is never rewritten by Layte Panel.
+        </Notice>
       )}
 
       <OverviewCard site={s} />

@@ -1,4 +1,3 @@
-import { AlertTriangle } from "lucide-react";
 import { Link } from "react-router";
 import { useCertificates } from "@/api/ssl";
 import { CertBadge } from "@/components/CertBadge";
@@ -6,6 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Notice } from "@/components/ui/notice";
 
 export function SSLPage() {
   const certs = useCertificates();
@@ -22,14 +22,13 @@ export function SSLPage() {
       </div>
 
       {problems.length > 0 && (
-        <div role="alert" className="flex items-start gap-2 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+        <Notice tone="warning">
           <p>
             {problems.length} certificate{problems.length > 1 ? "s are" : " is"} expiring soon or expired, which usually
             means renewal is failing. Check <code className="font-mono">certbot renew --dry-run</code> and that the
             domain's DNS still points here.
           </p>
-        </div>
+        </Notice>
       )}
 
       <Card>

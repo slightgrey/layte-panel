@@ -19,6 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Notice, progressFrame } from "@/components/ui/notice";
+import { cn } from "@/lib/utils";
 import { FormError } from "./AuthShell";
 
 export function SecurityPage() {
@@ -34,9 +36,9 @@ export function SecurityPage() {
         <p className="text-sm text-muted-foreground">Firewall, security updates, failed SSH logins and Cloudflare.</p>
       </div>
       {ov.reboot_required && (
-        <div role="alert" className="flex items-center gap-2 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
-          <RotateCw className="size-4 text-warning" /> A reboot is required to finish installing updates (e.g. a new kernel).
-        </div>
+        <Notice tone="warning" icon={RotateCw}>
+          A reboot is required to finish installing updates (e.g. a new kernel).
+        </Notice>
       )}
       <div className="grid gap-6 lg:grid-cols-2">
         <UpdatesCard data={sec.data} />
@@ -81,12 +83,15 @@ function CloudflareCard({ data }: { data: SecurityResponse }) {
           {cf.ranges} Cloudflare address ranges, list from {cf.list_date}. It's updated with Layte Panel releases.
         </p>
         {cf.enabled && !cf.up_to_date && (
-          <div role="status" className="flex flex-wrap items-center gap-3 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
+          <Notice
+            action={
+              <Button size="sm" disabled={set.isPending} onClick={() => set.mutate(true)}>
+                <RefreshCw /> Update
+              </Button>
+            }
+          >
             This version of Layte Panel has a newer list of Cloudflare addresses.
-            <Button size="sm" disabled={set.isPending} onClick={() => set.mutate(true)}>
-              <RefreshCw /> Update
-            </Button>
-          </div>
+          </Notice>
         )}
         {cf.problem && <p className="text-sm text-destructive">Can't turn this on: {cf.problem}.</p>}
         {!cf.enabled && (cf.conflicts?.length ?? 0) > 0 && (
@@ -121,7 +126,9 @@ function UpdatesCard({ data }: { data: SecurityResponse }) {
           </p>
         )}
         {jobId ? (
-          <JobProgress jobId={jobId} onDone={() => qc.invalidateQueries({ queryKey: securityKey })} />
+          <div className={cn("rounded-[14px] p-4", progressFrame)}>
+            <JobProgress jobId={jobId} onDone={() => qc.invalidateQueries({ queryKey: securityKey })} />
+          </div>
         ) : (
           <div>
             <Button disabled={install.isPending || up?.security === 0} onClick={() => install.mutate(undefined, { onSuccess: (r) => setJobId(r.job_id) })}>

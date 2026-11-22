@@ -91,7 +91,7 @@ export function CredentialsPanel({ secrets }: { secrets: Record<string, string> 
   const entries = Object.entries(secrets);
   if (entries.length === 0) return null;
   return (
-    <div className="rounded-[14px] bg-warning/5 shadow-inset p-4">
+    <div className="rounded-[14px] border-l-4 border-warning bg-warning/15 p-4 shadow-raised-sm">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium">
         <KeyRound className="size-4 text-warning" /> Save these credentials now. They are shown only once.
       </div>
