@@ -11,7 +11,7 @@ export function UsageBar({ value, label }: { value: number; label: string }) {
       aria-valuenow={v}
       aria-valuemin={0}
       aria-valuemax={100}
-      className="h-2 w-full overflow-hidden rounded-full bg-muted"
+      className="h-2.5 w-full overflow-hidden rounded-full bg-background p-[2px] shadow-inset"
     >
       <div className={cn("h-full rounded-full transition-[width]", color)} style={{ width: `${v}%` }} />
     </div>

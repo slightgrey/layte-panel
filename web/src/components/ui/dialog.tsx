@@ -29,13 +29,13 @@ export function Dialog({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={() => !locked && onClose()}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4 backdrop-blur-[2px]" onMouseDown={() => !locked && onClose()}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`w-full ${wide ? "max-w-5xl" : "max-w-lg"} rounded-xl border bg-card p-6 shadow-lg`}
+        className={`w-full ${wide ? "max-w-5xl" : "max-w-lg"} rounded-[1.25rem] bg-card p-6 shadow-raised`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-4">

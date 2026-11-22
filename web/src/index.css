@@ -1,38 +1,58 @@
 @import "tailwindcss";
 
-/* Design tokens (shadcn/ui naming). Light by default, dark via the OS setting. */
+/* Dark mode is class-based (`.dark` on <html>), set by public/theme-init.js
+   and the theme toggle. "System" follows the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens (shadcn/ui naming). Soft "neumorphic" look: cards share the
+   page colour and are lifted by a light + dark shadow pair. */
 :root {
-  --background: oklch(0.985 0.002 247);
-  --foreground: oklch(0.21 0.02 260);
-  --card: oklch(1 0 0);
+  --background: #e8e8e8;
+  --foreground: #2b2b2b;
+  --card: #e8e8e8;
   --card-foreground: var(--foreground);
-  --muted: oklch(0.96 0.004 247);
-  --muted-foreground: oklch(0.52 0.02 257);
-  --border: oklch(0.91 0.006 247);
+  --muted: #dedede;
+  --muted-foreground: #6b6b6b;
+  --border: rgb(0 0 0 / 0.07);
   --input: var(--border);
-  --primary: oklch(0.51 0.09 186);
-  --primary-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.58 0.22 27);
-  --success: oklch(0.6 0.15 155);
-  --warning: oklch(0.72 0.16 70);
-  --ring: var(--primary);
-  --radius: 0.6rem;
+  /* text-primary / progress bars */
+  --primary: #3f6f99;
+  --primary-foreground: #ffffff;
+  /* filled buttons (the pale-blue "Hire me" pill) */
+  --action: #c8e0f4;
+  --action-foreground: #1d3a55;
+  --destructive: #c0392b;
+  --success: #2e8b57;
+  --warning: #b7791f;
+  --ring: #7fb0dc;
+  --radius: 0.875rem;
+
+  --sh-raised: -5px -5px 15px rgb(255 255 255 / 0.8), 5px 5px 15px rgb(0 0 0 / 0.12);
+  --sh-raised-sm: -3px -3px 8px rgb(255 255 255 / 0.75), 3px 3px 8px rgb(0 0 0 / 0.1);
+  --sh-inset: inset 3px 3px 7px rgb(0 0 0 / 0.1), inset -3px -3px 7px rgb(255 255 255 / 0.75);
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.17 0.012 260);
-    --foreground: oklch(0.95 0.005 247);
-    --card: oklch(0.21 0.013 260);
-    --muted: oklch(0.25 0.013 260);
-    --muted-foreground: oklch(0.7 0.015 257);
-    --border: oklch(0.3 0.014 260);
-    --primary: oklch(0.7 0.11 186);
-    --primary-foreground: oklch(0.17 0.012 260);
-    --destructive: oklch(0.66 0.2 25);
-    --success: oklch(0.72 0.15 155);
-    --warning: oklch(0.8 0.15 75);
-  }
+:root.dark {
+  --background: #1d1f23;
+  --foreground: #e6e8eb;
+  --card: #1d1f23;
+  --muted: #26292e;
+  --muted-foreground: #9aa0a8;
+  --border: rgb(255 255 255 / 0.06);
+  --primary: #8fc1ea;
+  --primary-foreground: #10202e;
+  --action: #2f4f6b;
+  --action-foreground: #dcecf9;
+  --destructive: #f07167;
+  --success: #5fd39a;
+  --warning: #f2b84b;
+  --ring: #5f95c4;
+
+  --sh-raised: -5px -5px 14px rgb(255 255 255 / 0.035), 6px 6px 16px rgb(0 0 0 / 0.55);
+  --sh-raised-sm: -3px -3px 8px rgb(255 255 255 / 0.03), 3px 3px 8px rgb(0 0 0 / 0.5);
+  --sh-inset: inset 3px 3px 7px rgb(0 0 0 / 0.5), inset -3px -3px 7px rgb(255 255 255 / 0.03);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -46,15 +66,20 @@
   --color-input: var(--input);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-action: var(--action);
+  --color-action-foreground: var(--action-foreground);
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-ring: var(--ring);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+  --shadow-raised: var(--sh-raised);
+  --shadow-raised-sm: var(--sh-raised-sm);
+  --shadow-inset: var(--sh-inset);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
 }
 
 @layer base {
@@ -66,5 +91,41 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--action);
+    color: var(--action-foreground);
+  }
+  /* Code blocks and the file editor sit "pressed in" to the page. */
+  pre,
+  textarea {
+    box-shadow: var(--sh-inset);
+    border-color: transparent !important;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+}
+
+@layer utilities {
+  /* Small uppercase mono label, e.g. "STACK" on vincelayte.me. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  /* Blinking terminal caret. */
+  .caret::after {
+    content: "_";
+    margin-left: 1px;
+    animation: caret-blink 1.1s steps(1) infinite;
+  }
+  @keyframes caret-blink {
+    50% {
+      opacity: 0;
+    }
   }
 }

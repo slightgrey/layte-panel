@@ -36,7 +36,7 @@ export function SitesPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Sites</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Sites</h1>
           <p className="text-sm text-muted-foreground">Sites managed by Layte Panel and sites found in your nginx config.</p>
         </div>
         <div className="flex gap-2">

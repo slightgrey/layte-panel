@@ -26,7 +26,7 @@ export function DatabasesPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Databases</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Databases</h1>
           <p className="text-sm text-muted-foreground">
             {dbs.data ? `${dbs.data.engine === "mariadb" ? "MariaDB" : "MySQL"} on this server. ` : ""}
             Databases created by Layte Panel can be managed here; others are read-only.

@@ -53,13 +53,13 @@ export function JobProgress({ jobId, onDone }: { jobId: string; onDone?: (ok: bo
       </ol>
 
       {logs.length > 0 && (
-        <pre className="max-h-40 overflow-auto rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed">
+        <pre className="max-h-40 overflow-auto rounded-[12px] bg-background p-3 font-mono text-xs leading-relaxed">
           {logs.map((l) => l.message).join("\n")}
         </pre>
       )}
 
       {done?.status === "failed" && (
-        <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p role="alert" className="rounded-[12px] bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {done.message}
         </p>
       )}
@@ -91,7 +91,7 @@ export function CredentialsPanel({ secrets }: { secrets: Record<string, string> 
   const entries = Object.entries(secrets);
   if (entries.length === 0) return null;
   return (
-    <div className="rounded-lg border border-warning/40 bg-warning/5 p-4">
+    <div className="rounded-[14px] bg-warning/5 shadow-inset p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium">
         <KeyRound className="size-4 text-warning" /> Save these credentials now. They are shown only once.
       </div>
