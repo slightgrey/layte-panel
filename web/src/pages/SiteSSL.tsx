@@ -110,7 +110,11 @@ function CertificateDetails({ site }: { site: Site }) {
       <Card>
         <CardHeader>
           <CardTitle>Certificate</CardTitle>
-          {!cert.managed && <span className="text-xs text-muted-foreground">not issued by Layte Panel · read-only</span>}
+          {!cert.managed && (
+            <span className="text-xs text-muted-foreground">
+              not issued by Layte Panel{site.adopted ? " · renewable" : " · read-only"}
+            </span>
+          )}
         </CardHeader>
         <CardContent>
           <dl className="divide-y">
@@ -142,7 +146,7 @@ function CertificateDetails({ site }: { site: Site }) {
           </dl>
         </CardContent>
       </Card>
-      {cert.managed && site.managed && site.ssl && <RenewCard site={site} />}
+      {site.ssl && ((cert.managed && site.managed) || (site.adopted && cert.auto_renew)) && <RenewCard site={site} />}
     </>
   );
 }
