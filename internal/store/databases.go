@@ -53,7 +53,16 @@ func (s *Store) DatabaseByName(ctx context.Context, name string) (Database, erro
 }
 
 func (s *Store) ListDatabases(ctx context.Context) ([]Database, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT name, db_user, site_id, created_at FROM databases ORDER BY name`)
+	return s.queryDatabases(ctx, `SELECT name, db_user, site_id, created_at FROM databases ORDER BY name`)
+}
+
+// DatabasesForSite returns the databases linked to one site.
+func (s *Store) DatabasesForSite(ctx context.Context, siteID int64) ([]Database, error) {
+	return s.queryDatabases(ctx, `SELECT name, db_user, site_id, created_at FROM databases WHERE site_id=? ORDER BY name`, siteID)
+}
+
+func (s *Store) queryDatabases(ctx context.Context, query string, args ...any) ([]Database, error) {
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

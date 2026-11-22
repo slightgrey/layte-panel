@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -338,13 +339,21 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 				return fail(err)
 			}
 		}
-		if req.DropDB && site.DBName != "" {
-			j.Step("Drop database " + site.DBName)
-			if err := call("db.drop", actions.DBDropParams{Name: site.DBName, User: site.DBUser}); err != nil {
+		if req.DropDB {
+			dbs, err := s.siteDatabases(ctx, site)
+			if err != nil {
 				return fail(err)
 			}
-			s.Store.RemoveDatabase(context.WithoutCancel(ctx), site.DBName)
+			for _, db := range dbs {
+				j.Step("Drop database " + db.Name)
+				if err := call("db.drop", actions.DBDropParams{Name: db.Name, User: db.User}); err != nil {
+					return fail(err)
+				}
+				s.Store.RemoveDatabase(context.WithoutCancel(ctx), db.Name)
+			}
 		}
+		// Without DropDB, linked databases are kept: deleting the site row unlinks
+		// them (ON DELETE SET NULL) and they stay manageable on the Databases page.
 		if req.RemoveFiles {
 			j.Step("Remove Linux user " + site.SystemUser + " and all site files")
 			if err := call("site.user_remove", actions.UserParams{Username: site.SystemUser}); err != nil {
@@ -363,6 +372,19 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		return "", conflict("site_busy", "another job is running for %s", site.Domain)
 	}
 	return jobID, err
+}
+
+// siteDatabases returns every database linked to the site: the ones in the
+// databases table plus site.DBName (sites created before that table existed).
+func (s *Service) siteDatabases(ctx context.Context, site store.Site) ([]store.Database, error) {
+	dbs, err := s.Store.DatabasesForSite(ctx, site.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list databases of %s: %w", site.Domain, err)
+	}
+	if site.DBName != "" && !slices.ContainsFunc(dbs, func(d store.Database) bool { return d.Name == site.DBName }) {
+		dbs = append(dbs, store.Database{Name: site.DBName, User: site.DBUser, SiteID: site.ID})
+	}
+	return dbs, nil
 }
 
 // freeUsername returns base, or base2, base3, … if taken by another site.
