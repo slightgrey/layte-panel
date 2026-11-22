@@ -85,3 +85,31 @@ func (s *server) handleImportDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID})
 }
+
+// POST /api/v1/sites/{id}/databases/link {name} — link an existing database to an adopted site.
+func (s *server) handleLinkDatabase(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.sites.LinkDatabase(r.Context(), actorOf(r), site, req.Name); err != nil {
+		s.writeSiteError(w, "link database", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/databases/{name}/link — forget a linked database (it stays on the server).
+func (s *server) handleUnlinkDatabase(w http.ResponseWriter, r *http.Request) {
+	if err := s.sites.UnlinkDatabase(r.Context(), r.PathValue("name")); err != nil {
+		s.writeSiteError(w, "unlink database", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

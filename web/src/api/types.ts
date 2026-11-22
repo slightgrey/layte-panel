@@ -169,6 +169,7 @@ export interface DatabaseRow {
   site_id?: number;
   site_domain?: string;
   wordpress?: boolean;
+  linked?: boolean; // existing database linked to an adopted site: never dropped or reset
 }
 
 export interface DatabasesResponse {

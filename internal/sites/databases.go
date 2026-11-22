@@ -23,6 +23,7 @@ type DatabaseView struct {
 	SiteID     int64  `json:"site_id,omitempty"`
 	SiteDomain string `json:"site_domain,omitempty"`
 	WordPress  bool   `json:"wordpress,omitempty"`
+	Linked     bool   `json:"linked,omitempty"` // existing database linked to an adopted site
 }
 
 // ListDatabases merges the server's databases with Layte's records.
@@ -54,7 +55,7 @@ func (s *Service) ListDatabases(ctx context.Context, actor agent.Actor) (engine 
 	for _, d := range res.Databases {
 		v := DatabaseView{Name: d.Name, Size: d.Size, System: d.System}
 		if o, ok := byName[d.Name]; ok {
-			v.Managed, v.User, v.SiteID = true, o.User, o.SiteID
+			v.Managed, v.User, v.SiteID, v.Linked = true, o.User, o.SiteID, o.Linked
 			if site, ok := byID[o.SiteID]; ok {
 				v.SiteDomain, v.WordPress = site.Domain, site.WordPress
 			}
@@ -78,8 +79,8 @@ func (s *Service) CreateDatabase(ctx context.Context, actor agent.Actor, name st
 		if err != nil {
 			return "", badRequest("no such site")
 		}
-		if !site.Managed {
-			return "", conflict("site_unmanaged", "databases can only be linked to sites created by Layte Panel")
+		if !site.Managed && !site.Adopted {
+			return "", conflict("site_unmanaged", "databases can only be linked to sites created or adopted by Layte Panel")
 		}
 	}
 	if _, err := s.Store.DatabaseByName(ctx, name); err == nil {
@@ -121,6 +122,9 @@ func (s *Service) DropDatabase(ctx context.Context, actor agent.Actor, name, con
 	if err != nil {
 		return err
 	}
+	if db.Linked {
+		return conflict("db_linked", "%s wasn't created by Layte Panel; unlink it instead", name)
+	}
 	if site != nil {
 		return conflict("db_in_use", "%s belongs to site %s; delete the site (with its database) instead", name, site.Domain)
 	}
@@ -139,6 +143,9 @@ func (s *Service) ResetDBPassword(ctx context.Context, actor agent.Actor, name s
 	db, site, err := s.managedDB(ctx, name)
 	if err != nil {
 		return "", err
+	}
+	if db.Linked {
+		return "", conflict("db_linked", "%s wasn't created by Layte Panel; its app's config holds the password, so it can't be reset here", name)
 	}
 	if site != nil && site.WordPress {
 		return "", conflict("db_in_use", "%s is used by the WordPress site %s; changing it here would break wp-config.php", name, site.Domain)
@@ -160,8 +167,12 @@ func (s *Service) dumpTarget(ctx context.Context, name string) (store.Database, 
 	if site == nil {
 		return db, store.Site{}, conflict("db_no_site", "%s isn't linked to a site; export and import use the site's tmp/ folder", name)
 	}
-	if err := s.requireManagedActive(*site); err != nil {
-		return db, *site, err
+	if !site.Adopted {
+		if err := s.requireManagedActive(*site); err != nil {
+			return db, *site, err
+		}
+	} else if site.Status != "active" {
+		return db, *site, conflict("site_busy", "%s is %s", site.Domain, site.Status)
 	}
 	return db, *site, nil
 }
@@ -173,7 +184,7 @@ func (s *Service) ExportDatabase(ctx context.Context, actor agent.Actor, name st
 	if err != nil {
 		return "", err
 	}
-	params := actions.DBExportParams{Database: db.Name, Domain: site.Domain, Username: site.SystemUser}
+	params := actions.DBExportParams{Database: db.Name, Domain: site.Domain, Username: site.SystemUser, WebRoot: adoptedRoot(site)}
 	return s.startDBJob("db.export", site, actor, func(ctx context.Context, j *jobs.Job) error {
 		j.Step("Export " + db.Name + " to tmp/")
 		var out actions.DumpFile
@@ -194,7 +205,7 @@ func (s *Service) ImportDatabase(ctx context.Context, actor agent.Actor, name, p
 	if err != nil {
 		return "", err
 	}
-	params := actions.DBImportParams{Database: db.Name, Domain: site.Domain, Username: site.SystemUser, Path: path}
+	params := actions.DBImportParams{Database: db.Name, Domain: site.Domain, Username: site.SystemUser, WebRoot: adoptedRoot(site), Path: path}
 	if err := params.Validate(); err != nil {
 		return "", badRequest("%v", err)
 	}
@@ -217,4 +228,51 @@ func (s *Service) startDBJob(kind string, site store.Site, actor agent.Actor, fn
 		return "", conflict("site_busy", "another job is running for %s", site.Domain)
 	}
 	return jobID, err
+}
+
+// adoptedRoot is the web root agent actions need for an adopted site ("" otherwise).
+func adoptedRoot(site store.Site) string {
+	if site.Adopted {
+		return site.RootPath
+	}
+	return ""
+}
+
+// LinkDatabase links an existing database on the server (not created by
+// Layte) to an adopted site, so it can be exported and imported there. It is
+// never dropped and its password is never reset.
+func (s *Service) LinkDatabase(ctx context.Context, actor agent.Actor, site store.Site, name string) error {
+	if !site.Adopted {
+		return conflict("site_not_adopted", "only adopted sites link existing databases; Layte sites create their own")
+	}
+	if err := validate.DBIdent(name); err != nil {
+		return badRequest("%v", err)
+	}
+	if _, err := s.Store.DatabaseByName(ctx, name); err == nil {
+		return conflict("db_taken", "%s is already managed or linked", name)
+	}
+	_, dbs, err := s.ListDatabases(ctx, actor)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(dbs, func(d DatabaseView) bool { return d.Name == name })
+	if i < 0 {
+		return &Error{Status: 404, Code: "not_found", Message: "no database " + name + " on this server"}
+	}
+	if dbs[i].System {
+		return badRequest("%s is a system database", name)
+	}
+	return s.Store.AddDatabase(ctx, store.Database{Name: name, SiteID: site.ID, Linked: true})
+}
+
+// UnlinkDatabase forgets a linked database. The database itself stays.
+func (s *Service) UnlinkDatabase(ctx context.Context, name string) error {
+	db, err := s.Store.DatabaseByName(ctx, name)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !db.Linked) {
+		return conflict("db_not_linked", "%s isn't a linked database", name)
+	}
+	if err != nil {
+		return err
+	}
+	return s.Store.RemoveDatabase(ctx, name)
 }
