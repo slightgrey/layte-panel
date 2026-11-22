@@ -1,5 +1,5 @@
-import { Download, File, FileCode, Folder, FolderPlus, Lock, Pencil, Save, Trash2, Upload } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { ArrowLeft, ChevronRight, CornerLeftUp, Download, File, FileCode, Folder, FolderPlus, Home, Lock, Pencil, Save, Trash2, Upload } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { downloadURL, useFileActions, useFileContent, useFiles } from "@/api/files";
 import { useSite } from "@/api/sites";
@@ -13,6 +13,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBytes } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { FormError } from "./AuthShell";
 
 const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
@@ -33,6 +34,8 @@ export function SiteFilesPage() {
 
   const go = (p: string) => setParams(p ? { path: p } : { path: "" });
   const crumbs = dir.split("/").filter(Boolean);
+  const atRoot = crumbs.length === 0;
+  const up = () => go(crumbs.slice(0, -1).join("/"));
   const anyError = actions.upload.error ?? actions.remove.error ?? actions.mkdir.error;
 
   return (
@@ -45,16 +48,20 @@ export function SiteFilesPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <nav aria-label="Folder" className="flex flex-wrap items-center gap-1 text-sm">
-          <button className="hover:underline" onClick={() => go("")}>
+        <Button variant="outline" size="sm" onClick={up} disabled={atRoot} aria-label="Back to the parent folder" title="Back to the parent folder">
+          <ArrowLeft /> Back
+        </Button>
+        <nav aria-label="Folder" className="flex min-w-0 flex-wrap items-center gap-0.5 rounded-[12px] bg-card px-1.5 py-1 text-sm shadow-raised-sm">
+          <Crumb current={atRoot} onClick={() => go("")}>
+            <Home className="size-3.5" />
             {site.data?.domain ?? "root"}
-          </button>
+          </Crumb>
           {crumbs.map((c, i) => (
-            <span key={i} className="flex items-center gap-1">
-              <span className="text-muted-foreground">/</span>
-              <button className="hover:underline" onClick={() => go(crumbs.slice(0, i + 1).join("/"))}>
+            <span key={i} className="flex items-center gap-0.5">
+              <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden />
+              <Crumb current={i === crumbs.length - 1} onClick={() => go(crumbs.slice(0, i + 1).join("/"))}>
                 {c}
-              </button>
+              </Crumb>
             </span>
           ))}
         </nav>
@@ -92,7 +99,10 @@ export function SiteFilesPage() {
           ) : files.error ? (
             <p className="text-sm text-destructive">{files.error.message}</p>
           ) : files.data.entries.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">This folder is empty.</p>
+            <>
+              {!atRoot && <ParentRow onClick={up} />}
+              <p className="py-8 text-center text-sm text-muted-foreground">This folder is empty.</p>
+            </>
           ) : (
             <Table>
               <TableHeader>
@@ -104,6 +114,13 @@ export function SiteFilesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {!atRoot && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-1.5">
+                      <ParentRow onClick={up} />
+                    </TableCell>
+                  </TableRow>
+                )}
                 {files.data.entries.map((e) => {
                   const p = join(dir, e.name);
                   return (
@@ -180,6 +197,38 @@ export function SiteFilesPage() {
         onSubmit={(name) => actions.rename.mutateAsync({ path: join(dir, renaming!.name), to: join(dir, name) })}
       />
     </div>
+  );
+}
+
+/** One breadcrumb step: a chip; the current folder is bold and blue. */
+function Crumb({ current, onClick, children }: { current: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={current ? "location" : undefined}
+      className={cn(
+        "flex items-center gap-1.5 rounded-[9px] px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        current ? "font-semibold text-primary" : "text-foreground hover:bg-action hover:text-action-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** ".." at the top of the list: back to the parent folder. */
+function ParentRow({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 rounded-[9px] px-1 py-1 text-left text-sm text-muted-foreground hover:text-primary"
+    >
+      <CornerLeftUp className="size-4" />
+      <span className="font-mono">..</span>
+      <span className="text-xs">Parent folder</span>
+    </button>
   );
 }
 
