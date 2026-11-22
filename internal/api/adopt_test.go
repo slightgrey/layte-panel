@@ -82,6 +82,9 @@ func TestAdoptSite(t *testing.T) {
 
 func TestAdoptedSiteDatabase(t *testing.T) {
 	_, c, deps := siteEnv(t)
+	// Make shop a WordPress site whose wp-config.php uses the "blog" database.
+	deps.FS.WriteFileAtomic("/var/www/shop/public/wp-config.php", []byte("<?php\ndefine( 'DB_NAME', 'blog' );\ndefine( 'DB_USER', 'bloguser' );\n"), 0o640)
+	deps.FS.MkdirAll("/var/lib/mysql/otherdb", 0o750)
 	c.do("POST", "/api/v1/sites/scan", nil)
 	shop := siteIDByDomain(t, c, "shop.example.org")
 	_, prev := c.do("GET", "/api/v1/sites/"+shop+"/adopt", nil)
@@ -101,11 +104,15 @@ func TestAdoptedSiteDatabase(t *testing.T) {
 	if st, _ := c.do("POST", "/api/v1/sites/"+shop+"/databases/link", map[string]string{"name": "nosuchdb"}); st != 404 {
 		t.Errorf("link missing db: %d", st)
 	}
+	// wp-config.php names another database: refused.
+	if st, body := c.do("POST", "/api/v1/sites/"+shop+"/databases/link", map[string]string{"name": "otherdb"}); st != 409 || errCode(body) != "db_mismatch" {
+		t.Errorf("link db wp-config doesn't use: %d %v", st, body)
+	}
 	if st, body := c.do("POST", "/api/v1/sites/"+shop+"/databases/link", map[string]string{"name": "blog"}); st != 204 {
 		t.Fatalf("link: %d %v", st, body)
 	}
-	if d := dbByName(t, c)["blog"]; d["linked"] != true || d["site_domain"] != "shop.example.org" {
-		t.Errorf("linked db: %v", d)
+	if d := dbByName(t, c)["blog"]; d["linked"] != true || d["site_domain"] != "shop.example.org" || d["user"] != "bloguser" {
+		t.Errorf("linked db (user from wp-config.php): %v", d)
 	}
 	// Linked databases are never dropped or have their password reset.
 	if st, body := c.do("POST", "/api/v1/databases/blog/password", nil); st != 409 || errCode(body) != "db_linked" {

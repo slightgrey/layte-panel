@@ -262,7 +262,21 @@ func (s *Service) LinkDatabase(ctx context.Context, actor agent.Actor, site stor
 	if dbs[i].System {
 		return badRequest("%s is a system database", name)
 	}
-	return s.Store.AddDatabase(ctx, store.Database{Name: name, SiteID: site.ID, Linked: true})
+	// WordPress: wp-config.php says which database (and user) the site uses.
+	user := ""
+	if site.WordPress {
+		cfg, ok, err := s.readWPConfig(ctx, actor, site)
+		if err != nil {
+			return err
+		}
+		if ok && cfg.Name != "" && cfg.Name != name {
+			return conflict("db_mismatch", "wp-config.php uses the database %s, not %s", cfg.Name, name)
+		}
+		if ok && cfg.Name == name {
+			user = cfg.User
+		}
+	}
+	return s.Store.AddDatabase(ctx, store.Database{Name: name, User: user, SiteID: site.ID, Linked: true})
 }
 
 // UnlinkDatabase forgets a linked database. The database itself stays.
