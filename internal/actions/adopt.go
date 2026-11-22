@@ -452,3 +452,27 @@ func loopbackStatus(ctx context.Context, domain string, https bool) (int, error)
 	resp.Body.Close()
 	return resp.StatusCode, nil
 }
+
+// verifyAdopted checks, from the server's own config, that domain + web root
+// + user is an adopted site: the user is a Layte user, nginx serves the
+// domain from that web root, and the pool behind it is Layte's and runs as
+// that user. File, cron and dump actions on adopted sites all go through it.
+func (d Deps) verifyAdopted(ctx context.Context, domain, user, webRoot string) error {
+	if ok, _ := d.FS.Exists("/home/" + user + "/" + siteUserMarker); !ok {
+		return agent.Errorf(agent.CodeInvalidParams, "%s is not a Layte site user", user)
+	}
+	out, err := d.sitesDiscover(ctx, agent.Actor{}, agent.NoParams{})
+	if err != nil {
+		return err
+	}
+	all := out.([]DiscoveredSite)
+	i := slices.IndexFunc(all, func(s DiscoveredSite) bool { return s.Domain == domain && s.Root == webRoot && !s.Managed })
+	if i < 0 || all[i].PHPSocket == "" {
+		return agent.Errorf(agent.CodeInvalidParams, "%s is not served from %s", domain, webRoot)
+	}
+	pools := d.findPools(all[i].PHPSocket)
+	if len(pools) != 1 || !system.IsManaged([]byte(pools[0].Content)) || pools[0].User != user {
+		return agent.Errorf(agent.CodeInvalidParams, "%s's PHP pool isn't an adopted pool running as %s", domain, user)
+	}
+	return nil
+}

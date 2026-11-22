@@ -47,7 +47,7 @@ func (d Deps) siteDiskUsage(ctx context.Context, _ agent.Actor, p SiteDiskParams
 	}
 	paths := []string{root}
 	var parts []string
-	if p.Username != "" {
+	if p.Username != "" && p.WebRoot == "" { // adopted sites have no public/logs/tmp in their web root
 		for _, sub := range []string{"public", "logs", "tmp"} {
 			if fi, err := d.FS.Lstat(root + "/" + sub); err == nil && fi.IsDir() {
 				parts = append(parts, sub)

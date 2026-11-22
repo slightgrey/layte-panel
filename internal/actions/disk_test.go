@@ -25,7 +25,6 @@ func TestSiteDiskUsage(t *testing.T) {
 	for _, bad := range []SiteDiskParams{
 		{Domain: "a.test"},
 		{Domain: "a.test", WebRoot: "/etc"},
-		{Domain: "a.test", Username: "acme", WebRoot: "/var/www/x"},
 	} {
 		if bad.Validate() == nil {
 			t.Errorf("accepted %+v", bad)

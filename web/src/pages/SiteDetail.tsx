@@ -229,7 +229,7 @@ const mono = "font-mono text-xs";
 
 /** Total size, plus the public/logs/tmp breakdown for Layte sites. */
 function DiskSize({ site }: { site: Site }) {
-  const canMeasure = site.status === "active" && Boolean(site.managed ? site.system_user : site.root_path);
+  const canMeasure = site.status === "active" && Boolean(site.managed || site.adopted ? site.system_user : site.root_path);
   const disk = useSiteDisk(site.id, canMeasure);
   if (!canMeasure) return <span className="text-muted-foreground">–</span>;
   if (disk.isPending) return <span className="text-muted-foreground">Measuring…</span>;

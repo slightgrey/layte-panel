@@ -35,6 +35,8 @@ func (s *Service) ListCron(ctx context.Context) ([]CronView, map[int64]string, e
 		domains[x.ID] = x.Domain
 		if x.Managed && x.WordPress {
 			suggest[x.ID] = actions.WPCronCommand(templates.Site{Domain: x.Domain, User: x.SystemUser, PHPVersion: x.PHPVersion})
+		} else if x.Adopted && x.WordPress && x.PHPVersion != "" {
+			suggest[x.ID] = actions.WPCronCommandAt(x.PHPVersion, x.RootPath)
 		}
 	}
 	out := make([]CronView, 0, len(jobs))
@@ -44,10 +46,10 @@ func (s *Service) ListCron(ctx context.Context) ([]CronView, map[int64]string, e
 	return out, suggest, nil
 }
 
-// AddCron adds a job to a managed site and re-installs its cron file.
+// AddCron adds a job to a managed or adopted site and re-installs its cron file.
 func (s *Service) AddCron(ctx context.Context, actor agent.Actor, site store.Site, schedule, command string) (int64, error) {
-	if !site.Managed {
-		return 0, conflict("site_unmanaged", "cron jobs can only be added to sites created by Layte Panel")
+	if !site.Managed && !site.Adopted {
+		return 0, conflict("site_unmanaged", "cron jobs can only be added to sites created or adopted by Layte Panel")
 	}
 	schedule = strings.Join(strings.Fields(schedule), " ")
 	if err := validate.CronSchedule(schedule); err != nil {
@@ -119,5 +121,9 @@ func (s *Service) syncCron(ctx context.Context, actor agent.Actor, site store.Si
 			entries = append(entries, actions.CronEntry{Schedule: j.Schedule, Command: j.Command})
 		}
 	}
-	return s.Agent.Call(ctx, "cron.write", actor, actions.CronWriteParams{Domain: site.Domain, Username: site.SystemUser, Jobs: entries}, nil)
+	params := actions.CronWriteParams{Domain: site.Domain, Username: site.SystemUser, Jobs: entries}
+	if site.Adopted {
+		params.WebRoot = site.RootPath
+	}
+	return s.Agent.Call(ctx, "cron.write", actor, params, nil)
 }

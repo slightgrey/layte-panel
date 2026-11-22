@@ -65,6 +65,11 @@ func (l localFileOps) Run(_ context.Context, _ system.Credential, req fileops.Re
 //   - Imported sites: WebRoot is set (read-only); it must be the root of an
 //     enabled nginx vhost for Domain, and operations run as the folder's owner
 //     (www-data if root owns it).
+//   - Adopted sites: both are set; the jail is the web root, operations run
+//     as the (Layte) user, and verifyAdopted must pass.
+//
+// Area "data" addresses the site's non-public folder (tmp/, logs/): the site
+// folder for Layte sites, /home/<user> for adopted ones.
 type FSParams struct {
 	Domain   string `json:"domain"`
 	Username string `json:"username,omitempty"`
@@ -76,6 +81,7 @@ type FSParams struct {
 	Length   int    `json:"length,omitempty"`
 	Chunk    []byte `json:"chunk,omitempty"`
 	Final    bool   `json:"final,omitempty"`
+	Area     string `json:"area,omitempty"` // "" (web files) or "data"
 }
 
 var (
@@ -92,14 +98,18 @@ func (p FSParams) validate(ops []string) error {
 	if err := validDomain(p.Domain); err != nil {
 		return err
 	}
-	if (p.Username == "") == (p.WebRoot == "") {
-		return errors.New("exactly one of username or web_root is required")
+	if p.Username == "" && p.WebRoot == "" {
+		return errors.New("username or web_root is required")
+	}
+	if p.Area != "" && p.Area != "data" {
+		return fmt.Errorf("unknown area %q", p.Area)
 	}
 	if p.Username != "" {
 		if err := validate.SiteUsername(p.Username); err != nil {
 			return err
 		}
-	} else {
+	}
+	if p.WebRoot != "" {
 		if path.Clean(p.WebRoot) != p.WebRoot || !slices.ContainsFunc(webRootPrefixes, func(pre string) bool { return strings.HasPrefix(p.WebRoot+"/", pre) && p.WebRoot+"/" != pre }) {
 			return fmt.Errorf("web root %s is not in a web folder", p.WebRoot)
 		}
@@ -128,6 +138,20 @@ func (p FSWriteParams) Validate() error { return FSParams(p).validate(writeOps) 
 
 // jail works out the folder and the user for a request.
 func (d Deps) jail(ctx context.Context, p FSParams) (root string, as system.Credential, readOnly bool, err error) {
+	if p.Username != "" && p.WebRoot != "" { // adopted
+		if err := d.verifyAdopted(ctx, p.Domain, p.Username, p.WebRoot); err != nil {
+			return "", as, false, err
+		}
+		root = p.WebRoot
+		if p.Area == "data" {
+			root = "/home/" + p.Username
+		}
+		if fi, err := d.FS.Lstat(root); err != nil || !fi.IsDir() {
+			return "", as, false, agent.Errorf(agent.CodeNotFound, "folder %s not found", root)
+		}
+		as, err = d.Users.Lookup(p.Username)
+		return root, as, false, err
+	}
 	if p.Username != "" {
 		if ok, _ := d.FS.Exists("/home/" + p.Username + "/" + siteUserMarker); !ok {
 			return "", as, false, agent.Errorf(agent.CodeInvalidParams, "%s is not a Layte site user", p.Username)
@@ -141,6 +165,9 @@ func (d Deps) jail(ctx context.Context, p FSParams) (root string, as system.Cred
 	}
 
 	// Imported: the web root must really belong to this domain in nginx.
+	if p.Area == "data" {
+		return "", as, true, agent.Errorf(agent.CodeInvalidParams, "imported sites have no data folder; adopt the site first")
+	}
 	out, err := d.sitesDiscover(ctx, agent.Actor{}, agent.NoParams{})
 	if err != nil {
 		return "", as, true, err

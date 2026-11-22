@@ -20,12 +20,19 @@ import (
 const maxUpload = 256 << 20 // per request (all files)
 
 // fsBase addresses a site's folder: Layte sites by their user, imported
-// sites (read-only) by their web root.
-func fsBase(site store.Site) actions.FSParams {
-	if site.Managed {
-		return actions.FSParams{Domain: site.Domain, Username: site.SystemUser}
+// sites (read-only) by their web root, adopted sites by both. ?area=data
+// picks the site's non-public folder (tmp/, logs/) instead of its web files.
+func fsBase(site store.Site, r *http.Request) actions.FSParams {
+	p := actions.FSParams{Domain: site.Domain, Area: r.URL.Query().Get("area")}
+	switch {
+	case site.Managed:
+		p.Username = site.SystemUser
+	case site.Adopted:
+		p.Username, p.WebRoot = site.SystemUser, site.RootPath
+	default:
+		p.WebRoot = site.RootPath
 	}
-	return actions.FSParams{Domain: site.Domain, WebRoot: site.RootPath}
+	return p
 }
 
 func (s *server) fsRead(r *http.Request, p actions.FSParams) (fileops.Response, error) {
@@ -46,11 +53,11 @@ func (s *server) fsSite(w http.ResponseWriter, r *http.Request, write bool) (sto
 	if !ok {
 		return site, false
 	}
-	if site.Managed && site.Status != "active" {
+	if (site.Managed || site.Adopted) && site.Status != "active" {
 		writeError(w, http.StatusConflict, "site_busy", "the site is "+site.Status)
 		return site, false
 	}
-	if write && !site.Managed {
+	if write && !site.Managed && !site.Adopted {
 		writeError(w, http.StatusConflict, "site_unmanaged", "imported sites are read-only in Layte Panel")
 		return site, false
 	}
@@ -80,7 +87,7 @@ func (s *server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p := fsBase(site)
+	p := fsBase(site, r)
 	p.Op, p.Path = "list", r.URL.Query().Get("path")
 	res, err := s.fsRead(r, p)
 	if err != nil {
@@ -90,12 +97,16 @@ func (s *server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	if res.Entries == nil {
 		res.Entries = []fileops.Entry{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"entries": res.Entries, "read_only": !site.Managed, "root": fsRootLabel(site)})
+	writeJSON(w, http.StatusOK, map[string]any{"entries": res.Entries, "read_only": !site.Managed && !site.Adopted, "root": fsRootLabel(site, p.Area)})
 }
 
-func fsRootLabel(site store.Site) string {
-	if site.Managed {
+// fsRootLabel is the folder the file manager shows paths relative to.
+func fsRootLabel(site store.Site, area string) string {
+	switch {
+	case site.Managed:
 		return "/home/" + site.SystemUser + "/" + site.Domain
+	case site.Adopted && area == "data":
+		return "/home/" + site.SystemUser
 	}
 	return site.RootPath
 }
@@ -106,7 +117,7 @@ func (s *server) handleReadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p := fsBase(site)
+	p := fsBase(site, r)
 	p.Path = r.URL.Query().Get("path")
 	p.Op = "stat"
 	st, err := s.fsRead(r, p)
@@ -192,7 +203,7 @@ func (s *server) handleSaveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.URL.Query().Get("path")
-	n, err := s.writeAll(r, fsBase(site), name, strings.NewReader(req.Content))
+	n, err := s.writeAll(r, fsBase(site, r), name, strings.NewReader(req.Content))
 	if err != nil {
 		s.writeFSError(w, "save file", err)
 		return
@@ -232,7 +243,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			part.Close()
 			continue
 		}
-		if _, err := s.writeAll(r, fsBase(site), path.Join(dir, name), part); err != nil {
+		if _, err := s.writeAll(r, fsBase(site, r), path.Join(dir, name), part); err != nil {
 			part.Close()
 			s.writeFSError(w, "upload", err)
 			return
@@ -249,7 +260,7 @@ func (s *server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p := fsBase(site)
+	p := fsBase(site, r)
 	p.Op, p.Path = "stat", r.URL.Query().Get("path")
 	st, err := s.fsRead(r, p)
 	if err != nil {
@@ -296,7 +307,7 @@ func (s *server) handleFileOp(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	p := fsBase(site)
+	p := fsBase(site, r)
 	p.Op, p.Path, p.To = op, req.Path, req.To
 	if _, err := s.fsWrite(r, p); err != nil {
 		s.writeFSError(w, op, err)

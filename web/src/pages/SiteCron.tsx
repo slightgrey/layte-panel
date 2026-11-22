@@ -13,8 +13,8 @@ export function SiteCronPage() {
 
 function CronTab({ site }: { site: Site }) {
   const cron = useCron();
-  // Same rule as the global Cron page: only active sites created by Layte can be changed.
-  const writable = site.managed && site.status === "active";
+  // Same rule as the global Cron page: only active sites created or adopted by Layte can be changed.
+  const writable = (site.managed || site.adopted) && site.status === "active";
   const jobs = (cron.data?.jobs ?? []).filter((j) => j.site_id === site.id);
 
   return (

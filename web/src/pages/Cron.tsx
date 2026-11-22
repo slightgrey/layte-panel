@@ -8,7 +8,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 export function CronPage() {
   const cron = useCron();
   const sites = useSites();
-  const managed = (sites.data?.sites ?? []).filter((s) => s.managed && s.status === "active");
+  const managed = (sites.data?.sites ?? []).filter((s) => (s.managed || s.adopted) && s.status === "active");
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">

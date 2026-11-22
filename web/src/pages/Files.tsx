@@ -29,7 +29,7 @@ export function FilesPage() {
                   <Link to={`/sites/${s.id}/files`} className="flex items-center gap-3 py-3 hover:underline">
                     <FolderOpen className="size-4 text-primary" />
                     <span className="font-medium">{s.domain}</span>
-                    {!s.managed && (
+                    {!s.managed && !s.adopted && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Lock className="size-3" /> read-only
                       </span>
