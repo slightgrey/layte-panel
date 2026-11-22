@@ -138,17 +138,19 @@ func (s *Service) DropDatabase(ctx context.Context, actor agent.Actor, name, con
 }
 
 // ResetDBPassword sets a new random password and returns it (shown once).
-// WordPress sites are refused: their wp-config.php would stop working.
+// For a WordPress site (created or adopted) wp-config.php is updated in the
+// same step and the site must keep answering, or both are put back. Other
+// linked databases are refused: their app's config holds the password.
 func (s *Service) ResetDBPassword(ctx context.Context, actor agent.Actor, name string) (string, error) {
 	db, site, err := s.managedDB(ctx, name)
 	if err != nil {
 		return "", err
 	}
+	if site != nil && site.WordPress && (site.Managed || site.Adopted) {
+		return s.resetWPPassword(ctx, actor, db, *site)
+	}
 	if db.Linked {
 		return "", conflict("db_linked", "%s wasn't created by Layte Panel; its app's config holds the password, so it can't be reset here", name)
-	}
-	if site != nil && site.WordPress {
-		return "", conflict("db_in_use", "%s is used by the WordPress site %s; changing it here would break wp-config.php", name, site.Domain)
 	}
 	pw := randomPassword()
 	if err := s.Agent.Call(ctx, "db.password_reset", actor, actions.DBPasswordParams{User: db.User, Password: pw}, nil); err != nil {
@@ -289,4 +291,33 @@ func (s *Service) UnlinkDatabase(ctx context.Context, name string) error {
 		return err
 	}
 	return s.Store.RemoveDatabase(ctx, name)
+}
+
+// resetWPPassword changes a WordPress site's database password together with
+// its wp-config.php (agent action db.wp_password).
+func (s *Service) resetWPPassword(ctx context.Context, actor agent.Actor, db store.Database, site store.Site) (string, error) {
+	if site.Status != "active" {
+		return "", conflict("site_busy", "%s is %s", site.Domain, site.Status)
+	}
+	if db.User == "" {
+		return "", conflict("db_user_unknown", "Layte doesn't know which MySQL user %s uses; unlink and link the database again", db.Name)
+	}
+	pw := randomPassword()
+	params := actions.WPDBPasswordParams{Database: db.Name, User: db.User, Domain: site.Domain, Username: site.SystemUser, WebRoot: adoptedRoot(site), Password: pw}
+	if err := s.longCall(ctx, 2*time.Minute, "db.wp_password", actor, params, nil); err != nil {
+		if agent.IsCode(err, agent.CodeInvalidParams) || agent.IsCode(err, "site_check_failed") {
+			return "", conflict("db_password_refused", "%s", agentMessage(err))
+		}
+		return "", err
+	}
+	return pw, nil
+}
+
+// agentMessage is the agent's user-facing error message.
+func agentMessage(err error) string {
+	var ae *agent.Error
+	if errors.As(err, &ae) {
+		return ae.Message
+	}
+	return err.Error()
 }
