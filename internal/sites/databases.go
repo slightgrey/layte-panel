@@ -7,6 +7,7 @@ import (
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/store"
 	"github.com/slightgrey/layte-panel/internal/validate"
 )
@@ -146,4 +147,73 @@ func (s *Service) ResetDBPassword(ctx context.Context, actor agent.Actor, name s
 		return "", err
 	}
 	return pw, nil
+}
+
+// dumpTarget loads a Layte database and the active Layte site it belongs to.
+// Dumps are written to (and read from) that site's tmp/ folder.
+func (s *Service) dumpTarget(ctx context.Context, name string) (store.Database, store.Site, error) {
+	db, site, err := s.managedDB(ctx, name)
+	if err != nil {
+		return db, store.Site{}, err
+	}
+	if site == nil {
+		return db, store.Site{}, conflict("db_no_site", "%s isn't linked to a site; export and import use the site's tmp/ folder", name)
+	}
+	if err := s.requireManagedActive(*site); err != nil {
+		return db, *site, err
+	}
+	return db, *site, nil
+}
+
+// ExportDatabase starts a job that dumps the database to the site's tmp/
+// folder. The job result has the file's path (relative to the site folder).
+func (s *Service) ExportDatabase(ctx context.Context, actor agent.Actor, name string) (string, error) {
+	db, site, err := s.dumpTarget(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	params := actions.DBExportParams{Database: db.Name, Domain: site.Domain, Username: site.SystemUser}
+	return s.startDBJob("db.export", site, actor, func(ctx context.Context, j *jobs.Job) error {
+		j.Step("Export " + db.Name + " to tmp/")
+		var out actions.DumpFile
+		if err := s.Agent.Call(ctx, "db.export", actor, params, &out); err != nil {
+			return err
+		}
+		j.Log("Saved %s (%d bytes). Download it from the Database or Files tab.", out.Path, out.Size)
+		j.SetResult(map[string]any{"site_id": site.ID, "path": out.Path, "size": out.Size})
+		return nil
+	})
+}
+
+// ImportDatabase starts a job that runs a .sql file from the site's tmp/
+// folder into the database. confirm must be the database name: an import
+// overwrites the tables the file contains.
+func (s *Service) ImportDatabase(ctx context.Context, actor agent.Actor, name, path, confirm string) (string, error) {
+	db, site, err := s.dumpTarget(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	params := actions.DBImportParams{Database: db.Name, Domain: site.Domain, Username: site.SystemUser, Path: path}
+	if err := params.Validate(); err != nil {
+		return "", badRequest("%v", err)
+	}
+	if confirm != db.Name {
+		return "", badRequest("type the database name (%s) to confirm", db.Name)
+	}
+	return s.startDBJob("db.import", site, actor, func(ctx context.Context, j *jobs.Job) error {
+		j.Step("Import " + path + " into " + db.Name)
+		if err := s.Agent.Call(ctx, "db.import", actor, params, nil); err != nil {
+			return err
+		}
+		j.SetResult(map[string]any{"site_id": site.ID, "path": path})
+		return nil
+	})
+}
+
+func (s *Service) startDBJob(kind string, site store.Site, actor agent.Actor, fn func(context.Context, *jobs.Job) error) (string, error) {
+	jobID, err := s.Jobs.Start(kind, site.ID, actor.UserID, fn)
+	if errors.Is(err, jobs.ErrSiteBusy) {
+		return "", conflict("site_busy", "another job is running for %s", site.Domain)
+	}
+	return jobID, err
 }

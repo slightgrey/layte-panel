@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { DatabasesResponse, SecretsResponse } from "./types";
+import type { DatabasesResponse, JobStarted, SecretsResponse } from "./types";
 
 export const databasesKey = ["databases"] as const;
 
@@ -30,4 +30,17 @@ export function useDropDatabase() {
 /** POST /databases/{name}/password: returns the new password once. */
 export function useResetDBPassword() {
   return useMutation({ mutationFn: (name: string) => api<SecretsResponse>("POST", `/databases/${name}/password`) });
+}
+
+/** POST /databases/{name}/export: dump to the site's tmp/ folder (job). */
+export function useExportDatabase() {
+  return useMutation({ mutationFn: (name: string) => api<JobStarted>("POST", `/databases/${name}/export`) });
+}
+
+/** POST /databases/{name}/import: run tmp/<file>.sql into the database (job). */
+export function useImportDatabase() {
+  return useMutation({
+    mutationFn: (v: { name: string; path: string; confirm: string }) =>
+      api<JobStarted>("POST", `/databases/${v.name}/import`, { path: v.path, confirm: v.confirm }),
+  });
 }

@@ -1,13 +1,18 @@
-import { Database, KeyRound, Plus } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
-import { useCreateDatabase, useDatabases, useResetDBPassword } from "@/api/databases";
+import { Database, Download, KeyRound, Plus, Trash2, Upload } from "lucide-react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
+import { useCreateDatabase, useDatabases, useExportDatabase, useImportDatabase, useResetDBPassword } from "@/api/databases";
+import { downloadURL, useFileActions, useFiles } from "@/api/files";
 import type { DatabaseRow, Site } from "@/api/types";
 import { OneTimeSecrets } from "@/components/JobProgress";
 import { EmptyState, SiteShell } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBytes } from "@/lib/format";
 import { FormError } from "./AuthShell";
 
@@ -30,7 +35,7 @@ function DatabaseTab({ site }: { site: Site }) {
       {mine.length === 0 ? (
         <NoDatabase site={site} onCreated={setSecrets} />
       ) : (
-        mine.map((db) => <DatabaseCards key={db.name} db={db} onSecrets={setSecrets} />)
+        mine.map((db) => <DatabaseCards key={db.name} site={site} db={db} onSecrets={setSecrets} />)
       )}
     </>
   );
@@ -85,8 +90,11 @@ function NoDatabase({ site, onCreated }: { site: Site; onCreated: (s: Record<str
   );
 }
 
-function DatabaseCards({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
+function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
   const reset = useResetDBPassword();
+  const exp = useExportDatabase();
+  const [, setParams] = useSearchParams();
+  const canDump = db.managed && site.managed && site.status === "active";
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
@@ -137,17 +145,163 @@ function DatabaseCards({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Reco
                 <KeyRound /> Reset password
               </Button>
             )}
-            <Button variant="outline" disabled title="Coming later">
-              Export (.sql)
-            </Button>
-            <Button variant="outline" disabled title="Coming later">
-              Import (.sql)
-            </Button>
+            {canDump && (
+              <Button
+                variant="outline"
+                disabled={exp.isPending}
+                title="Dump the database to a .sql file in the site's tmp/ folder"
+                onClick={() => exp.mutate(db.name, { onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }) })}
+              >
+                <Download /> Export (.sql)
+              </Button>
+            )}
           </div>
-          <FormError message={reset.error?.message} />
+          <FormError message={reset.error?.message ?? exp.error?.message} />
         </CardContent>
       </Card>
+
+      {canDump && <DumpFiles site={site} db={db} />}
     </div>
+  );
+}
+
+/** .sql files in the site's tmp/ folder: download, import, delete, upload. */
+function DumpFiles({ site, db }: { site: Site; db: DatabaseRow }) {
+  const files = useFiles(site.id, "tmp");
+  const fileActions = useFileActions(site.id);
+  const [importPath, setImportPath] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const dumps = (files.data?.entries ?? [])
+    .filter((e) => e.type === "file" && e.name.endsWith(".sql"))
+    .sort((a, b) => b.mtime.localeCompare(a.mtime));
+
+  return (
+    <Card className="lg:col-span-3">
+      <CardHeader>
+        <CardTitle>SQL files</CardTitle>
+        <input
+          ref={input}
+          type="file"
+          accept=".sql"
+          className="hidden"
+          onChange={(e) => {
+            const picked = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (picked.length) fileActions.upload.mutate({ dir: "tmp", files: picked });
+          }}
+        />
+        <Button variant="outline" size="sm" disabled={fileActions.upload.isPending} onClick={() => input.current?.click()}>
+          <Upload /> {fileActions.upload.isPending ? "Uploading…" : "Upload .sql"}
+        </Button>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Exports and uploads are kept in <code className="font-mono">tmp/</code> in the site folder, which isn't served on
+          the web. Uploads can be up to 256 MB. Delete old dumps once you no longer need them.
+        </p>
+        <FormError message={fileActions.upload.error?.message ?? fileActions.remove.error?.message} />
+        {files.isPending ? (
+          <Spinner />
+        ) : files.error ? (
+          <p className="text-sm text-destructive">{files.error.message}</p>
+        ) : dumps.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">No .sql files yet. Export the database or upload a dump.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>File</TableHead>
+                <TableHead className="text-right">Size</TableHead>
+                <TableHead>Modified</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dumps.map((f) => {
+                const path = `tmp/${f.name}`;
+                return (
+                  <TableRow key={f.name}>
+                    <TableCell className="font-mono text-xs break-all">{f.name}</TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">{formatBytes(f.size)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(f.mtime).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <a
+                          href={downloadURL(site.id, path)}
+                          className="inline-flex h-8 items-center rounded-[10px] px-2.5 text-muted-foreground hover:text-primary"
+                          aria-label={`Download ${f.name}`}
+                          title="Download"
+                        >
+                          <Download className="size-4" />
+                        </a>
+                        <Button variant="ghost" size="sm" onClick={() => setImportPath(path)}>
+                          Import
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          aria-label={`Delete ${f.name}`}
+                          disabled={fileActions.remove.isPending}
+                          onClick={() => fileActions.remove.mutate({ path })}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+        {importPath && <ImportDialog db={db} path={importPath} onClose={() => setImportPath(null)} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ImportDialog({ db, path, onClose }: { db: DatabaseRow; path: string; onClose: () => void }) {
+  const imp = useImportDatabase();
+  const [, setParams] = useSearchParams();
+  const [confirm, setConfirm] = useState("");
+  return (
+    <Dialog open onClose={onClose} title={`Import into ${db.name}`}>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          imp.mutate(
+            { name: db.name, path, confirm },
+            {
+              onSuccess: (r) => {
+                onClose();
+                setParams({ job: r.job_id }, { replace: true });
+              },
+            },
+          );
+        }}
+      >
+        <p className="text-sm text-muted-foreground">
+          Runs <code className="font-mono">{path}</code> against <code className="font-mono">{db.name}</code>. Tables in the
+          file replace the existing ones, and this can't be undone. Export first if you might need the current data. The
+          import stops at the first error, and statements before it stay applied.
+          {db.wordpress && " If the dump comes from another site, update the WordPress URLs afterwards."}
+        </p>
+        <Field label={`Type ${db.name} to confirm`} htmlFor="import-confirm">
+          <Input id="import-confirm" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        </Field>
+        <FormError message={imp.error?.message} />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" className="bg-destructive hover:bg-destructive/90" disabled={confirm !== db.name || imp.isPending}>
+            Import
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
