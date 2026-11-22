@@ -10,6 +10,8 @@ import (
 	"encoding/pem"
 	"fmt"
 	"path"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -181,9 +183,27 @@ func (d Deps) ensureDeployHook() error {
 type SSLRenewParams struct {
 	Domain string `json:"domain"`
 	DryRun bool   `json:"dry_run,omitempty"`
+	// Adopted sites: their existing certbot certificate (not a layte- one).
+	// All three are required together; the agent checks them itself.
+	CertName string `json:"cert_name,omitempty"`
+	Username string `json:"username,omitempty"`
+	WebRoot  string `json:"web_root,omitempty"`
 }
 
-func (p SSLRenewParams) Validate() error { return validDomain(p.Domain) }
+var certNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,250}$`)
+
+func (p SSLRenewParams) Validate() error {
+	if err := validDomain(p.Domain); err != nil {
+		return err
+	}
+	if p.CertName == "" && p.Username == "" && p.WebRoot == "" {
+		return nil
+	}
+	if !certNameRe.MatchString(p.CertName) || strings.Contains(p.CertName, "..") {
+		return fmt.Errorf("invalid certificate name %q", p.CertName)
+	}
+	return FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Op: "stat", Path: "."}.validate(readOps)
+}
 
 // sslRenew renews the site's Layte certificate now. DryRun asks Let's
 // Encrypt's staging server instead, which checks that renewal will work
@@ -191,7 +211,25 @@ func (p SSLRenewParams) Validate() error { return validDomain(p.Domain) }
 // certificate that isn't due yet); certbot's deploy hook reloads nginx.
 // Certificates without the layte- prefix are never touched.
 func (d Deps) sslRenew(ctx context.Context, _ agent.Actor, p SSLRenewParams) (any, error) {
-	if ok, _ := d.FS.Exists(templates.CertDir(p.Domain)); !ok {
+	name := templates.CertName(p.Domain)
+	if p.CertName != "" {
+		// Adopted site: only the certificate its own nginx vhost uses.
+		if err := d.verifyAdopted(ctx, p.Domain, p.Username, p.WebRoot); err != nil {
+			return nil, err
+		}
+		out, err := d.sitesDiscover(ctx, agent.Actor{}, agent.NoParams{})
+		if err != nil {
+			return nil, err
+		}
+		want := letsencryptLive + "/" + p.CertName + "/fullchain.pem"
+		if !slices.ContainsFunc(out.([]DiscoveredSite), func(s DiscoveredSite) bool { return s.Domain == p.Domain && s.CertPath == want }) {
+			return nil, agent.Errorf(agent.CodeInvalidParams, "%s doesn't use the certificate %s", p.Domain, p.CertName)
+		}
+		if ok, _ := d.FS.Exists(letsencryptRenewal + "/" + p.CertName + ".conf"); !ok {
+			return nil, agent.Errorf(agent.CodeNotFound, "certbot has no renewal config for %s", p.CertName)
+		}
+		name = p.CertName
+	} else if ok, _ := d.FS.Exists(templates.CertDir(p.Domain)); !ok {
 		return nil, agent.Errorf(agent.CodeNotFound, "%s has no Layte certificate", p.Domain)
 	}
 	certbot, err := d.certbotBin()
@@ -203,7 +241,7 @@ func (d Deps) sslRenew(ctx context.Context, _ agent.Actor, p SSLRenewParams) (an
 	}
 	// --no-random-sleep-on-renew: without a terminal certbot first waits up
 	// to 8 minutes (meant to spread out cron renewals).
-	args := []string{"renew", "--cert-name", templates.CertName(p.Domain), "--non-interactive", "--no-random-sleep-on-renew"}
+	args := []string{"renew", "--cert-name", name, "--non-interactive", "--no-random-sleep-on-renew"}
 	if p.DryRun {
 		args = append(args, "--dry-run")
 	} else {

@@ -187,3 +187,32 @@ func TestAdoptedFilesAndCron(t *testing.T) {
 		t.Error("cron as the old (non-Layte) user")
 	}
 }
+
+func TestRenewAdoptedCertChecks(t *testing.T) {
+	d := devDeps(t)
+	if _, err := adoptShop(t, d); err != nil {
+		t.Fatal(err)
+	}
+	base := SSLRenewParams{Domain: "shop.example.org", DryRun: true, Username: "shopexampleorg", WebRoot: "/var/www/shop/public"}
+	// The shop vhost uses no certificate at all, so any name is refused.
+	for _, name := range []string{"shop.example.org", "blog.example.com"} {
+		p := base
+		p.CertName = name
+		if _, err := d.sslRenew(ctx, agent.Actor{}, p); err == nil {
+			t.Errorf("renewed %s, which shop's vhost doesn't use", name)
+		}
+	}
+	// Not adopted (the blog): refused before certbot runs.
+	p := SSLRenewParams{Domain: "blog.example.com", DryRun: true, CertName: "blog.example.com", Username: "blogx", WebRoot: "/var/www/blog"}
+	if _, err := d.sslRenew(ctx, agent.Actor{}, p); err == nil {
+		t.Error("renewed a site that isn't adopted")
+	}
+	for _, bad := range []SSLRenewParams{
+		{Domain: "shop.example.org", CertName: "../etc", Username: "shopexampleorg", WebRoot: "/var/www/shop/public"},
+		{Domain: "shop.example.org", CertName: "x"},
+	} {
+		if bad.Validate() == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+}

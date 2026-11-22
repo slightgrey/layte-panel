@@ -3,6 +3,8 @@ package api
 import (
 	"strings"
 	"testing"
+
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 func TestAdoptSite(t *testing.T) {
@@ -140,3 +142,44 @@ func TestAdoptedSiteDatabase(t *testing.T) {
 	}
 }
 
+func TestAdoptedSiteRenewsItsCertificate(t *testing.T) {
+	_, c, deps := siteEnv(t)
+	// Give the hand-written shop vhost an HTTPS block with a certbot
+	// certificate (like the live blog), then scan.
+	vhost := "/etc/nginx/sites-enabled/shop.example.org.conf"
+	b, _ := deps.FS.ReadFile(vhost)
+	https := "\nserver {\n    listen 443 ssl;\n    server_name shop.example.org;\n    root /var/www/shop/public;\n" +
+		"    ssl_certificate /etc/letsencrypt/live/shop.example.org/fullchain.pem;\n" +
+		"    location ~ \\.php$ { fastcgi_pass unix:/run/php/shop.sock; }\n}\n"
+	deps.FS.WriteFileAtomic(vhost, append(b, https...), 0o644)
+	deps.FS.MkdirAll("/etc/letsencrypt/renewal", 0o755)
+	deps.FS.WriteFileAtomic("/etc/letsencrypt/renewal/shop.example.org.conf", []byte("# test\n"), 0o644)
+	c.do("POST", "/api/v1/sites/scan", nil)
+	shop := siteIDByDomain(t, c, "shop.example.org")
+
+	// Not adopted yet: refused.
+	if st, _ := c.do("POST", "/api/v1/sites/"+shop+"/ssl/renew", map[string]bool{"dry_run": true}); st != 409 {
+		t.Errorf("renew before adopting: %d", st)
+	}
+	_, prev := c.do("GET", "/api/v1/sites/"+shop+"/adopt", nil)
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/adopt", map[string]string{"username": "shopexampleorg", "pool_hash": prev["pool_hash"].(string)})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("adopt: %v", job)
+	}
+	st, body := c.do("POST", "/api/v1/sites/"+shop+"/ssl/renew", map[string]bool{"dry_run": true})
+	if st != 202 {
+		t.Fatalf("renew: %d %v", st, body)
+	}
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("renew job: %v", job)
+	}
+	var call string
+	for _, x := range deps.Runner.(*system.FakeRunner).CallList() {
+		if strings.HasPrefix(x, "/usr/bin/certbot renew") {
+			call = x
+		}
+	}
+	if !strings.Contains(call, "--cert-name shop.example.org ") || !strings.HasSuffix(call, "--dry-run") {
+		t.Errorf("certbot call: %q", call)
+	}
+}

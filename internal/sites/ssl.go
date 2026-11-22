@@ -3,6 +3,8 @@ package sites
 import (
 	"context"
 	"errors"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
@@ -78,19 +80,32 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 // renewal works. Forced renewals count towards Let's Encrypt's limit of 5
 // duplicate certificates per week.
 func (s *Service) RenewSSL(ctx context.Context, actor agent.Actor, site store.Site, dryRun bool) (string, error) {
-	if err := s.requireManagedActive(site); err != nil {
+	params := actions.SSLRenewParams{Domain: site.Domain, DryRun: dryRun}
+	certName := templates.CertName(site.Domain)
+	if site.Adopted {
+		// The adopted site's own certbot certificate, as its vhost names it.
+		dir, file := path.Split(site.CertPath)
+		if site.Status != "active" {
+			return "", conflict("site_busy", "%s is %s", site.Domain, site.Status)
+		}
+		if file != "fullchain.pem" || !strings.HasPrefix(dir, "/etc/letsencrypt/live/") {
+			return "", badRequest("%s doesn't use a certbot certificate", site.Domain)
+		}
+		certName = path.Base(dir)
+		params.CertName, params.Username, params.WebRoot = certName, site.SystemUser, site.RootPath
+	} else if err := s.requireManagedActive(site); err != nil {
 		return "", err
 	}
 	if !site.SSL {
 		return "", badRequest("%s doesn't use HTTPS", site.Domain)
 	}
-	kind, step := "site.ssl_renew", "Renew certificate "+templates.CertName(site.Domain)
+	kind, step := "site.ssl_renew", "Renew certificate "+certName
 	if dryRun {
 		kind, step = "site.ssl_renew_test", "Test renewal against Let's Encrypt staging"
 	}
 	jobID, err := s.Jobs.Start(kind, site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
 		j.Step(step)
-		if err := s.longCall(ctx, 3*time.Minute, "ssl.renew", actor, actions.SSLRenewParams{Domain: site.Domain, DryRun: dryRun}, nil); err != nil {
+		if err := s.longCall(ctx, 3*time.Minute, "ssl.renew", actor, params, nil); err != nil {
 			return err
 		}
 		if dryRun {
