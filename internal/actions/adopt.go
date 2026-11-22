@@ -381,8 +381,11 @@ func (d Deps) siteAdopt(ctx context.Context, actor agent.Actor, p AdoptParams) (
 
 	// 4. The site must answer exactly as before.
 	after, err := d.siteStatus(ctx, site)
-	if err != nil || after != before {
-		return fail(agent.Errorf("site_check_failed", "%s answered %d before and %d after (%v); everything was undone", p.Domain, before, after, err))
+	if err != nil {
+		return fail(agent.Errorf("site_check_failed", "%s answered %d before, and no longer answers after (%v); everything was undone", p.Domain, before, err))
+	}
+	if after != before {
+		return fail(agent.Errorf("site_check_failed", "%s answered %d before and %d after; everything was undone", p.Domain, before, after))
 	}
 	step(fmt.Sprintf("%s still answers %d", p.Domain, after))
 	return res, nil
