@@ -1,60 +1,48 @@
-import { ExternalLink, Pause, ScrollText } from "lucide-react";
+import { ExternalLink, ScrollText } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { useLogSources } from "@/api/logs";
 import type { Site } from "@/api/types";
+import { LogViewer } from "@/components/LogViewer";
 import { EmptyState, SiteShell } from "@/components/SiteShell";
-import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/Spinner";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 
-// UI only for now: the viewer isn't streaming yet. The global Logs page already
-// supports ?site=<id>, so the link below works today.
 export function SiteLogsPage() {
-  return <SiteShell title="Logs" preview>{(site) => <LogsTab site={site} />}</SiteShell>;
+  return <SiteShell title="Logs">{(site) => <LogsTab site={site} />}</SiteShell>;
 }
 
 function LogsTab({ site }: { site: Site }) {
-  const base = site.root_path ? site.root_path.replace(/\/public\/?$/, "") + "/logs" : "/var/log/nginx";
-  const files = [
-    { label: "Access log", path: `${base}/access.log` },
-    { label: "Error log", path: `${base}/error.log` },
-    { label: "PHP errors", path: `${base}/php-error.log` },
-    { label: "Cron output", path: `${base}/cron.log` },
-  ];
-  const [path, setPath] = useState(files[0]!.path);
+  const sources = useLogSources();
+  const mine = (sources.data?.sources ?? []).filter((s) => s.site_id === site.id);
+  const [picked, setPicked] = useState<string | null>(null);
+  // Default to the site's first log until the user picks one.
+  const path = picked && mine.some((s) => s.path === picked) ? picked : (mine[0]?.path ?? null);
 
-  return (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <Select aria-label="Log file" className="w-auto min-w-56" value={path} onChange={(e) => setPath(e.target.value)}>
-          {files.map((f) => (
-            <option key={f.path} value={f.path}>
-              {f.label}
-            </option>
-          ))}
-        </Select>
-        <Input aria-label="Filter" placeholder="Filter lines" className="w-48" disabled />
-        <Button variant="outline" size="sm" disabled>
-          <Pause /> Pause
-        </Button>
-        <Link
-          to={`/logs?site=${site.id}`}
-          className="ml-auto inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          Open in Logs <ExternalLink className="size-3.5" />
-        </Link>
-      </div>
+  if (sources.isPending) return <Spinner />;
+  if (sources.error) return <p className="text-sm text-destructive">{sources.error.message}</p>;
+
+  const openInLogs = (
+    <Link
+      to={path ? `/logs?path=${encodeURIComponent(path)}` : `/logs?site=${site.id}`}
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    >
+      Open in Logs <ExternalLink className="size-3.5" />
+    </Link>
+  );
+
+  if (mine.length === 0) {
+    return (
       <Card>
-        <CardContent className="p-0">
-          <div className="h-[55vh] overflow-auto rounded-[1.25rem] bg-background p-4 font-mono text-xs leading-relaxed shadow-inset">
-            <EmptyState icon={ScrollText} title="Live tail coming soon">
-              This tab will stream this site's logs. Until then, use <strong>Open in Logs</strong>.
-            </EmptyState>
-          </div>
+        <CardContent className="pt-6">
+          <EmptyState icon={ScrollText} title="No logs for this site yet">
+            Log files show up here once the site has written them.
+            <div className="mt-3 flex justify-center">{openInLogs}</div>
+          </EmptyState>
         </CardContent>
       </Card>
-      <p className="font-mono text-xs text-muted-foreground">{path}</p>
-    </>
-  );
+    );
+  }
+
+  return <LogViewer sources={mine} path={path} onPathChange={setPicked} toolbarExtra={openInLogs} heightClass="h-[55vh]" />;
 }
