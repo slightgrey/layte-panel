@@ -93,6 +93,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/{id}/php", authed(s.handleSwitchPHP))
 	mux.Handle("POST /api/v1/sites/{id}/ssl", authed(s.handleIssueSSL))
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
+	mux.Handle("POST /api/v1/sites/{id}/ssl/renew", authed(s.handleRenewSSL))
 	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
 
 	// Files (session only).

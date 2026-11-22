@@ -20,3 +20,10 @@ export function useIssueSSL(siteId: number) {
 export function useRemoveSSL(siteId: number) {
   return useMutation({ mutationFn: () => api<JobStarted>("DELETE", `/sites/${siteId}/ssl`) });
 }
+
+/** POST /sites/{id}/ssl/renew: renew now (forced), or dryRun to test renewal against staging (job). */
+export function useRenewSSL(siteId: number) {
+  return useMutation({
+    mutationFn: (dryRun: boolean) => api<JobStarted>("POST", `/sites/${siteId}/ssl/renew`, { dry_run: dryRun }),
+  });
+}

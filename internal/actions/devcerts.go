@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -78,12 +79,40 @@ func fakeCertbot(root system.FS, c system.Cmd) (system.Result, error) {
 		if err := writeFakeCert(root, arg("--cert-name"), domains, 90*24*time.Hour); err != nil {
 			return system.Result{}, err
 		}
+		if err := writeFakeRenewalConf(root, arg("--cert-name")); err != nil {
+			return system.Result{}, err
+		}
 		time.Sleep(500 * time.Millisecond) // pretend to talk to Let's Encrypt
 		return system.Result{Stdout: []byte("Successfully received certificate.\n")}, nil
+	case "renew":
+		name := arg("--cert-name")
+		time.Sleep(500 * time.Millisecond)
+		if slices.Contains(c.Args, "--dry-run") {
+			return system.Result{Stdout: []byte("Congratulations, all simulated renewals succeeded.\n")}, nil
+		}
+		b, err := root.ReadFile(letsencryptLive + "/" + name + "/cert.pem")
+		if err != nil {
+			return system.Result{}, err
+		}
+		cert, err := parseCert(b)
+		if err != nil {
+			return system.Result{}, err
+		}
+		return system.Result{Stdout: []byte("Congratulations, all renewals succeeded.\n")}, writeFakeCert(root, name, cert.DNSNames, 90*24*time.Hour)
 	case "revoke":
+		root.Remove(letsencryptRenewal + "/" + arg("--cert-name") + ".conf")
 		return system.Result{}, root.RemoveAll(letsencryptLive + "/" + arg("--cert-name"))
 	}
 	return system.Result{}, fmt.Errorf("certbot %s: not faked", c.Args[0])
+}
+
+// writeFakeRenewalConf mimics certbot's renewal/<name>.conf, which is what
+// makes certbot's timer renew a certificate.
+func writeFakeRenewalConf(root system.FS, name string) error {
+	if err := root.MkdirAll(letsencryptRenewal, 0o755); err != nil {
+		return err
+	}
+	return root.WriteFileAtomic(letsencryptRenewal+"/"+name+".conf", []byte("# fake renewal config (dev)\n"), 0o644)
 }
 
 // seedFakeCerts gives the imported Certbot site a cert that expires soon,
@@ -92,5 +121,8 @@ func seedFakeCerts(fs system.FS) error {
 	if ok, _ := fs.Exists(letsencryptLive + "/blog.example.com/cert.pem"); ok {
 		return nil
 	}
-	return writeFakeCert(fs, "blog.example.com", []string{"blog.example.com", "www.blog.example.com"}, 20*24*time.Hour)
+	if err := writeFakeCert(fs, "blog.example.com", []string{"blog.example.com", "www.blog.example.com"}, 20*24*time.Hour); err != nil {
+		return err
+	}
+	return writeFakeRenewalConf(fs, "blog.example.com")
 }

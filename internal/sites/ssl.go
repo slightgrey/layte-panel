@@ -72,6 +72,40 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 	return jobID, err
 }
 
+// RenewSSL starts a job that renews the site's certificate now (forced), or
+// with dryRun only checks against Let's Encrypt's staging server that
+// renewal works. Forced renewals count towards Let's Encrypt's limit of 5
+// duplicate certificates per week.
+func (s *Service) RenewSSL(ctx context.Context, actor agent.Actor, site store.Site, dryRun bool) (string, error) {
+	if err := s.requireManagedActive(site); err != nil {
+		return "", err
+	}
+	if !site.SSL {
+		return "", badRequest("%s doesn't use HTTPS", site.Domain)
+	}
+	kind, step := "site.ssl_renew", "Renew certificate "+templates.CertName(site.Domain)
+	if dryRun {
+		kind, step = "site.ssl_renew_test", "Test renewal against Let's Encrypt staging"
+	}
+	jobID, err := s.Jobs.Start(kind, site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
+		j.Step(step)
+		if err := s.Agent.Call(ctx, "ssl.renew", actor, actions.SSLRenewParams{Domain: site.Domain, DryRun: dryRun}, nil); err != nil {
+			return err
+		}
+		if dryRun {
+			j.Log("Renewal works. Nothing was changed; certbot renews automatically 30 days before expiry.")
+		} else {
+			j.Log("New certificate installed; certbot's deploy hook reloaded nginx.")
+		}
+		j.SetResult(map[string]any{"site_id": site.ID, "dry_run": dryRun})
+		return nil
+	})
+	if errors.Is(err, jobs.ErrSiteBusy) {
+		return "", conflict("site_busy", "another job is running for %s", site.Domain)
+	}
+	return jobID, err
+}
+
 // RemoveSSL starts a job that switches the site back to HTTP and revokes its
 // Layte certificate.
 func (s *Service) RemoveSSL(ctx context.Context, actor agent.Actor, site store.Site) (string, error) {
