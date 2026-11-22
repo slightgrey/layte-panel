@@ -1,11 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Info, Trash2 } from "lucide-react";
+import { ArrowLeft, Info, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { siteKey, sitesKey, useDeleteSite, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
-import { certsKey } from "@/api/ssl";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
+import { SiteHeader, SiteJobCard } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,15 +13,12 @@ import { Dialog } from "@/components/ui/dialog";
 import { Checkbox, Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FormError } from "./AuthShell";
-import { SiteBadges } from "./SiteBadges";
-import { SiteSSLCard } from "./SiteSSL";
 
 export function SiteDetailPage() {
   const id = Number(useParams().id);
   const site = useSite(id);
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const jobId = params.get("job");
-  const qc = useQueryClient();
 
   if (jobId && site.error) {
     // The site row is removed when creation fails and is fully rolled back.
@@ -56,55 +53,11 @@ export function SiteDetailPage() {
     );
   }
   const s = site.data;
+  const canDelete = s.managed && s.status !== "creating" && s.status !== "deleting";
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <div>
-        <BackLink />
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">{s.domain}</h1>
-          <SiteBadges site={s} />
-          <a
-            href={`${s.ssl ? "https" : "http"}://${s.domain}`}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            Visit <ExternalLink className="size-3.5" />
-          </a>
-          <Link to={`/logs?site=${s.id}`} className="text-sm text-muted-foreground hover:text-foreground">
-            Logs
-          </Link>
-          <Link to={`/sites/${s.id}/files`} className="text-sm text-muted-foreground hover:text-foreground">
-            Files
-          </Link>
-          {s.managed && s.status !== "creating" && s.status !== "deleting" && (
-            <div className="ml-auto">
-              <DeleteSite site={s} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {jobId && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{s.status === "creating" ? "Creating site" : "Progress"}</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setParams({}, { replace: true })}>
-              Dismiss
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <JobProgress
-              jobId={jobId}
-              onDone={() => {
-                qc.invalidateQueries({ queryKey: siteKey(id) });
-                qc.invalidateQueries({ queryKey: sitesKey });
-                qc.invalidateQueries({ queryKey: certsKey });
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
+      <SiteHeader site={s} actions={canDelete && <DeleteSite site={s} />} />
+      <SiteJobCard site={s} />
 
       {!s.managed && (
         <div className="flex items-start gap-2 rounded-[14px] bg-background px-4 shadow-inset py-3 text-sm">
@@ -117,7 +70,6 @@ export function SiteDetailPage() {
       )}
 
       <OverviewCard site={s} />
-      <SiteSSLCard site={s} />
       <VhostCard site={s} />
     </div>
   );

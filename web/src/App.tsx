@@ -11,7 +11,11 @@ import { SecurityPage } from "./pages/Security";
 import { SiteFilesPage } from "./pages/SiteFiles";
 import { LogsPage } from "./pages/Logs";
 import { NewSitePage } from "./pages/NewSite";
+import { SiteCronPage } from "./pages/SiteCron";
+import { SiteDatabasePage } from "./pages/SiteDatabase";
 import { SiteDetailPage } from "./pages/SiteDetail";
+import { SiteLogsPage } from "./pages/SiteLogs";
+import { SiteSSLPage } from "./pages/SiteSSL";
 import { SitesPage } from "./pages/Sites";
 import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
@@ -34,6 +38,10 @@ export function App() {
           <Route path="files" element={<FilesPage />} />
           <Route path="security" element={<SecurityPage />} />
           <Route path="keys" element={<KeysPage />} />
+          <Route path="sites/:id/ssl" element={<SiteSSLPage />} />
+          <Route path="sites/:id/database" element={<SiteDatabasePage />} />
+          <Route path="sites/:id/cron" element={<SiteCronPage />} />
+          <Route path="sites/:id/logs" element={<SiteLogsPage />} />
           <Route path="sites/:id/files" element={<SiteFilesPage />} />
         </Route>
       </Route>

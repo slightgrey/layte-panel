@@ -1,9 +1,10 @@
-import { ArrowLeft, Download, File, FileCode, Folder, FolderPlus, Lock, Pencil, Save, Trash2, Upload } from "lucide-react";
+import { Download, File, FileCode, Folder, FolderPlus, Lock, Pencil, Save, Trash2, Upload } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { downloadURL, useFileActions, useFileContent, useFiles } from "@/api/files";
 import { useSite } from "@/api/sites";
 import type { FileEntry } from "@/api/types";
+import { SiteHeader } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,15 +36,12 @@ export function SiteFilesPage() {
   const anyError = actions.upload.error ?? actions.remove.error ?? actions.mkdir.error;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
-      <div>
-        <Link to={`/sites/${siteId}`} className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-4" /> {site.data?.domain ?? "Site"}
-        </Link>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          Files {readOnly && files.data && <Lock className="size-4 text-muted-foreground" aria-label="read-only" />}
-        </h1>
-        <p className="font-mono text-xs text-muted-foreground">{files.data?.root}</p>
+    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+      {site.data && <SiteHeader site={site.data} />}
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-semibold tracking-tight">Files</h2>
+        {readOnly && files.data && <Lock className="size-4 text-muted-foreground" aria-label="read-only" />}
+        <span className="truncate font-mono text-xs text-muted-foreground">{files.data?.root}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
