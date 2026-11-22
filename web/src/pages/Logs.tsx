@@ -57,7 +57,7 @@ export function LogsPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Logs</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Logs</h1>
         <p className="text-sm text-muted-foreground">Live view of nginx, PHP-FPM and site logs.</p>
       </div>
 
@@ -96,7 +96,7 @@ export function LogsPage() {
       {stream.error && <p className="text-sm text-destructive">{stream.error}</p>}
       <Card>
         <CardContent className="p-0">
-          <div className="h-[65vh] overflow-auto rounded-xl bg-muted/40 p-4 font-mono text-xs leading-relaxed">
+          <div className="h-[65vh] overflow-auto rounded-[1.25rem] bg-background p-4 shadow-inset font-mono text-xs leading-relaxed">
             {path && stream.status === "connecting" && <Spinner />}
             {shown.length === 0 && stream.status === "live" && <p className="text-muted-foreground">{filter ? "No matching lines." : "The log is empty."}</p>}
             {shown.map((l, i) => (

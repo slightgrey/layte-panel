@@ -14,7 +14,7 @@ export function SSLPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">SSL certificates</h1>
+        <h1 className="text-2xl font-bold tracking-tight">SSL certificates</h1>
         <p className="text-sm text-muted-foreground">
           Every Let's Encrypt certificate on this server. certbot renews them automatically 30 days before they expire.
           To enable HTTPS for a site, open the site.
@@ -22,7 +22,7 @@ export function SSLPage() {
       </div>
 
       {problems.length > 0 && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+        <div role="alert" className="flex items-start gap-2 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <p>
             {problems.length} certificate{problems.length > 1 ? "s are" : " is"} expiring soon or expired, which usually

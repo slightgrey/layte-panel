@@ -40,7 +40,7 @@ export function SiteFilesPage() {
         <Link to={`/sites/${siteId}`} className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> {site.data?.domain ?? "Site"}
         </Link>
-        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           Files {readOnly && files.data && <Lock className="size-4 text-muted-foreground" aria-label="read-only" />}
         </h1>
         <p className="font-mono text-xs text-muted-foreground">{files.data?.root}</p>
@@ -242,7 +242,7 @@ function Editor({ siteId, path, readOnly, onClose }: { siteId: number; path: str
             aria-label="File content"
             spellCheck={false}
             readOnly={readOnly}
-            className="h-[60vh] w-full resize-none rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-[60vh] w-full resize-none rounded-[12px] bg-background p-3 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

@@ -28,7 +28,7 @@ export function DashboardPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{data.system.data?.hostname ?? "Dashboard"}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{data.system.data?.hostname ?? "Dashboard"}</h1>
           <p className="text-sm text-muted-foreground">{data.system.data?.os}</p>
         </div>
         <p className="text-xs text-muted-foreground">Updated {new Date(dataUpdatedAt).toLocaleTimeString()} · refreshes every 30s</p>
@@ -54,7 +54,7 @@ export function DashboardPage() {
 
 function Notice({ children }: { children: ReactNode }) {
   return (
-    <div role="alert" className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+    <div role="alert" className="flex items-start gap-2 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
       <div>{children}</div>
     </div>

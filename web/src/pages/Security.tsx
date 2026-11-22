@@ -30,11 +30,11 @@ export function SecurityPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Security</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Security</h1>
         <p className="text-sm text-muted-foreground">Firewall, security updates, failed SSH logins and Cloudflare.</p>
       </div>
       {ov.reboot_required && (
-        <div role="alert" className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+        <div role="alert" className="flex items-center gap-2 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
           <RotateCw className="size-4 text-warning" /> A reboot is required to finish installing updates (e.g. a new kernel).
         </div>
       )}
@@ -81,7 +81,7 @@ function CloudflareCard({ data }: { data: SecurityResponse }) {
           {cf.ranges} Cloudflare address ranges, list from {cf.list_date}. It's updated with Layte Panel releases.
         </p>
         {cf.enabled && !cf.up_to_date && (
-          <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          <div role="status" className="flex flex-wrap items-center gap-3 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
             This version of Layte Panel has a newer list of Cloudflare addresses.
             <Button size="sm" disabled={set.isPending} onClick={() => set.mutate(true)}>
               <RefreshCw /> Update

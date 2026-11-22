@@ -35,7 +35,7 @@ export function CronPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Cron jobs</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Cron jobs</h1>
         <p className="text-sm text-muted-foreground">
           Scheduled commands per site. They run as the site's own Linux user from the site folder, and their output goes
           to the site's <code className="font-mono">logs/cron.log</code>.

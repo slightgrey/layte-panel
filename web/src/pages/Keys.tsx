@@ -30,7 +30,7 @@ export function KeysPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">API keys</h1>
+          <h1 className="text-2xl font-bold tracking-tight">API keys</h1>
           <p className="text-sm text-muted-foreground">
             Read-only keys for other apps (like a dashboard or monitoring). Keys can't change anything on the server.{" "}
             <a href="/api/v1/openapi.json" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
@@ -44,7 +44,7 @@ export function KeysPage() {
       {created && (
         <div className="flex flex-col gap-2">
           <CredentialsPanel secrets={{ api_key: created }} />
-          <pre className="overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-xs">
+          <pre className="overflow-x-auto rounded-[12px] bg-background p-3 font-mono text-xs">
             curl -H "Authorization: Bearer {created}" {window.location.origin}/api/v1/sites
           </pre>
           <Button variant="ghost" size="sm" className="self-end" onClick={() => setCreated(null)}>

@@ -11,9 +11,10 @@ import {
   Shield,
   ShieldCheck,
 } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useLogout, useMe } from "@/api/auth";
 import { formatVersion, useHealth } from "@/api/health";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -43,10 +44,11 @@ export function Layout() {
   const onLogout = () => logout.mutate(undefined, { onSettled: () => navigate("/login", { replace: true }) });
 
   return (
-    <div className="flex min-h-svh">
-      <aside className="sticky top-0 hidden h-svh w-56 shrink-0 flex-col border-r bg-card md:flex">
-        <Brand className="h-14 px-5" />
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2" aria-label="Main">
+    <div className="flex min-h-svh gap-6 p-3 md:p-5">
+      <aside className="sticky top-5 hidden h-[calc(100svh-2.5rem)] w-60 shrink-0 flex-col rounded-[1.5rem] bg-card shadow-raised md:flex">
+        <Brand className="h-16 px-5" />
+        <p className="eyebrow px-6 pt-1 pb-2">Server</p>
+        <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3" aria-label="Main">
           {nav.map((item) => (
             <NavEntry key={item.label} item={item} />
           ))}
@@ -54,18 +56,28 @@ export function Layout() {
         <VersionFooter />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 md:px-8">
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <header className="sticky top-3 z-40 flex h-14 items-center justify-between gap-3 rounded-[1.25rem] bg-card/95 px-4 shadow-raised backdrop-blur md:top-5 md:px-5">
           <Brand className="md:hidden" />
-          <span className="hidden md:block" />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{me.data?.user.username}</span>
-            <Button variant="ghost" size="sm" onClick={onLogout} disabled={logout.isPending}>
-              <LogOut /> Log out
+          <PromptPath />
+          <div className="flex items-center gap-2 md:gap-3">
+            <ThemeToggle />
+            <span className="hidden rounded-full px-3 py-1 font-mono text-xs text-muted-foreground shadow-inset sm:inline">
+              {me.data?.user.username ?? "…"}
+            </span>
+            <Button variant="ghost" size="sm" onClick={onLogout} disabled={logout.isPending} aria-label="Log out">
+              <LogOut /> <span className="hidden sm:inline">Log out</span>
             </Button>
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8">
+
+        <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 md:hidden" aria-label="Main (mobile)">
+          {nav.map((item) => (
+            <NavEntry key={item.label} item={item} compact />
+          ))}
+        </nav>
+
+        <main className="flex-1 pb-6 md:px-2">
           <Outlet />
         </main>
       </div>
@@ -73,9 +85,27 @@ export function Layout() {
   );
 }
 
-function NavEntry({ item }: { item: NavItem }) {
+/** Terminal-style location, e.g. "~/sites/example.com_". */
+function PromptPath() {
+  const { pathname } = useLocation();
+  const path = pathname === "/" ? "~" : `~${decodeURIComponent(pathname)}`;
+  return (
+    <p className="hidden min-w-0 truncate font-mono text-sm text-muted-foreground md:block">
+      <span className="text-primary">layte</span>
+      <span className="opacity-60">@panel</span>
+      <span className="opacity-60">:</span>
+      <span className="text-foreground">{path}</span>
+      <span className="opacity-60">$</span>
+      <span className="caret ml-1" />
+    </p>
+  );
+}
+
+function NavEntry({ item, compact = false }: { item: NavItem; compact?: boolean }) {
   const Icon = item.icon;
-  const base = "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm";
+  const base = compact
+    ? "flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm transition-all"
+    : "flex items-center gap-3 rounded-[12px] px-3 py-2 text-sm transition-all";
   if (!item.to) {
     return (
       <span className={cn(base, "cursor-default text-muted-foreground/60")} title="Coming in a later release">
@@ -90,7 +120,12 @@ function NavEntry({ item }: { item: NavItem }) {
       to={item.to}
       end={item.to === "/"}
       className={({ isActive }) =>
-        cn(base, isActive ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")
+        cn(
+          base,
+          isActive
+            ? "bg-background font-medium text-primary shadow-inset"
+            : cn("text-muted-foreground hover:text-foreground", compact ? "bg-card shadow-raised-sm" : "hover:bg-muted/60"),
+        )
       }
     >
       <Icon className="size-4" />
@@ -109,7 +144,7 @@ function VersionFooter() {
   const isRelease = /^\d+\.\d+\.\d+$/.test(v);
   const label = formatVersion(v);
   return (
-    <div className="border-t px-5 py-3 text-xs text-muted-foreground">
+    <div className="mx-3 mb-3 rounded-[12px] px-3 py-2.5 font-mono text-[11px] text-muted-foreground shadow-inset">
       {isRelease ? (
         <a
           href={`${RELEASES_URL}/tag/${label}`}
@@ -129,8 +164,10 @@ function VersionFooter() {
 
 export function Brand({ className }: { className?: string }) {
   return (
-    <div className={cn("flex items-center gap-2 font-semibold tracking-tight", className)}>
-      <img src="/favicon.svg" alt="" className="size-6" />
+    <div className={cn("flex items-center gap-3 font-semibold tracking-tight", className)}>
+      <span className="grid size-9 place-items-center rounded-[12px] bg-background shadow-raised-sm">
+        <img src="/favicon.svg" alt="" className="size-5" />
+      </span>
       Layte Panel
     </div>
   );

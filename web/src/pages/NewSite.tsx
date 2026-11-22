@@ -61,7 +61,7 @@ export function NewSitePage() {
         <Link to="/sites" className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> Sites
         </Link>
-        <h1 className="text-xl font-semibold tracking-tight">New site</h1>
+        <h1 className="text-2xl font-bold tracking-tight">New site</h1>
         <p className="text-sm text-muted-foreground">
           Creates a Linux user, a PHP-FPM pool and an nginx config, plus a database and WordPress if you want them.
         </p>

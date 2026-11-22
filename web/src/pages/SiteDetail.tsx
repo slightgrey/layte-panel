@@ -61,7 +61,7 @@ export function SiteDetailPage() {
       <div>
         <BackLink />
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">{s.domain}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{s.domain}</h1>
           <SiteBadges site={s} />
           <a
             href={`${s.ssl ? "https" : "http"}://${s.domain}`}
@@ -107,7 +107,7 @@ export function SiteDetailPage() {
       )}
 
       {!s.managed && (
-        <div className="flex items-start gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-sm">
+        <div className="flex items-start gap-2 rounded-[14px] bg-background px-4 shadow-inset py-3 text-sm">
           <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <p>
             This site was found in your nginx config. Layte Panel shows it <strong>read-only</strong> and never changes
@@ -300,7 +300,7 @@ function VhostCard({ site }: { site: Site }) {
         ) : vhost.error ? (
           <p className="text-sm text-muted-foreground">Unavailable: {vhost.error.message}</p>
         ) : (
-          <pre className="max-h-[32rem] overflow-auto rounded-md border bg-muted/50 p-4 font-mono text-xs leading-relaxed">
+          <pre className="max-h-[32rem] overflow-auto rounded-[12px] bg-background p-4 font-mono text-xs leading-relaxed">
             {vhost.data.content}
           </pre>
         )}
