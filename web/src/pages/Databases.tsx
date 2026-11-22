@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { useCreateDatabase, useDatabases, useDropDatabase, useResetDBPassword } from "@/api/databases";
 import { useSites } from "@/api/sites";
 import type { DatabaseRow } from "@/api/types";
-import { CredentialsPanel } from "@/components/JobProgress";
+import { OneTimeSecrets } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,14 +35,7 @@ export function DatabasesPage() {
         <NewDatabase onCreated={setSecrets} />
       </div>
 
-      {secrets && (
-        <div className="flex flex-col gap-2">
-          <CredentialsPanel secrets={secrets} />
-          <Button variant="ghost" size="sm" className="self-end" onClick={() => setSecrets(null)}>
-            I've saved them
-          </Button>
-        </div>
-      )}
+      {secrets && <OneTimeSecrets secrets={secrets} onDismiss={() => setSecrets(null)} />}
 
       <Card>
         <CardContent className="pt-5">

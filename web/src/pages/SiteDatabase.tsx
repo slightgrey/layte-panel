@@ -1,33 +1,92 @@
-import { Copy, Database, Eye, KeyRound, Plus } from "lucide-react";
-import type { ReactNode } from "react";
-import type { Site } from "@/api/types";
+import { Database, KeyRound, Plus } from "lucide-react";
+import { type FormEvent, type ReactNode, useState } from "react";
+import { useCreateDatabase, useDatabases, useResetDBPassword } from "@/api/databases";
+import type { DatabaseRow, Site } from "@/api/types";
+import { OneTimeSecrets } from "@/components/JobProgress";
 import { EmptyState, SiteShell } from "@/components/SiteShell";
+import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { formatBytes } from "@/lib/format";
+import { FormError } from "./AuthShell";
 
-// UI only for now: buttons are disabled until the endpoints exist.
 export function SiteDatabasePage() {
-  return <SiteShell title="Database" preview>{(site) => (site.db_name ? <DatabaseCards site={site} /> : <NoDatabase />)}</SiteShell>;
+  return <SiteShell title="Database">{(site) => <DatabaseTab site={site} />}</SiteShell>;
 }
 
-function NoDatabase() {
+function DatabaseTab({ site }: { site: Site }) {
+  const dbs = useDatabases();
+  // Secrets live only in this state: shown once, then dropped on dismiss.
+  const [secrets, setSecrets] = useState<Record<string, string> | null>(null);
+
+  if (dbs.isPending) return <Spinner />;
+  if (dbs.error) return <p className="text-sm text-destructive">{dbs.error.message}</p>;
+
+  const mine = dbs.data.databases.filter((d) => d.site_id === site.id);
+  return (
+    <>
+      {secrets && <OneTimeSecrets secrets={secrets} onDismiss={() => setSecrets(null)} />}
+      {mine.length === 0 ? (
+        <NoDatabase site={site} onCreated={setSecrets} />
+      ) : (
+        mine.map((db) => <DatabaseCards key={db.name} db={db} onSecrets={setSecrets} />)
+      )}
+    </>
+  );
+}
+
+/** Suggested DB name from the site user: lowercase, - → _, max 32 chars. */
+function suggestName(site: Site) {
+  const n = (site.system_user || "").toLowerCase().replace(/-/g, "_").replace(/[^a-z0-9_]/g, "");
+  return /^[a-z]/.test(n) ? n.slice(0, 32) : "";
+}
+
+function NoDatabase({ site, onCreated }: { site: Site; onCreated: (s: Record<string, string>) => void }) {
+  const create = useCreateDatabase();
+  const [name, setName] = useState(() => suggestName(site));
   return (
     <Card>
       <CardContent className="pt-6">
         <EmptyState icon={Database} title="No database for this site">
-          Static sites don't need one. You can add a MySQL database and user for this site here.
-          <div className="mt-4">
-            <Button disabled>
-              <Plus /> Create database
-            </Button>
-          </div>
+          {site.managed ? (
+            <>
+              Static sites don't need one. You can add a MySQL database and a user with the same name for this site here.
+              <form
+                className="mt-4 flex flex-wrap items-start justify-center gap-2"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  create.mutate({ name: name.trim(), site_id: site.id }, { onSuccess: (r) => onCreated(r.secrets) });
+                }}
+              >
+                <Input
+                  aria-label="Database name"
+                  required
+                  pattern="[a-z][a-z0-9_]{0,31}"
+                  title="Lowercase letters, digits and _"
+                  className="w-56 font-mono"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <Button type="submit" disabled={create.isPending || !name.trim()}>
+                  <Plus /> Create database
+                </Button>
+              </form>
+              <div className="mt-2">
+                <FormError message={create.error?.message} />
+              </div>
+            </>
+          ) : (
+            "Imported sites are read-only, so a database can't be added here."
+          )}
         </EmptyState>
       </CardContent>
     </Card>
   );
 }
 
-function DatabaseCards({ site }: { site: Site }) {
+function DatabaseCards({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
+  const reset = useResetDBPassword();
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
@@ -37,24 +96,16 @@ function DatabaseCards({ site }: { site: Site }) {
         <CardContent>
           <dl className="divide-y">
             <Row label="Database">
-              <Mono>{site.db_name}</Mono>
+              <Mono>{db.name}</Mono>
             </Row>
             <Row label="User">
-              <Mono>{site.db_user}</Mono>
+              <Mono>{db.user || "–"}</Mono>
             </Row>
             <Row label="Host">
               <Mono>localhost</Mono>
             </Row>
             <Row label="Password">
-              <span className="flex items-center gap-2">
-                <Mono>••••••••••••</Mono>
-                <Button variant="ghost" size="sm" disabled aria-label="Show password">
-                  <Eye />
-                </Button>
-                <Button variant="ghost" size="sm" disabled aria-label="Copy password">
-                  <Copy />
-                </Button>
-              </span>
+              <span className="text-muted-foreground">Shown once when created or reset.</span>
             </Row>
           </dl>
         </CardContent>
@@ -65,8 +116,7 @@ function DatabaseCards({ site }: { site: Site }) {
           <CardTitle>Usage</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Stat label="Size" value="–" />
-          <Stat label="Tables" value="–" />
+          <Stat label="Size" value={formatBytes(db.size)} />
           <Stat label="Charset" value="utf8mb4" />
         </CardContent>
       </Card>
@@ -75,16 +125,26 @@ function DatabaseCards({ site }: { site: Site }) {
         <CardHeader>
           <CardTitle>Actions</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button variant="outline" disabled>
-            <KeyRound /> Reset password
-          </Button>
-          <Button variant="outline" disabled>
-            Export (.sql)
-          </Button>
-          <Button variant="outline" disabled>
-            Import (.sql)
-          </Button>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-3">
+            {db.managed && (
+              <Button
+                variant="outline"
+                disabled={reset.isPending || db.wordpress}
+                title={db.wordpress ? "Used by WordPress: changing it here would break wp-config.php" : "Generate a new password"}
+                onClick={() => reset.mutate(db.name, { onSuccess: (r) => onSecrets(r.secrets) })}
+              >
+                <KeyRound /> Reset password
+              </Button>
+            )}
+            <Button variant="outline" disabled title="Coming later">
+              Export (.sql)
+            </Button>
+            <Button variant="outline" disabled title="Coming later">
+              Import (.sql)
+            </Button>
+          </div>
+          <FormError message={reset.error?.message} />
         </CardContent>
       </Card>
     </div>

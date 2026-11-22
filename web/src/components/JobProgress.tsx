@@ -104,6 +104,18 @@ export function CredentialsPanel({ secrets }: { secrets: Record<string, string> 
   );
 }
 
+/** CredentialsPanel plus a dismiss button; once dismissed the secrets are gone for good. */
+export function OneTimeSecrets({ secrets, onDismiss }: { secrets: Record<string, string>; onDismiss: () => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <CredentialsPanel secrets={secrets} />
+      <Button variant="ghost" size="sm" className="self-end" onClick={onDismiss}>
+        I've saved them
+      </Button>
+    </div>
+  );
+}
+
 function SecretRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
