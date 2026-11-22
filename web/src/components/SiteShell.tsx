@@ -7,7 +7,6 @@ import { certsKey } from "@/api/ssl";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -103,7 +102,7 @@ export function SiteJobCard({ site }: { site: Site }) {
 }
 
 /** Loads the site from the URL and renders the shared header + tabs around a tab's content. */
-export function SiteShell({ title, preview = false, children }: { title: string; preview?: boolean; children: (site: Site) => ReactNode }) {
+export function SiteShell({ title, children }: { title: string; children: (site: Site) => ReactNode }) {
   const id = Number(useParams().id);
   const site = useSite(id);
 
@@ -127,14 +126,7 @@ export function SiteShell({ title, preview = false, children }: { title: string;
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <SiteHeader site={site.data} />
-      <div className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        {preview && (
-          <Badge variant="warning" title="Layout only. Not connected to the server yet.">
-            UI preview
-          </Badge>
-        )}
-      </div>
+      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
       <SiteJobCard site={site.data} />
       {children(site.data)}
     </div>
