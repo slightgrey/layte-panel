@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown, Cpu, HardDrive, MemoryStick, Server } from "lucide-react";
+import { ChevronDown, Cpu, HardDrive, MemoryStick, Server } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useDashboard } from "@/api/dashboard";
 import type { Section, Service, SystemInfo, Updates, Version } from "@/api/types";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UsageBar } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Notice } from "@/components/ui/notice";
 import { formatBytes, formatUptime, percent } from "@/lib/format";
 
 export function DashboardPage() {
@@ -20,7 +21,7 @@ export function DashboardPage() {
       </div>
     );
   }
-  if (error) return <Notice>Could not load the dashboard: {error.message}</Notice>;
+  if (error) return <Notice tone="warning">Could not load the dashboard: {error.message}</Notice>;
 
   const agentDown = Object.values(data).every((s) => s.error?.code === "agent_unavailable");
 
@@ -35,7 +36,7 @@ export function DashboardPage() {
       </div>
 
       {agentDown && (
-        <Notice>
+        <Notice tone="warning">
           The panel can't reach <code className="font-mono">layte-agent</code>. Check it with{" "}
           <code className="font-mono">systemctl status layte-agent</code>.
         </Notice>
@@ -48,15 +49,6 @@ export function DashboardPage() {
         <VersionsCard section={data.versions} />
       </div>
       <UpdatesCard section={data.updates} />
-    </div>
-  );
-}
-
-function Notice({ children }: { children: ReactNode }) {
-  return (
-    <div role="alert" className="flex items-start gap-2 rounded-[14px] bg-warning/10 shadow-inset px-4 py-3 text-sm">
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-      <div>{children}</div>
     </div>
   );
 }

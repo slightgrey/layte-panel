@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, type LucideIcon, ScrollText, ShieldCheck } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeft, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, type LucideIcon, ScrollText, ShieldCheck, XCircle } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { Link, NavLink, useParams, useSearchParams } from "react-router";
 import { databasesKey } from "@/api/databases";
 import { siteKey, sitesKey, useSite } from "@/api/sites";
@@ -10,6 +10,7 @@ import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { progressFrame } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { SiteBadges } from "@/pages/SiteBadges";
 
@@ -79,11 +80,17 @@ export function SiteJobCard({ site }: { site: Site }) {
   const [params, setParams] = useSearchParams();
   const jobId = params.get("job");
   const qc = useQueryClient();
+  const [result, setResult] = useState<{ job: string; ok: boolean } | null>(null);
   if (!jobId) return null;
+  const done = result?.job === jobId ? result : null;
+  const StateIcon = !done ? LoaderCircle : done.ok ? CheckCircle2 : XCircle;
   return (
-    <Card>
+    <Card className={progressFrame}>
       <CardHeader>
-        <CardTitle>{site.status === "creating" ? "Creating site" : "Progress"}</CardTitle>
+        <CardTitle className={cn("flex items-center gap-2", done && !done.ok ? "text-destructive" : "text-primary")}>
+          <StateIcon className={cn("size-4", !done && "animate-spin")} />
+          {site.status === "creating" ? "Creating site" : !done ? "In progress" : done.ok ? "Done" : "Failed"}
+        </CardTitle>
         <Button variant="ghost" size="sm" onClick={() => setParams({}, { replace: true })}>
           Dismiss
         </Button>
@@ -91,7 +98,8 @@ export function SiteJobCard({ site }: { site: Site }) {
       <CardContent>
         <JobProgress
           jobId={jobId}
-          onDone={() => {
+          onDone={(ok) => {
+            setResult({ job: jobId, ok });
             qc.invalidateQueries({ queryKey: siteKey(site.id) });
             qc.invalidateQueries({ queryKey: sitesKey });
             qc.invalidateQueries({ queryKey: certsKey });
