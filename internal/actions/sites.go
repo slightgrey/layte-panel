@@ -19,7 +19,8 @@ type DiscoveredSite struct {
 	Domain     string   `json:"domain"`
 	Aliases    []string `json:"aliases"`
 	Root       string   `json:"root"`
-	PHPVersion string   `json:"php_version"` // "" for static sites or unknown
+	PHPVersion string   `json:"php_version"`          // "" for static sites or unknown
+	PHPSocket  string   `json:"php_socket,omitempty"` // unix socket of the first fastcgi_pass
 	SSL        bool     `json:"ssl"`
 	CertPath   string   `json:"cert_path,omitempty"`
 	ConfigFile string   `json:"config_file"`
@@ -140,6 +141,9 @@ func (d Deps) siteFromServer(block []*nginx.Directive, pools map[string]string) 
 			return
 		}
 		sock := strings.TrimPrefix(dir.Arg(0), "unix:")
+		if strings.HasPrefix(dir.Arg(0), "unix:") {
+			s.PHPSocket = sock
+		}
 		if v, ok := pools[sock]; ok {
 			s.PHPVersion = v
 		} else if m := phpSocketRe.FindStringSubmatch(sock); m != nil {
@@ -192,6 +196,9 @@ func mergeSite(dst, src *DiscoveredSite) {
 	}
 	if dst.PHPVersion == "" {
 		dst.PHPVersion = src.PHPVersion
+	}
+	if dst.PHPSocket == "" {
+		dst.PHPSocket = src.PHPSocket
 	}
 	if dst.CertPath == "" {
 		dst.CertPath = src.CertPath

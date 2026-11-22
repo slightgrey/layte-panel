@@ -85,6 +85,7 @@ export interface Site {
   php_version: string;
   managed: boolean;
   source: "created" | "imported";
+  adopted: boolean; // imported, then adopted: runs as system_user with a Layte pool
   wordpress: boolean;
   ssl: boolean;
   db_name: string;
@@ -105,6 +106,22 @@ export interface ScanResponse extends SitesResponse {
   found: number;
   added: number;
   removed: number;
+}
+
+export interface AdoptPreview {
+  domain: string;
+  web_root: string;
+  php_version: string;
+  pool_file: string;
+  pool_name: string;
+  old_user: string;
+  old_group: string;
+  unsafe?: string[];
+  blockers?: string[];
+  pool_diff: string[]; // "+ line" / "- line" / "  line"
+  pool_hash: string;
+  log_files?: string[];
+  username: string; // suggested new user
 }
 
 export interface DiskUsage {

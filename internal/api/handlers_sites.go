@@ -142,6 +142,41 @@ func (s *server) handleSiteDisk(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// GET /api/v1/sites/{id}/adopt — what adopting would change (read-only).
+func (s *server) handleAdoptPreview(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.sites.AdoptPreview(r.Context(), actorOf(r), site)
+	if err != nil {
+		s.writeSiteError(w, "adopt preview", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// POST /api/v1/sites/{id}/adopt {username, pool_hash} — adopt (job).
+func (s *server) handleAdopt(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		PoolHash string `json:"pool_hash"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.Adopt(r.Context(), actorOf(r), site, req.Username, req.PoolHash)
+	if err != nil {
+		s.writeSiteError(w, "adopt site", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
 // GET /api/v1/php/versions
 func (s *server) handlePHPVersions(w http.ResponseWriter, r *http.Request) {
 	var versions []string

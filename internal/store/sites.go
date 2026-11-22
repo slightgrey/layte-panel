@@ -17,7 +17,8 @@ type Site struct {
 	RootPath   string    `json:"root_path"`
 	PHPVersion string    `json:"php_version"`
 	Managed    bool      `json:"managed"`
-	Source     string    `json:"source"` // created | imported
+	Source     string    `json:"source"`  // created | imported
+	Adopted    bool      `json:"adopted"` // imported, then adopted: runs as SystemUser with a Layte pool
 	WordPress  bool      `json:"wordpress"`
 	SSL        bool      `json:"ssl"`
 	DBName     string    `json:"db_name"`
@@ -31,14 +32,14 @@ type Site struct {
 }
 
 const siteCols = `id, domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl,
-	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, created_at, updated_at`
+	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, created_at, updated_at`
 
 func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
 	var aliases string
 	var created, updated int64
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.SystemUser, &s.RootPath, &s.PHPVersion, &s.Managed, &s.Source,
-		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &created, &updated)
+		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Site{}, ErrNotFound
 	}
@@ -80,9 +81,9 @@ func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 // UpdateSite saves every mutable column of x (matched by id).
 func (s *Store) UpdateSite(ctx context.Context, x Site) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, managed=?,
-		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, updated_at=? WHERE id=?`,
+		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, updated_at=? WHERE id=?`,
 		aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, time.Now().Unix(), x.ID)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, time.Now().Unix(), x.ID)
 	if err != nil {
 		return fmt.Errorf("update site %s: %w", x.Domain, err)
 	}
@@ -142,8 +143,8 @@ func (s *Store) ReplaceImported(ctx context.Context, found []Site) (added, remov
 		now := time.Now().Unix()
 		for _, x := range found {
 			seen[x.Domain] = true
-			var managed bool
-			err := tx.QueryRowContext(ctx, `SELECT managed FROM sites WHERE domain=?`, x.Domain).Scan(&managed)
+			var managed, adopted bool
+			err := tx.QueryRowContext(ctx, `SELECT managed, adopted FROM sites WHERE domain=?`, x.Domain).Scan(&managed, &adopted)
 			switch {
 			case errors.Is(err, sql.ErrNoRows):
 				_, err = tx.ExecContext(ctx, `INSERT INTO sites
@@ -156,6 +157,15 @@ func (s *Store) ReplaceImported(ctx context.Context, found []Site) (added, remov
 				added++
 			case err != nil:
 				return err
+			case adopted:
+				// The vhost is still the admin's, so follow it; the user, pool and
+				// PHP version are Layte's now.
+				_, err = tx.ExecContext(ctx, `UPDATE sites SET aliases_json=?, root_path=?, wordpress=?, ssl=?, nginx_conf=?, cert_path=?, updated_at=?
+					WHERE domain=? AND adopted=1`,
+					aliasesJSON(x.Aliases), x.RootPath, x.WordPress, x.SSL, x.NginxConf, x.CertPath, now, x.Domain)
+				if err != nil {
+					return err
+				}
 			case !managed:
 				_, err = tx.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, wordpress=?, ssl=?, nginx_conf=?, cert_path=?, updated_at=?
 					WHERE domain=? AND managed=0`,
@@ -165,7 +175,9 @@ func (s *Store) ReplaceImported(ctx context.Context, found []Site) (added, remov
 				}
 			}
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT id, domain FROM sites WHERE managed=0`)
+		// Adopted sites are never dropped by a scan: they own a Linux user and a
+		// pool, so removing them is a deliberate action.
+		rows, err := tx.QueryContext(ctx, `SELECT id, domain FROM sites WHERE managed=0 AND adopted=0`)
 		if err != nil {
 			return err
 		}

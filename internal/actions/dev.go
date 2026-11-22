@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -52,6 +53,8 @@ func DevDeps(dir string) (Deps, error) {
 		WPCLI:   devWPCLI{fs: root},
 		FileOps: localFileOps{base: absDir},
 		Now:     time.Now,
+		// Dev sites aren't served, so they always "answer" 200.
+		SiteCheck: func(context.Context, string, bool) (int, error) { return 200, nil },
 	}, nil
 }
 
@@ -134,6 +137,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return fakeMySQL(root, c)
 		case c.Bin == mysqldumpBin:
 			return fakeMySQLDump(root, c)
+		case c.Bin == chownBin:
+			return system.Result{}, nil // the fake root doesn't track owners
 		case c.Bin == duBin:
 			return fakeDu(c), nil
 		case c.Bin == ufwBin:

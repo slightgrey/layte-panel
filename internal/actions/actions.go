@@ -2,6 +2,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,6 +21,9 @@ type Deps struct {
 	WPCLI   WPCLI
 	FileOps FileOps
 	Now     func() time.Time
+	// SiteCheck returns a site's HTTP status (nil = real request over
+	// loopback). Used by adoption to verify the site still works.
+	SiteCheck func(ctx context.Context, domain string, https bool) (int, error)
 }
 
 // HostDeps returns dependencies that operate on the real machine.
@@ -66,6 +70,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("fs.read", true, 30*time.Second, d.fsRead),
 		agent.Def("security.overview", true, 15*time.Second, d.securityOverview),
 		agent.Def("site.disk_usage", true, 60*time.Second, d.siteDiskUsage),
+		agent.Def("site.adopt_preview", true, 30*time.Second, d.adoptPreview),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
@@ -92,5 +97,6 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("ufw.set_enabled", false, 30*time.Second, d.ufwSetEnabled),
 		agent.Def("cloudflare.set_realip", false, 30*time.Second, d.cloudflareSet),
 		agent.Def("updates.install", false, 30*time.Minute, u.install),
+		agent.Def("site.adopt", false, 5*time.Minute, d.siteAdopt),
 	)
 }
