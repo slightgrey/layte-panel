@@ -132,6 +132,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{}, root.RemoveAll("/home/" + u)
 		case c.Bin == mysqlBin:
 			return fakeMySQL(root, c)
+		case c.Bin == duBin:
+			return fakeDu(c), nil
 		case c.Bin == ufwBin:
 			return fakeUFWCmd(root, c)
 		case c.Bin == unattendedUpgradeBin:
@@ -145,4 +147,31 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		}
 		return system.Result{}, fmt.Errorf("run %s: %w", c.Bin, system.ErrNotFound)
 	}
+}
+
+// fakeDu reports made-up but stable sizes: the whole site is the sum of its
+// folders plus a little, so the overview's breakdown adds up.
+func fakeDu(c system.Cmd) system.Result {
+	var paths []string
+	for i, a := range c.Args {
+		if a == "--" {
+			paths = c.Args[i+1:]
+		}
+	}
+	size := func(p string) int64 {
+		switch path.Base(p) {
+		case "public":
+			return 48_300_000
+		case "logs":
+			return 2_150_000
+		case "tmp":
+			return 640_000
+		}
+		return 51_200_000
+	}
+	var b strings.Builder
+	for _, p := range paths {
+		fmt.Fprintf(&b, "%d\t%s\n", size(p), p)
+	}
+	return system.Result{Stdout: []byte(b.String())}
 }

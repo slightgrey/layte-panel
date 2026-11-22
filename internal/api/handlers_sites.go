@@ -113,6 +113,35 @@ func (s *server) handleSiteVhost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// GET /api/v1/sites/{id}/disk — the site folder's size on disk (du).
+func (s *server) handleSiteDisk(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	p := actions.SiteDiskParams{Domain: site.Domain}
+	switch {
+	case site.Managed && site.SystemUser != "":
+		p.Username = site.SystemUser
+	case !site.Managed && site.RootPath != "":
+		p.WebRoot = site.RootPath
+	default:
+		writeError(w, http.StatusNotFound, "not_found", "this site has no folder to measure")
+		return
+	}
+	var out actions.DiskUsage
+	if err := s.Agent.Call(r.Context(), "site.disk_usage", actorOf(r), p, &out); err != nil {
+		e := s.agentError("site.disk_usage", err)
+		status := http.StatusBadGateway
+		if e.Code == agent.CodeNotFound {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, e.Code, e.Message)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // GET /api/v1/php/versions
 func (s *server) handlePHPVersions(w http.ResponseWriter, r *http.Request) {
 	var versions []string

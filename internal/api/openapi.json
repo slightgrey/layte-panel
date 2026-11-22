@@ -163,6 +163,17 @@
         }
       }
     },
+    "/sites/{id}/disk": {
+      "get": {
+        "summary": "A site's size on disk",
+        "description": "Scope: `sites:read`. Measured with `du`. Layte sites also get a public/logs/tmp breakdown.",
+        "parameters": [{ "$ref": "#/components/parameters/SiteID" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "path": { "type": "string" }, "total": { "type": "integer", "description": "bytes" }, "parts": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "bytes": { "type": "integer" } } } } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/php/versions": {
       "get": {
         "summary": "Installed PHP-FPM versions",

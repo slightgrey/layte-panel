@@ -107,6 +107,12 @@ export interface ScanResponse extends SitesResponse {
   removed: number;
 }
 
+export interface DiskUsage {
+  path: string;
+  total: number; // bytes
+  parts?: { name: string; bytes: number }[];
+}
+
 export interface Vhost {
   path: string;
   content: string;

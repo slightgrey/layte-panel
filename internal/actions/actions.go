@@ -65,6 +65,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("logs.read", true, 10*time.Second, d.logsRead).WithQuiet(),
 		agent.Def("fs.read", true, 30*time.Second, d.fsRead),
 		agent.Def("security.overview", true, 15*time.Second, d.securityOverview),
+		agent.Def("site.disk_usage", true, 60*time.Second, d.siteDiskUsage),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),

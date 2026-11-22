@@ -77,6 +77,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/sites", read("sites:read", s.handleListSites))
 	mux.Handle("GET /api/v1/sites/{id}", read("sites:read", s.handleGetSite))
 	mux.Handle("GET /api/v1/sites/{id}/vhost", read("sites:read", s.handleSiteVhost))
+	mux.Handle("GET /api/v1/sites/{id}/disk", read("sites:read", s.handleSiteDisk))
 	mux.Handle("GET /api/v1/php/versions", read("sites:read", s.handlePHPVersions))
 	mux.Handle("GET /api/v1/ssl", read("ssl:read", s.handleListSSL))
 	mux.Handle("GET /api/v1/databases", read("databases:read", s.handleListDatabases))

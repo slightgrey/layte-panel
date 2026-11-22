@@ -24,7 +24,7 @@ Things to know about keys:
 | Scope | Endpoints |
 |---|---|
 | `system:read` | `GET /dashboard`: server info, services, software versions, pending updates |
-| `sites:read` | `GET /sites`, `GET /sites/{id}`, `GET /sites/{id}/vhost`, `GET /php/versions` |
+| `sites:read` | `GET /sites`, `GET /sites/{id}`, `GET /sites/{id}/vhost`, `GET /sites/{id}/disk`, `GET /php/versions` |
 | `ssl:read` | `GET /ssl`: every certificate, `days_left`, `state` (`ok` / `expiring` = under 21 days / `expired`) |
 | `databases:read` | `GET /databases`: names, sizes, owning site (never passwords) |
 | `cron:read` | `GET /cron` |

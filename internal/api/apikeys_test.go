@@ -168,8 +168,8 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&spec)
 	resp.Body.Close()
 	paths := spec["paths"].(map[string]any)
-	if len(paths) != 11 {
-		t.Errorf("spec has %d paths, routes have 11 key-readable ones", len(paths))
+	if len(paths) != 12 {
+		t.Errorf("spec has %d paths, routes have 12 key-readable ones", len(paths))
 	}
 	for p := range paths {
 		url := "/api/v1" + strings.ReplaceAll(p, "{id}", "1")
