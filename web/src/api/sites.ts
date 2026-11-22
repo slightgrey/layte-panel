@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, Site, SitesResponse, ScanResponse, Vhost } from "./types";
+import type { AdoptPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, Site, SitesResponse, ScanResponse, Vhost } from "./types";
 
 /** POST /sites: starts a creation job. */
 export function useCreateSite() {
@@ -86,3 +86,22 @@ export function usePHPVersions() {
     staleTime: 5 * 60_000,
   });
 }
+
+/** GET /sites/{id}/adopt: what adopting would change (nothing is changed). */
+export function useAdoptPreview(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["sites", id, "adopt"],
+    queryFn: () => api<AdoptPreview>("GET", `/sites/${id}/adopt`),
+    enabled,
+    retry: false,
+    gcTime: 0,
+  });
+}
+
+/** POST /sites/{id}/adopt: adopt the imported site (job). */
+export function useAdoptSite(id: number) {
+  return useMutation({
+    mutationFn: (v: { username: string; pool_hash: string }) => api<JobStarted>("POST", `/sites/${id}/adopt`, v),
+  });
+}
+
