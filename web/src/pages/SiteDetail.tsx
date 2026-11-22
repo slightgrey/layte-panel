@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Info, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { databasesKey, useDatabases } from "@/api/databases";
 import { siteKey, sitesKey, useDeleteSite, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
@@ -105,6 +106,23 @@ function PHPSwitch({ site }: { site: Site }) {
   );
 }
 
+/** "Drop databases" checkbox listing every database linked to the site (plus the legacy db_name). */
+function DropDatabasesOption({ site, checked, onChange }: { site: Site; checked: boolean; onChange: (v: boolean) => void }) {
+  const dbs = useDatabases();
+  const names = new Set((dbs.data?.databases ?? []).filter((d) => d.site_id === site.id).map((d) => d.name));
+  if (site.db_name) names.add(site.db_name);
+  if (names.size === 0) return null;
+  const list = [...names].sort();
+  return (
+    <Checkbox
+      label={list.length === 1 ? `Drop database ${list[0]}` : `Drop ${list.length} databases: ${list.join(", ")}`}
+      description={list.length === 1 ? "Deletes the database and its user. This can't be undone." : "Deletes these databases and their users. This can't be undone."}
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+  );
+}
+
 /** Delete button + confirmation dialog; shows the deletion job's progress. */
 function DeleteSite({ site }: { site: Site }) {
   const [open, setOpen] = useState(false);
@@ -142,6 +160,7 @@ function DeleteSite({ site }: { site: Site }) {
               setFinished(true);
               qc.invalidateQueries({ queryKey: sitesKey });
               qc.invalidateQueries({ queryKey: siteKey(site.id) });
+              qc.invalidateQueries({ queryKey: databasesKey });
               if (ok) navigate("/sites", { replace: true });
             }}
           />
@@ -156,14 +175,7 @@ function DeleteSite({ site }: { site: Site }) {
               checked={removeFiles}
               onChange={(e) => setRemoveFiles(e.target.checked)}
             />
-            {site.db_name && (
-              <Checkbox
-                label={`Drop database ${site.db_name}`}
-                description="Deletes the database and its user. This can't be undone."
-                checked={dropDb}
-                onChange={(e) => setDropDb(e.target.checked)}
-              />
-            )}
+            <DropDatabasesOption site={site} checked={dropDb} onChange={setDropDb} />
             <Field label={`Type ${site.domain} to confirm`} htmlFor="confirm">
               <Input id="confirm" autoComplete="off" spellCheck={false} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </Field>
