@@ -1,4 +1,4 @@
-import { Database, Download, KeyRound, Link2, Plus, Trash2, Unlink, Upload } from "lucide-react";
+import { Database, Download, Link2, Plus, Trash2, Unlink, Upload } from "lucide-react";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
@@ -7,12 +7,12 @@ import {
   useExportDatabase,
   useImportDatabase,
   useLinkDatabase,
-  useResetDBPassword,
   useUnlinkDatabase,
 } from "@/api/databases";
 import { downloadURL, useFileActions, useFiles } from "@/api/files";
 import type { DatabaseRow, Site } from "@/api/types";
 import { OneTimeSecrets } from "@/components/JobProgress";
+import { ResetDBPassword } from "@/components/ResetDBPassword";
 import { EmptyState, SiteShell } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -137,7 +137,6 @@ function LinkDatabase({ site, all }: { site: Site; all: DatabaseRow[] }) {
 }
 
 function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
-  const reset = useResetDBPassword();
   const exp = useExportDatabase();
   const [, setParams] = useSearchParams();
   const canDump = db.managed && (site.managed || site.adopted) && site.status === "active";
@@ -196,15 +195,8 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
                 <Unlink /> Unlink
               </Button>
             )}
-            {db.managed && !db.linked && (
-              <Button
-                variant="outline"
-                disabled={reset.isPending || db.wordpress}
-                title={db.wordpress ? "Used by WordPress: changing it here would break wp-config.php" : "Generate a new password"}
-                onClick={() => reset.mutate(db.name, { onSuccess: (r) => onSecrets(r.secrets) })}
-              >
-                <KeyRound /> Reset password
-              </Button>
+            {db.managed && (!db.linked || db.wordpress) && (site.managed || site.adopted) && (
+              <ResetDBPassword db={db} onSecrets={onSecrets} />
             )}
             {canDump && (
               <Button
@@ -222,7 +214,7 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
               Linked existing database: Layte Panel didn't create it, so it never drops it or changes its password.
             </p>
           )}
-          <FormError message={reset.error?.message ?? exp.error?.message ?? unlink.error?.message} />
+          <FormError message={exp.error?.message ?? unlink.error?.message} />
         </CardContent>
       </Card>
 

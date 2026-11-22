@@ -46,6 +46,9 @@ func fakeMySQL(root system.FS, c system.Cmd) (system.Result, error) {
 		}
 	}
 	sql := string(c.Stdin)
+	if strings.HasPrefix(sql, "SHOW GRANTS FOR ") {
+		return system.Result{Stdout: []byte("GRANT USAGE ON *.* TO `x`@`localhost`\n")}, nil
+	}
 	switch {
 	case reCreateDB.MatchString(sql):
 		name := reCreateDB.FindStringSubmatch(sql)[1]

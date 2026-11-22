@@ -81,8 +81,30 @@ func TestDatabases(t *testing.T) {
 	if d := dbByName(t, c)["wptest"]; d["site_domain"] != "wp.test" || d["wordpress"] != true || d["managed"] != true {
 		t.Errorf("site db: %v", d)
 	}
-	if st, body := c.do("POST", "/api/v1/databases/wptest/password", nil); st != 409 || errCode(body) != "db_in_use" {
-		t.Errorf("reset WP db: %d %v", st, body)
+	// The dev stub wp-config.php names no database: refused, nothing changed.
+	if st, body := c.do("POST", "/api/v1/databases/wptest/password", nil); st != 409 || errCode(body) != "db_password_refused" {
+		t.Errorf("reset WP db with stub wp-config: %d %v", st, body)
+	}
+	// A real wp-config.php: MySQL and wp-config.php change together.
+	cfg := "/home/wptest/wp.test/public/wp-config.php"
+	deps.FS.WriteFileAtomic(cfg, []byte("<?php\ndefine( 'DB_NAME', 'wptest' );\ndefine( 'DB_USER', 'wptest' );\ndefine( 'DB_PASSWORD', 'OLDpassword123456789012345' );\n"), 0o640)
+	st, body = c.do("POST", "/api/v1/databases/wptest/password", nil)
+	if st != 200 {
+		t.Fatalf("reset WP db: %d %v", st, body)
+	}
+	newPW := body["secrets"].(map[string]any)["db_password"].(string)
+	if b, _ := deps.FS.ReadFile(cfg); !strings.Contains(string(b), "define( 'DB_PASSWORD', '"+newPW+"' );") || strings.Contains(string(b), "OLDpassword") {
+		t.Errorf("wp-config.php after reset:\n%s", b)
+	}
+	var altered bool
+	for _, cmd := range deps.Runner.(*system.FakeRunner).Cmds {
+		altered = altered || strings.Contains(string(cmd.Stdin), "ALTER USER 'wptest'@'localhost' IDENTIFIED BY '"+newPW+"'")
+		if strings.Contains(cmd.String(), newPW) || strings.Contains(cmd.String(), "OLDpassword") {
+			t.Error("password in argv")
+		}
+	}
+	if !altered {
+		t.Error("MySQL password not changed")
 	}
 	if st, body := c.do("DELETE", "/api/v1/databases/wptest", map[string]string{"confirm": "wptest"}); st != 409 || errCode(body) != "db_in_use" {
 		t.Errorf("drop site db: %d %v", st, body)

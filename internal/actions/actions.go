@@ -83,6 +83,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("db.create", false, 30*time.Second, d.dbCreate),
 		agent.Def("db.drop", false, 30*time.Second, d.dbDrop),
 		agent.Def("db.password_reset", false, 30*time.Second, d.dbPasswordReset),
+		agent.Def("db.wp_password", false, 2*time.Minute, d.wpDBPassword),
 		agent.Def("db.export", false, 30*time.Minute, d.dbExport),
 		agent.Def("db.import", false, 30*time.Minute, d.dbImport),
 		agent.Def("wp.install", false, 5*time.Minute, d.wpInstall),

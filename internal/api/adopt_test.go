@@ -114,9 +114,11 @@ func TestAdoptedSiteDatabase(t *testing.T) {
 	if d := dbByName(t, c)["blog"]; d["linked"] != true || d["site_domain"] != "shop.example.org" || d["user"] != "bloguser" {
 		t.Errorf("linked db (user from wp-config.php): %v", d)
 	}
-	// Linked databases are never dropped or have their password reset.
-	if st, body := c.do("POST", "/api/v1/databases/blog/password", nil); st != 409 || errCode(body) != "db_linked" {
-		t.Errorf("reset linked: %d %v", st, body)
+	// Linked databases are never dropped. A WordPress one can get a new
+	// password only together with wp-config.php; this one has no DB_PASSWORD
+	// line, so the reset is refused without changing anything.
+	if st, body := c.do("POST", "/api/v1/databases/blog/password", nil); st != 409 || errCode(body) != "db_password_refused" {
+		t.Errorf("reset linked WP db without DB_PASSWORD: %d %v", st, body)
 	}
 	if st, body := c.do("DELETE", "/api/v1/databases/blog", map[string]string{"confirm": "blog"}); st != 409 || errCode(body) != "db_linked" {
 		t.Errorf("drop linked: %d %v", st, body)

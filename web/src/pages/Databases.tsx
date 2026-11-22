@@ -1,10 +1,11 @@
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
-import { useCreateDatabase, useDatabases, useDropDatabase, useResetDBPassword } from "@/api/databases";
+import { useCreateDatabase, useDatabases, useDropDatabase } from "@/api/databases";
 import { useSites } from "@/api/sites";
 import type { DatabaseRow } from "@/api/types";
 import { OneTimeSecrets } from "@/components/JobProgress";
+import { ResetDBPassword } from "@/components/ResetDBPassword";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,6 @@ export function DatabasesPage() {
 }
 
 function DBRow({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
-  const reset = useResetDBPassword();
   const [dropOpen, setDropOpen] = useState(false);
   return (
     <TableRow>
@@ -81,11 +81,10 @@ function DBRow({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<strin
         {db.system && <Badge className="ml-2">system</Badge>}
         {!db.managed && !db.system && <Badge className="ml-2">not Layte</Badge>}
         {db.linked && (
-          <Badge className="ml-2" title="Existing database linked to an adopted site: exported and imported there, never dropped or reset">
+          <Badge className="ml-2" title="Existing database linked to an adopted site: exported and imported there, never dropped (WordPress: password changes update wp-config.php)">
             linked
           </Badge>
         )}
-        {reset.error && <div className="text-xs text-destructive">{reset.error.message}</div>}
       </TableCell>
       <TableCell>
         {db.site_id ? (
@@ -98,17 +97,9 @@ function DBRow({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<strin
       </TableCell>
       <TableCell className="text-right text-xs tabular-nums">{formatBytes(db.size)}</TableCell>
       <TableCell>
-        {db.managed && !db.linked && (
+        {db.managed && (!db.linked || db.wordpress) && (
           <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={reset.isPending || db.wordpress}
-              title={db.wordpress ? "Used by WordPress: changing it here would break wp-config.php" : "Generate a new password"}
-              onClick={() => reset.mutate(db.name, { onSuccess: (r) => onSecrets(r.secrets) })}
-            >
-              <KeyRound /> New password
-            </Button>
+            <ResetDBPassword db={db} onSecrets={onSecrets} variant="ghost" label="New password" />
             <Button
               variant="ghost"
               size="sm"
