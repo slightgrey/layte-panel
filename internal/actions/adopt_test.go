@@ -141,3 +141,49 @@ func TestSiteAdoptRefusesChangedPool(t *testing.T) {
 		}
 	}
 }
+
+func TestAdoptedFilesAndCron(t *testing.T) {
+	d := devDeps(t)
+	if _, err := adoptShop(t, d); err != nil {
+		t.Fatal(err)
+	}
+	web := FSParams{Domain: "shop.example.org", Username: "shopexampleorg", WebRoot: "/var/www/shop/public"}
+	w := web
+	w.Op, w.Path = "mkdir", "uploads"
+	if _, err := d.fsWrite(ctx, agent.Actor{}, FSWriteParams(w)); err != nil {
+		t.Fatalf("write to adopted web root: %v", err)
+	}
+	if ok, _ := d.FS.Exists("/var/www/shop/public/uploads"); !ok {
+		t.Error("mkdir didn't land in the web root")
+	}
+	data := web
+	data.Op, data.Path, data.Area = "list", "tmp", "data"
+	if _, err := d.fsRead(ctx, agent.Actor{}, FSReadParams(data)); err != nil {
+		t.Errorf("list data area: %v", err)
+	}
+	// Another user name, or another web root, is refused.
+	for _, bad := range []FSParams{
+		{Domain: "shop.example.org", Username: "shop", WebRoot: "/var/www/shop/public", Op: "list"},
+		{Domain: "shop.example.org", Username: "shopexampleorg", WebRoot: "/var/www/blog", Op: "list"},
+		{Domain: "blog.example.com", Username: "shopexampleorg", WebRoot: "/var/www/blog", Op: "list"},
+	} {
+		if _, err := d.fsRead(ctx, agent.Actor{}, FSReadParams(bad)); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+
+	// Cron runs as the new user from the web root and logs outside it.
+	_, err := d.cronWrite(ctx, agent.Actor{}, CronWriteParams{Domain: "shop.example.org", Username: "shopexampleorg", WebRoot: "/var/www/shop/public",
+		Jobs: []CronEntry{{Schedule: "*/5 * * * *", Command: "php artisan schedule:run"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := d.FS.ReadFile(CronPath("shop.example.org"))
+	if !strings.Contains(string(b), "*/5 * * * * shopexampleorg cd /var/www/shop/public && ( php artisan schedule:run ) >> /home/shopexampleorg/logs/cron.log 2>&1") {
+		t.Errorf("cron file:\n%s", b)
+	}
+	if _, err := d.cronWrite(ctx, agent.Actor{}, CronWriteParams{Domain: "shop.example.org", Username: "shop", WebRoot: "/var/www/shop/public",
+		Jobs: []CronEntry{{Schedule: "* * * * *", Command: "id"}}}); err == nil {
+		t.Error("cron as the old (non-Layte) user")
+	}
+}

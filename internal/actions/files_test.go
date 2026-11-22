@@ -45,6 +45,14 @@ func TestFSJail(t *testing.T) {
 	if _, err := d.fsRead(ctx, agent.Actor{}, FSReadParams{Domain: "blog.example.com", WebRoot: "/var/www/shop/public", Op: "list"}); err == nil {
 		t.Error("accepted another site's web root")
 	}
+	// Username + web root is the adopted form: refused unless really adopted.
+	if _, err := d.fsWrite(ctx, agent.Actor{}, FSWriteParams{Domain: "shop.example.org", Username: "shopx", WebRoot: "/var/www/shop/public", Op: "mkdir", Path: "x"}); err == nil {
+		t.Error("wrote to a site that isn't adopted")
+	}
+	// Imported sites have no data area.
+	if _, err := d.fsRead(ctx, agent.Actor{}, FSReadParams{Domain: "blog.example.com", WebRoot: "/var/www/blog", Op: "list", Area: "data"}); err == nil {
+		t.Error("imported site has a data area")
+	}
 	// Imported sites are read-only even if a write request gets through.
 	if _, err := d.fsWrite(ctx, agent.Actor{}, FSWriteParams{Domain: "blog.example.com", WebRoot: "/var/www/blog", Op: "delete", Path: "wp-config.php"}); err == nil {
 		t.Error("wrote to an imported site")
@@ -53,7 +61,7 @@ func TestFSJail(t *testing.T) {
 		{Domain: "a.test", WebRoot: "/", Op: "list"},
 		{Domain: "a.test", WebRoot: "/etc", Op: "list"},
 		{Domain: "a.test", WebRoot: "/var/www", Op: "list"},
-		{Domain: "a.test", Username: "acme", WebRoot: "/var/www/x", Op: "list"},
+		{Domain: "a.test", Username: "acme", Op: "list", Area: "nope"},
 		{Domain: "a.test", Username: "acme", Op: "delete"},
 		{Domain: "a.test", Username: "acme", Op: "list", Path: "../x"},
 	} {

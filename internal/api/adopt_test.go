@@ -37,6 +37,21 @@ func TestAdoptSite(t *testing.T) {
 	if st, body := c.do("GET", "/api/v1/sites/"+shop+"/adopt", nil); st != 409 || errCode(body) != "site_adopted" {
 		t.Errorf("preview again: %d %v", st, body)
 	}
+	// Files: writable now (web root), plus the data area for dumps and logs.
+	if st, body := c.do("POST", "/api/v1/sites/"+shop+"/files/mkdir", map[string]string{"path": "uploads"}); st != 204 {
+		t.Errorf("mkdir on adopted site: %d %v", st, body)
+	}
+	if st, body := c.do("GET", "/api/v1/sites/"+shop+"/files?path=tmp&area=data", nil); st != 200 || body["read_only"] == true {
+		t.Errorf("data area: %d %v", st, body)
+	}
+	// Cron: allowed, runs as the new user from the web root.
+	if st, body := c.do("POST", "/api/v1/sites/"+shop+"/cron", map[string]string{"schedule": "@hourly", "command": "php cron.php"}); st != 201 {
+		t.Errorf("add cron: %d %v", st, body)
+	}
+	if b, _ := deps.FS.ReadFile("/etc/cron.d/layte-shop_example_org"); !strings.Contains(string(b), "shopexampleorg cd /var/www/shop/public &&") {
+		t.Errorf("cron file:\n%s", b)
+	}
+
 	// The vhost was not touched.
 	if b, _ := deps.FS.ReadFile("/etc/nginx/sites-enabled/shop.example.org.conf"); strings.Contains(string(b), "Layte") {
 		t.Error("vhost changed")
@@ -44,6 +59,12 @@ func TestAdoptSite(t *testing.T) {
 
 	// The blog uses the default www pool: the preview says why, the job refuses.
 	blog := siteIDByDomain(t, c, "blog.example.com")
+	if st, _ := c.do("POST", "/api/v1/sites/"+blog+"/files/mkdir", map[string]string{"path": "x"}); st != 409 {
+		t.Errorf("imported site writable: %d", st)
+	}
+	if st, _ := c.do("POST", "/api/v1/sites/"+blog+"/cron", map[string]string{"schedule": "@hourly", "command": "id"}); st != 409 {
+		t.Errorf("cron on imported site: %d", st)
+	}
 	_, prev = c.do("GET", "/api/v1/sites/"+blog+"/adopt", nil)
 	if b, _ := prev["blockers"].([]any); len(b) == 0 {
 		t.Fatalf("blog preview: %v", prev)

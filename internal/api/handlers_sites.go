@@ -123,6 +123,8 @@ func (s *server) handleSiteDisk(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case site.Managed && site.SystemUser != "":
 		p.Username = site.SystemUser
+	case site.Adopted:
+		p.Username, p.WebRoot = site.SystemUser, site.RootPath
 	case !site.Managed && site.RootPath != "":
 		p.WebRoot = site.RootPath
 	default:
