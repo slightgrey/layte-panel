@@ -270,11 +270,11 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 		j.Step("Install WordPress")
 		j.Log("Downloading WordPress and running the installer as %s…", site.SystemUser)
 		adminPW := randomPassword()
-		err := call("wp.install", actions.WPInstallParams{
+		err := s.longCall(ctx, 5*time.Minute, "wp.install", actor, actions.WPInstallParams{
 			Domain: site.Domain, Username: site.SystemUser, PHPVersion: site.PHPVersion,
 			URL: "http://" + site.Domain, Title: wp.Title, AdminUser: wp.AdminUser, AdminEmail: wp.AdminEmail,
 			AdminPassword: adminPW, DBName: site.DBName, DBUser: site.DBUser, DBPassword: secrets["db_password"],
-		})
+		}, nil)
 		if err != nil {
 			return err
 		}
@@ -329,7 +329,7 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		}
 		if site.SSL {
 			j.Step("Revoke certificate")
-			if err := call("ssl.revoke", actions.DomainParams{Domain: site.Domain}); err != nil {
+			if err := s.longCall(ctx, time.Minute, "ssl.revoke", actor, actions.DomainParams{Domain: site.Domain}, nil); err != nil {
 				j.Log("Warning: revoking failed (%v); the certificate will simply expire.", err)
 			}
 		}
@@ -356,7 +356,7 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		// them (ON DELETE SET NULL) and they stay manageable on the Databases page.
 		if req.RemoveFiles {
 			j.Step("Remove Linux user " + site.SystemUser + " and all site files")
-			if err := call("site.user_remove", actions.UserParams{Username: site.SystemUser}); err != nil {
+			if err := s.longCall(ctx, time.Minute, "site.user_remove", actor, actions.UserParams{Username: site.SystemUser}, nil); err != nil {
 				return fail(err)
 			}
 		} else {
@@ -385,6 +385,17 @@ func (s *Service) siteDatabases(ctx context.Context, site store.Site) ([]store.D
 		dbs = append(dbs, store.Database{Name: site.DBName, User: site.DBUser, SiteID: site.ID})
 	}
 	return dbs, nil
+}
+
+// longCall calls an agent action that may run longer than the client's
+// default 60 s (agent.DefaultCallTimeout). timeout is the action's own limit
+// in the agent's registry; a margin is added so the agent, which enforces
+// that limit, always answers first and its error ("action timed out") is
+// what the job shows.
+func (s *Service) longCall(ctx context.Context, timeout time.Duration, action string, actor agent.Actor, params, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout+30*time.Second)
+	defer cancel()
+	return s.Agent.Call(ctx, action, actor, params, out)
 }
 
 // freeUsername returns base, or base2, base3, … if taken by another site.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -176,7 +177,7 @@ func (s *Service) ExportDatabase(ctx context.Context, actor agent.Actor, name st
 	return s.startDBJob("db.export", site, actor, func(ctx context.Context, j *jobs.Job) error {
 		j.Step("Export " + db.Name + " to tmp/")
 		var out actions.DumpFile
-		if err := s.Agent.Call(ctx, "db.export", actor, params, &out); err != nil {
+		if err := s.longCall(ctx, 30*time.Minute, "db.export", actor, params, &out); err != nil {
 			return err
 		}
 		j.Log("Saved %s (%d bytes). Download it from the Database or Files tab.", out.Path, out.Size)
@@ -202,7 +203,7 @@ func (s *Service) ImportDatabase(ctx context.Context, actor agent.Actor, name, p
 	}
 	return s.startDBJob("db.import", site, actor, func(ctx context.Context, j *jobs.Job) error {
 		j.Step("Import " + path + " into " + db.Name)
-		if err := s.Agent.Call(ctx, "db.import", actor, params, nil); err != nil {
+		if err := s.longCall(ctx, 30*time.Minute, "db.import", actor, params, nil); err != nil {
 			return err
 		}
 		j.SetResult(map[string]any{"site_id": site.ID, "path": path})

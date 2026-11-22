@@ -90,7 +90,7 @@ func TestSSLLifecycle(t *testing.T) {
 			renews = append(renews, call)
 		}
 	}
-	if len(renews) != 2 || !strings.HasSuffix(renews[0], "--cert-name layte-secure.test --non-interactive --dry-run") ||
+	if len(renews) != 2 || !strings.HasSuffix(renews[0], "--cert-name layte-secure.test --non-interactive --no-random-sleep-on-renew --dry-run") ||
 		!strings.HasSuffix(renews[1], "--force-renewal") {
 		t.Errorf("certbot renew calls: %q", renews)
 	}

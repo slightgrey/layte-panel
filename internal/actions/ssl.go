@@ -201,7 +201,9 @@ func (d Deps) sslRenew(ctx context.Context, _ agent.Actor, p SSLRenewParams) (an
 	if err := d.ensureDeployHook(); err != nil {
 		return nil, err
 	}
-	args := []string{"renew", "--cert-name", templates.CertName(p.Domain), "--non-interactive"}
+	// --no-random-sleep-on-renew: without a terminal certbot first waits up
+	// to 8 minutes (meant to spread out cron renewals).
+	args := []string{"renew", "--cert-name", templates.CertName(p.Domain), "--non-interactive", "--no-random-sleep-on-renew"}
 	if p.DryRun {
 		args = append(args, "--dry-run")
 	} else {
