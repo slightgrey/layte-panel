@@ -132,6 +132,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{}, root.RemoveAll("/home/" + u)
 		case c.Bin == mysqlBin:
 			return fakeMySQL(root, c)
+		case c.Bin == mysqldumpBin:
+			return fakeMySQLDump(root, c)
 		case c.Bin == duBin:
 			return fakeDu(c), nil
 		case c.Bin == ufwBin:

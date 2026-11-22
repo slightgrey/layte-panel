@@ -115,6 +115,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/databases", authed(s.handleCreateDatabase))
 	mux.Handle("DELETE /api/v1/databases/{name}", authed(s.handleDropDatabase))
 	mux.Handle("POST /api/v1/databases/{name}/password", authed(s.handleResetDBPassword))
+	mux.Handle("POST /api/v1/databases/{name}/export", authed(s.handleExportDatabase))
+	mux.Handle("POST /api/v1/databases/{name}/import", authed(s.handleImportDatabase))
 
 	// Jobs and API keys (session only).
 	mux.Handle("GET /api/v1/jobs/{id}", authed(s.handleGetJob))

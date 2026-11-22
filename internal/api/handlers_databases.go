@@ -58,3 +58,30 @@ func (s *server) handleResetDBPassword(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"secrets": map[string]string{"db_user": name, "db_password": pw}})
 }
+
+// POST /api/v1/databases/{name}/export — dump to the site's tmp/ folder (job).
+func (s *server) handleExportDatabase(w http.ResponseWriter, r *http.Request) {
+	jobID, err := s.sites.ExportDatabase(r.Context(), actorOf(r), r.PathValue("name"))
+	if err != nil {
+		s.writeSiteError(w, "export database", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID})
+}
+
+// POST /api/v1/databases/{name}/import {path, confirm} — run tmp/<file>.sql (job).
+func (s *server) handleImportDatabase(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path    string `json:"path"`
+		Confirm string `json:"confirm"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.ImportDatabase(r.Context(), actorOf(r), r.PathValue("name"), req.Path, req.Confirm)
+	if err != nil {
+		s.writeSiteError(w, "import database", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID})
+}

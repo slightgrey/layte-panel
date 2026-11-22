@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, type LucideIcon, ScrollText, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, NavLink, useParams, useSearchParams } from "react-router";
+import { databasesKey } from "@/api/databases";
 import { siteKey, sitesKey, useSite } from "@/api/sites";
 import { certsKey } from "@/api/ssl";
 import type { Site } from "@/api/types";
@@ -94,6 +95,8 @@ export function SiteJobCard({ site }: { site: Site }) {
             qc.invalidateQueries({ queryKey: siteKey(site.id) });
             qc.invalidateQueries({ queryKey: sitesKey });
             qc.invalidateQueries({ queryKey: certsKey });
+            qc.invalidateQueries({ queryKey: databasesKey }); // sizes after an import
+            qc.invalidateQueries({ queryKey: ["files", site.id] }); // new dumps in tmp/
           }}
         />
       </CardContent>
