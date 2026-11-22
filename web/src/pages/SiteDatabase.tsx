@@ -154,7 +154,11 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
               <Mono>{db.name}</Mono>
             </Row>
             <Row label="User">
-              <Mono>{db.user || "–"}</Mono>
+              {db.user ? (
+                <Mono>{db.user}</Mono>
+              ) : (
+                <span className="text-muted-foreground">{db.linked ? "Not known: it's set in the site's own config" : "–"}</span>
+              )}
             </Row>
             <Row label="Host">
               <Mono>localhost</Mono>
