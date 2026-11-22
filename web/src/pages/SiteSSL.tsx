@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { SiteShell } from "@/components/SiteShell";
 import { FormError } from "./AuthShell";
 
 /** HTTPS card on the site page: status, and issue/remove for managed sites. */
@@ -81,4 +82,9 @@ export function SiteSSLCard({ site }: { site: Site }) {
       </CardContent>
     </Card>
   );
+}
+
+/** /sites/:id/ssl — the HTTPS card on its own tab. */
+export function SiteSSLPage() {
+  return <SiteShell title="SSL certificate">{(site) => <SiteSSLCard site={site} />}</SiteShell>;
 }
