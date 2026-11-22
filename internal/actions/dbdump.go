@@ -25,7 +25,8 @@ type DBDumpParams struct {
 	Database string `json:"database"`
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
-	Path     string `json:"path,omitempty"` // import only: tmp/<file>.sql
+	WebRoot  string `json:"web_root,omitempty"` // adopted sites
+	Path     string `json:"path,omitempty"`     // import only: tmp/<file>.sql
 }
 
 func (p DBDumpParams) validate() error {
@@ -38,7 +39,13 @@ func (p DBDumpParams) validate() error {
 	if err := validDomain(p.Domain); err != nil {
 		return err
 	}
-	return validate.SiteUsername(p.Username)
+	if err := validate.SiteUsername(p.Username); err != nil {
+		return err
+	}
+	if p.WebRoot != "" {
+		return FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Op: "stat", Path: "."}.validate(readOps)
+	}
+	return nil
 }
 
 // DBExportParams / DBImportParams are separate types so each action has
@@ -81,10 +88,11 @@ func (d Deps) tempDBUser(ctx context.Context, db, grants string, fn func(user, p
 	return fn(user, password)
 }
 
-// siteDumpEnv finds the site folder and its user (same checks as the file
-// manager) and makes sure tmp/ is a real folder.
+// siteDumpEnv finds the site's data folder (the site folder for Layte sites,
+// /home/<user> for adopted ones; same checks as the file manager) and its
+// user, and makes sure tmp/ is a real folder.
 func (d Deps) siteDumpEnv(ctx context.Context, p DBDumpParams) (root string, as system.Credential, err error) {
-	root, as, _, err = d.jail(ctx, FSParams{Domain: p.Domain, Username: p.Username})
+	root, as, _, err = d.jail(ctx, FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Area: "data"})
 	if err != nil {
 		return "", as, err
 	}

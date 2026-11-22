@@ -80,6 +80,11 @@ function DBRow({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<strin
         <span className="font-mono text-sm">{db.name}</span>
         {db.system && <Badge className="ml-2">system</Badge>}
         {!db.managed && !db.system && <Badge className="ml-2">not Layte</Badge>}
+        {db.linked && (
+          <Badge className="ml-2" title="Existing database linked to an adopted site: exported and imported there, never dropped or reset">
+            linked
+          </Badge>
+        )}
         {reset.error && <div className="text-xs text-destructive">{reset.error.message}</div>}
       </TableCell>
       <TableCell>
@@ -93,7 +98,7 @@ function DBRow({ db, onSecrets }: { db: DatabaseRow; onSecrets: (s: Record<strin
       </TableCell>
       <TableCell className="text-right text-xs tabular-nums">{formatBytes(db.size)}</TableCell>
       <TableCell>
-        {db.managed && (
+        {db.managed && !db.linked && (
           <div className="flex justify-end gap-1">
             <Button
               variant="ghost"

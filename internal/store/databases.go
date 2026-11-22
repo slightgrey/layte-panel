@@ -13,12 +13,13 @@ type Database struct {
 	Name      string    `json:"name"`
 	User      string    `json:"user"`
 	SiteID    int64     `json:"site_id,omitempty"`
+	Linked    bool      `json:"linked,omitempty"` // existing database linked to an adopted site
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func (s *Store) AddDatabase(ctx context.Context, d Database) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO databases (name, db_user, site_id, created_at) VALUES (?, ?, ?, ?)`,
-		d.Name, d.User, nullID(d.SiteID), time.Now().Unix())
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO databases (name, db_user, site_id, linked, created_at) VALUES (?, ?, ?, ?, ?)`,
+		d.Name, d.User, nullID(d.SiteID), d.Linked, time.Now().Unix())
 	if isUniqueViolation(err) {
 		return fmt.Errorf("database %s: %w", d.Name, ErrExists)
 	}
@@ -40,8 +41,8 @@ func (s *Store) DatabaseByName(ctx context.Context, name string) (Database, erro
 	var d Database
 	var site sql.NullInt64
 	var created int64
-	err := s.DB.QueryRowContext(ctx, `SELECT name, db_user, site_id, created_at FROM databases WHERE name=?`, name).
-		Scan(&d.Name, &d.User, &site, &created)
+	err := s.DB.QueryRowContext(ctx, `SELECT name, db_user, site_id, linked, created_at FROM databases WHERE name=?`, name).
+		Scan(&d.Name, &d.User, &site, &d.Linked, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Database{}, ErrNotFound
 	}
@@ -53,12 +54,12 @@ func (s *Store) DatabaseByName(ctx context.Context, name string) (Database, erro
 }
 
 func (s *Store) ListDatabases(ctx context.Context) ([]Database, error) {
-	return s.queryDatabases(ctx, `SELECT name, db_user, site_id, created_at FROM databases ORDER BY name`)
+	return s.queryDatabases(ctx, `SELECT name, db_user, site_id, linked, created_at FROM databases ORDER BY name`)
 }
 
 // DatabasesForSite returns the databases linked to one site.
 func (s *Store) DatabasesForSite(ctx context.Context, siteID int64) ([]Database, error) {
-	return s.queryDatabases(ctx, `SELECT name, db_user, site_id, created_at FROM databases WHERE site_id=? ORDER BY name`, siteID)
+	return s.queryDatabases(ctx, `SELECT name, db_user, site_id, linked, created_at FROM databases WHERE site_id=? ORDER BY name`, siteID)
 }
 
 func (s *Store) queryDatabases(ctx context.Context, query string, args ...any) ([]Database, error) {
@@ -72,7 +73,7 @@ func (s *Store) queryDatabases(ctx context.Context, query string, args ...any) (
 		var d Database
 		var site sql.NullInt64
 		var created int64
-		if err := rows.Scan(&d.Name, &d.User, &site, &created); err != nil {
+		if err := rows.Scan(&d.Name, &d.User, &site, &d.Linked, &created); err != nil {
 			return nil, err
 		}
 		d.SiteID, d.CreatedAt = site.Int64, time.Unix(created, 0)

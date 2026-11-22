@@ -44,3 +44,21 @@ export function useImportDatabase() {
       api<JobStarted>("POST", `/databases/${v.name}/import`, { path: v.path, confirm: v.confirm }),
   });
 }
+
+/** POST /sites/{id}/databases/link: link an existing database to an adopted site. */
+export function useLinkDatabase(siteId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api<void>("POST", `/sites/${siteId}/databases/link`, { name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: databasesKey }),
+  });
+}
+
+/** DELETE /databases/{name}/link: forget a linked database (it stays on the server). */
+export function useUnlinkDatabase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api<void>("DELETE", `/databases/${name}/link`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: databasesKey }),
+  });
+}

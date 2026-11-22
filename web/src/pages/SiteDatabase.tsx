@@ -1,7 +1,15 @@
-import { Database, Download, KeyRound, Plus, Trash2, Upload } from "lucide-react";
+import { Database, Download, KeyRound, Link2, Plus, Trash2, Unlink, Upload } from "lucide-react";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useCreateDatabase, useDatabases, useExportDatabase, useImportDatabase, useResetDBPassword } from "@/api/databases";
+import {
+  useCreateDatabase,
+  useDatabases,
+  useExportDatabase,
+  useImportDatabase,
+  useLinkDatabase,
+  useResetDBPassword,
+  useUnlinkDatabase,
+} from "@/api/databases";
 import { downloadURL, useFileActions, useFiles } from "@/api/files";
 import type { DatabaseRow, Site } from "@/api/types";
 import { OneTimeSecrets } from "@/components/JobProgress";
@@ -10,7 +18,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
-import { Field } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBytes } from "@/lib/format";
@@ -33,7 +41,7 @@ function DatabaseTab({ site }: { site: Site }) {
     <>
       {secrets && <OneTimeSecrets secrets={secrets} onDismiss={() => setSecrets(null)} />}
       {mine.length === 0 ? (
-        <NoDatabase site={site} onCreated={setSecrets} />
+        <NoDatabase site={site} all={dbs.data.databases} onCreated={setSecrets} />
       ) : (
         mine.map((db) => <DatabaseCards key={db.name} site={site} db={db} onSecrets={setSecrets} />)
       )}
@@ -47,16 +55,19 @@ function suggestName(site: Site) {
   return /^[a-z]/.test(n) ? n.slice(0, 32) : "";
 }
 
-function NoDatabase({ site, onCreated }: { site: Site; onCreated: (s: Record<string, string>) => void }) {
+function NoDatabase({ site, all, onCreated }: { site: Site; all: DatabaseRow[]; onCreated: (s: Record<string, string>) => void }) {
   const create = useCreateDatabase();
   const [name, setName] = useState(() => suggestName(site));
   return (
     <Card>
       <CardContent className="pt-6">
         <EmptyState icon={Database} title="No database for this site">
-          {site.managed ? (
+          {site.adopted && <LinkDatabase site={site} all={all} />}
+          {site.managed || site.adopted ? (
             <>
-              Static sites don't need one. You can add a MySQL database and a user with the same name for this site here.
+              {site.adopted
+                ? "Or create a new, empty database and a user with the same name for this site:"
+                : "Static sites don't need one. You can add a MySQL database and a user with the same name for this site here."}
               <form
                 className="mt-4 flex flex-wrap items-start justify-center gap-2"
                 onSubmit={(e: FormEvent) => {
@@ -90,11 +101,47 @@ function NoDatabase({ site, onCreated }: { site: Site; onCreated: (s: Record<str
   );
 }
 
+/** Adopted sites: pick the existing database the site already uses (e.g. from wp-config.php). */
+function LinkDatabase({ site, all }: { site: Site; all: DatabaseRow[] }) {
+  const link = useLinkDatabase(site.id);
+  const free = all.filter((d) => !d.system && !d.managed);
+  const [name, setName] = useState(free[0]?.name ?? "");
+  if (free.length === 0) return null;
+  return (
+    <div className="mb-6">
+      Link the database this site already uses{site.wordpress && " (see DB_NAME in wp-config.php)"}. It's never dropped or
+      changed by Layte Panel; you can export and import it here.
+      <form
+        className="mt-4 flex flex-wrap items-start justify-center gap-2"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          link.mutate(name);
+        }}
+      >
+        <Select aria-label="Existing database" className="w-56 font-mono" value={name} onChange={(e) => setName(e.target.value)}>
+          {free.map((d) => (
+            <option key={d.name} value={d.name}>
+              {d.name}
+            </option>
+          ))}
+        </Select>
+        <Button type="submit" disabled={link.isPending || !name}>
+          <Link2 /> Link database
+        </Button>
+      </form>
+      <div className="mt-2">
+        <FormError message={link.error?.message} />
+      </div>
+    </div>
+  );
+}
+
 function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
   const reset = useResetDBPassword();
   const exp = useExportDatabase();
   const [, setParams] = useSearchParams();
-  const canDump = db.managed && site.managed && site.status === "active";
+  const canDump = db.managed && (site.managed || site.adopted) && site.status === "active";
+  const unlink = useUnlinkDatabase();
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
@@ -135,7 +182,17 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-3">
-            {db.managed && (
+            {db.linked && (
+              <Button
+                variant="outline"
+                disabled={unlink.isPending}
+                title="Layte forgets this database; it stays on the server unchanged"
+                onClick={() => unlink.mutate(db.name)}
+              >
+                <Unlink /> Unlink
+              </Button>
+            )}
+            {db.managed && !db.linked && (
               <Button
                 variant="outline"
                 disabled={reset.isPending || db.wordpress}
@@ -156,7 +213,12 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
               </Button>
             )}
           </div>
-          <FormError message={reset.error?.message ?? exp.error?.message} />
+          {db.linked && (
+            <p className="text-xs text-muted-foreground">
+              Linked existing database: Layte Panel didn't create it, so it never drops it or changes its password.
+            </p>
+          )}
+          <FormError message={reset.error?.message ?? exp.error?.message ?? unlink.error?.message} />
         </CardContent>
       </Card>
 
@@ -167,8 +229,10 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
 
 /** .sql files in the site's tmp/ folder: download, import, delete, upload. */
 function DumpFiles({ site, db }: { site: Site; db: DatabaseRow }) {
-  const files = useFiles(site.id, "tmp");
-  const fileActions = useFileActions(site.id);
+  // The data area: tmp/ in the site folder (Layte sites) or in the user's home (adopted).
+  const files = useFiles(site.id, "tmp", "data");
+  const fileActions = useFileActions(site.id, "data");
+  const tmpDir = site.adopted ? `/home/${site.system_user}/tmp` : "tmp/ in the site folder";
   const [importPath, setImportPath] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const dumps = (files.data?.entries ?? [])
@@ -196,8 +260,7 @@ function DumpFiles({ site, db }: { site: Site; db: DatabaseRow }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          Exports and uploads are kept in <code className="font-mono">tmp/</code> in the site folder, which isn't served on
-          the web. Uploads can be up to 256 MB. Delete old dumps once you no longer need them.
+          Exports and uploads are kept in <code className="font-mono">{tmpDir}</code>, which isn't served on the web. Uploads can be up to 256 MB. Delete old dumps once you no longer need them.
         </p>
         <FormError message={fileActions.upload.error?.message ?? fileActions.remove.error?.message} />
         {files.isPending ? (
@@ -227,7 +290,7 @@ function DumpFiles({ site, db }: { site: Site; db: DatabaseRow }) {
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         <a
-                          href={downloadURL(site.id, path)}
+                          href={downloadURL(site.id, path, "data")}
                           className="inline-flex h-8 items-center rounded-[10px] px-2.5 text-muted-foreground hover:text-primary"
                           aria-label={`Download ${f.name}`}
                           title="Download"

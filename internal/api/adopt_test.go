@@ -77,3 +77,66 @@ func TestAdoptSite(t *testing.T) {
 		t.Error("blog marked adopted")
 	}
 }
+
+func TestAdoptedSiteDatabase(t *testing.T) {
+	_, c, deps := siteEnv(t)
+	c.do("POST", "/api/v1/sites/scan", nil)
+	shop := siteIDByDomain(t, c, "shop.example.org")
+	_, prev := c.do("GET", "/api/v1/sites/"+shop+"/adopt", nil)
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/adopt", map[string]string{"username": "shopexampleorg", "pool_hash": prev["pool_hash"].(string)})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("adopt: %v", job)
+	}
+
+	// Only adopted sites link existing databases; system databases never.
+	blogSite := siteIDByDomain(t, c, "blog.example.com")
+	if st, body := c.do("POST", "/api/v1/sites/"+blogSite+"/databases/link", map[string]string{"name": "blog"}); st != 409 {
+		t.Errorf("link to imported site: %d %v", st, body)
+	}
+	if st, _ := c.do("POST", "/api/v1/sites/"+shop+"/databases/link", map[string]string{"name": "mysql"}); st != 400 {
+		t.Errorf("link system db: %d", st)
+	}
+	if st, _ := c.do("POST", "/api/v1/sites/"+shop+"/databases/link", map[string]string{"name": "nosuchdb"}); st != 404 {
+		t.Errorf("link missing db: %d", st)
+	}
+	if st, body := c.do("POST", "/api/v1/sites/"+shop+"/databases/link", map[string]string{"name": "blog"}); st != 204 {
+		t.Fatalf("link: %d %v", st, body)
+	}
+	if d := dbByName(t, c)["blog"]; d["linked"] != true || d["site_domain"] != "shop.example.org" {
+		t.Errorf("linked db: %v", d)
+	}
+	// Linked databases are never dropped or have their password reset.
+	if st, body := c.do("POST", "/api/v1/databases/blog/password", nil); st != 409 || errCode(body) != "db_linked" {
+		t.Errorf("reset linked: %d %v", st, body)
+	}
+	if st, body := c.do("DELETE", "/api/v1/databases/blog", map[string]string{"confirm": "blog"}); st != 409 || errCode(body) != "db_linked" {
+		t.Errorf("drop linked: %d %v", st, body)
+	}
+
+	// Export lands in /home/<user>/tmp (outside the web root); import reads it back.
+	_, body = c.do("POST", "/api/v1/databases/blog/export", nil)
+	job := waitJob(t, c, body["job_id"].(string))
+	if job["status"] != "succeeded" {
+		t.Fatalf("export: %v", job)
+	}
+	rel := job["result"].(map[string]any)["path"].(string)
+	if !exists(t, deps.FS, "/home/shopexampleorg/"+rel) {
+		t.Fatalf("dump not in the data folder: %s", rel)
+	}
+	if st, body := c.do("GET", "/api/v1/sites/"+shop+"/files?path=tmp&area=data", nil); st != 200 || len(body["entries"].([]any)) != 1 {
+		t.Errorf("dump not listed in the data area: %d %v", st, body)
+	}
+	_, body = c.do("POST", "/api/v1/databases/blog/import", map[string]string{"path": rel, "confirm": "blog"})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Errorf("import: %v", job)
+	}
+
+	// Unlink: Layte forgets it, the database stays.
+	if st, _ := c.do("DELETE", "/api/v1/databases/blog/link", nil); st != 204 {
+		t.Errorf("unlink: %d", st)
+	}
+	if d, ok := dbByName(t, c)["blog"]; !ok || d["managed"] != false {
+		t.Errorf("after unlink: %v", d)
+	}
+}
+
