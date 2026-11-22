@@ -22,7 +22,7 @@ export function TableRow({ className, ...props }: HTMLAttributes<HTMLTableRowEle
 }
 
 export function TableHead({ className, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th className={cn("h-9 px-2 text-left font-mono text-[11px] font-medium tracking-[0.06em] text-muted-foreground uppercase first:pl-0 last:pr-0", className)} {...props} />;
+  return <th className={cn("h-9 px-2 text-left font-mono text-[0.75rem] font-medium tracking-[0.06em] text-muted-foreground uppercase first:pl-0 last:pr-0", className)} {...props} />;
 }
 
 export function TableCell({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {

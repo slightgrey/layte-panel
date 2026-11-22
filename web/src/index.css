@@ -83,6 +83,11 @@
 }
 
 @layer base {
+  /* Slightly larger base size (17px vs the browser's 16px); every rem-based
+     size (text, spacing, controls) scales with it. */
+  html {
+    font-size: 106.25%;
+  }
   * {
     border-color: var(--border);
   }
@@ -112,7 +117,7 @@
   /* Small uppercase mono label, e.g. "STACK" on vincelayte.me. */
   .eyebrow {
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted-foreground);
