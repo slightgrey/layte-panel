@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { CreateSiteRequest, DeleteSiteRequest, JobStarted, Site, SitesResponse, ScanResponse, Vhost } from "./types";
+import type { CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, Site, SitesResponse, ScanResponse, Vhost } from "./types";
 
 /** POST /sites: starts a creation job. */
 export function useCreateSite() {
@@ -58,6 +58,17 @@ export function useScanSites() {
 }
 
 /** GET /sites/{id}/vhost: the nginx config, read-only. */
+/** GET /sites/{id}/disk: size on disk (du). Walking a big site costs CPU, so it's cached for 5 minutes. */
+export function useSiteDisk(id: number, enabled = true) {
+  return useQuery({
+    queryKey: ["sites", id, "disk"],
+    queryFn: () => api<DiskUsage>("GET", `/sites/${id}/disk`),
+    enabled: enabled && id > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export function useSiteVhost(id: number, enabled = true) {
   return useQuery({
     queryKey: ["sites", id, "vhost"],

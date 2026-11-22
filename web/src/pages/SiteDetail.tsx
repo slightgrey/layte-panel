@@ -3,7 +3,7 @@ import { ArrowLeft, Info, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { databasesKey, useDatabases } from "@/api/databases";
-import { siteKey, sitesKey, useDeleteSite, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
+import { siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { SiteHeader, SiteJobCard } from "@/components/SiteShell";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Checkbox, Field, Select } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { formatBytes } from "@/lib/format";
 import { FormError } from "./AuthShell";
 
 export function SiteDetailPage() {
@@ -214,6 +215,33 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 const mono = "font-mono text-xs";
 
+/** Total size, plus the public/logs/tmp breakdown for Layte sites. */
+function DiskSize({ site }: { site: Site }) {
+  const canMeasure = site.status === "active" && Boolean(site.managed ? site.system_user : site.root_path);
+  const disk = useSiteDisk(site.id, canMeasure);
+  if (!canMeasure) return <span className="text-muted-foreground">–</span>;
+  if (disk.isPending) return <span className="text-muted-foreground">Measuring…</span>;
+  if (disk.error) return <span className="text-destructive">{disk.error.message}</span>;
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <span className="font-medium tabular-nums">{formatBytes(disk.data.total)}</span>
+      {disk.data.parts?.map((p) => (
+        <span key={p.name} className="text-xs text-muted-foreground tabular-nums">
+          {p.name} {formatBytes(p.bytes)}
+        </span>
+      ))}
+      <button
+        type="button"
+        className="text-xs text-primary hover:underline disabled:opacity-50"
+        disabled={disk.isFetching}
+        onClick={() => disk.refetch()}
+      >
+        {disk.isFetching ? "Measuring…" : "Refresh"}
+      </button>
+    </span>
+  );
+}
+
 function OverviewCard({ site: s }: { site: Site }) {
   return (
     <Card>
@@ -228,6 +256,9 @@ function OverviewCard({ site: s }: { site: Site }) {
           </Row>
           <Row label="Web root">
             <span className={mono}>{s.root_path || "–"}</span>
+          </Row>
+          <Row label="Size on disk">
+            <DiskSize site={s} />
           </Row>
           {s.system_user && <Row label="System user">{s.system_user}</Row>}
           {s.db_name && (
