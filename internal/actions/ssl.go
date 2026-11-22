@@ -2,6 +2,10 @@ package actions
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -16,7 +20,10 @@ import (
 	"github.com/slightgrey/layte-panel/internal/validate"
 )
 
-const letsencryptLive = "/etc/letsencrypt/live"
+const (
+	letsencryptLive    = "/etc/letsencrypt/live"
+	letsencryptRenewal = "/etc/letsencrypt/renewal"
+)
 
 // deployHook reloads nginx after certbot renews any certificate. certbot
 // runs every executable in renewal-hooks/deploy/ after a successful renewal.
@@ -34,6 +41,12 @@ type Certificate struct {
 	NotAfter  time.Time `json:"not_after"`
 	Managed   bool      `json:"managed"` // issued by Layte ("layte-" prefix)
 	Path      string    `json:"path"`    // fullchain.pem
+
+	Serial      string `json:"serial"`      // hex
+	Fingerprint string `json:"fingerprint"` // SHA-256 of the DER, colon-separated hex
+	KeyType     string `json:"key_type"`    // e.g. "ECDSA P-256", "RSA 2048"
+	Signature   string `json:"signature"`   // e.g. "ECDSA-SHA384"
+	AutoRenew   bool   `json:"auto_renew"`  // certbot has a renewal config for it
 }
 
 // sslList reads every certificate certbot manages (read-only).
@@ -53,14 +66,39 @@ func (d Deps) sslList(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any
 			continue
 		}
 		name := path.Base(path.Dir(f))
+		renewConf, _ := d.FS.Exists(letsencryptRenewal + "/" + name + ".conf")
 		out = append(out, Certificate{
 			Name: name, Domains: cert.DNSNames, Issuer: cert.Issuer.CommonName,
 			NotBefore: cert.NotBefore.UTC(), NotAfter: cert.NotAfter.UTC(),
 			Managed: strings.HasPrefix(name, "layte-"), Path: path.Dir(f) + "/fullchain.pem",
+			Serial: fmt.Sprintf("%X", cert.SerialNumber), Fingerprint: fingerprint(cert.Raw),
+			KeyType: keyType(cert), Signature: cert.SignatureAlgorithm.String(), AutoRenew: renewConf,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].NotAfter.Before(out[j].NotAfter) })
 	return out, nil
+}
+
+// fingerprint is the SHA-256 of a certificate, as browsers show it.
+func fingerprint(der []byte) string {
+	sum := sha256.Sum256(der)
+	parts := make([]string, len(sum))
+	for i, b := range sum {
+		parts[i] = fmt.Sprintf("%02X", b)
+	}
+	return strings.Join(parts, ":")
+}
+
+func keyType(c *x509.Certificate) string {
+	switch k := c.PublicKey.(type) {
+	case *ecdsa.PublicKey:
+		return "ECDSA " + k.Curve.Params().Name
+	case *rsa.PublicKey:
+		return fmt.Sprintf("RSA %d", k.N.BitLen())
+	case ed25519.PublicKey:
+		return "Ed25519"
+	}
+	return c.PublicKeyAlgorithm.String()
 }
 
 func parseCert(b []byte) (*x509.Certificate, error) {
@@ -138,6 +176,42 @@ func (d Deps) ensureDeployHook() error {
 		return err
 	}
 	return d.FS.WriteFileAtomic(deployHookPath, []byte(deployHook), 0o755)
+}
+
+type SSLRenewParams struct {
+	Domain string `json:"domain"`
+	DryRun bool   `json:"dry_run,omitempty"`
+}
+
+func (p SSLRenewParams) Validate() error { return validDomain(p.Domain) }
+
+// sslRenew renews the site's Layte certificate now. DryRun asks Let's
+// Encrypt's staging server instead, which checks that renewal will work
+// without issuing anything. A real renewal is forced (certbot would skip a
+// certificate that isn't due yet); certbot's deploy hook reloads nginx.
+// Certificates without the layte- prefix are never touched.
+func (d Deps) sslRenew(ctx context.Context, _ agent.Actor, p SSLRenewParams) (any, error) {
+	if ok, _ := d.FS.Exists(templates.CertDir(p.Domain)); !ok {
+		return nil, agent.Errorf(agent.CodeNotFound, "%s has no Layte certificate", p.Domain)
+	}
+	certbot, err := d.certbotBin()
+	if err != nil {
+		return nil, err
+	}
+	if err := d.ensureDeployHook(); err != nil {
+		return nil, err
+	}
+	args := []string{"renew", "--cert-name", templates.CertName(p.Domain), "--non-interactive"}
+	if p.DryRun {
+		args = append(args, "--dry-run")
+	} else {
+		args = append(args, "--force-renewal")
+	}
+	res, err := d.Runner.Run(ctx, certbot, args...)
+	if err != nil {
+		return nil, agent.Errorf("certbot_failed", "certbot renew: %s", failure(res, err, 6))
+	}
+	return map[string]bool{"renewed": !p.DryRun, "dry_run": p.DryRun}, nil
 }
 
 // sslRevoke revokes and deletes the site's Layte certificate (idempotent).

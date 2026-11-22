@@ -84,6 +84,26 @@ func (s *server) handleIssueSSL(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
 }
 
+// POST /api/v1/sites/{id}/ssl/renew {dry_run} — renew now, or test renewal (job).
+func (s *server) handleRenewSSL(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		DryRun bool `json:"dry_run"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.RenewSSL(r.Context(), actorOf(r), site, req.DryRun)
+	if err != nil {
+		s.writeSiteError(w, "renew ssl", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
 // DELETE /api/v1/sites/{id}/ssl — back to HTTP and revoke the certificate.
 func (s *server) handleRemoveSSL(w http.ResponseWriter, r *http.Request) {
 	site, ok := s.loadSite(w, r)

@@ -127,6 +127,11 @@ export interface Certificate {
   not_after: string;
   managed: boolean;
   path: string;
+  serial: string;
+  fingerprint: string; // SHA-256
+  key_type: string;
+  signature: string;
+  auto_renew: boolean;
   days_left: number;
   state: "ok" | "expiring" | "expired";
   site_id?: number;

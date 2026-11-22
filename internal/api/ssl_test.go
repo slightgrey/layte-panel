@@ -69,6 +69,41 @@ func TestSSLLifecycle(t *testing.T) {
 	if c := states["blog.example.com"]; c["state"] != "expiring" || c["managed"] != false || c["site_domain"] != "blog.example.com" {
 		t.Errorf("blog cert: %v", c)
 	}
+	ours := states["layte-secure.test"]
+	if ours["key_type"] != "ECDSA P-256" || ours["auto_renew"] != true || len(ours["fingerprint"].(string)) != 95 || ours["serial"] == "" {
+		t.Errorf("cert details: %v", ours)
+	}
+
+	// Test renewal (dry run) leaves the certificate alone; a real renewal is forced.
+	for _, dry := range []bool{true, false} {
+		st, body := c.do("POST", "/api/v1/sites/"+id+"/ssl/renew", map[string]bool{"dry_run": dry})
+		if st != 202 {
+			t.Fatalf("renew dry=%v: %d %v", dry, st, body)
+		}
+		if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+			t.Fatalf("renew dry=%v job: %v", dry, job)
+		}
+	}
+	var renews []string
+	for _, call := range deps.Runner.(*system.FakeRunner).CallList() {
+		if strings.HasPrefix(call, "/usr/bin/certbot renew") {
+			renews = append(renews, call)
+		}
+	}
+	if len(renews) != 2 || !strings.HasSuffix(renews[0], "--cert-name layte-secure.test --non-interactive --dry-run") ||
+		!strings.HasSuffix(renews[1], "--force-renewal") {
+		t.Errorf("certbot renew calls: %q", renews)
+	}
+	_, list = c.do("GET", "/api/v1/ssl", nil)
+	for _, x := range list["certificates"].([]any) {
+		if cert := x.(map[string]any); cert["name"] == "layte-secure.test" && cert["serial"] == ours["serial"] {
+			t.Error("forced renewal didn't replace the certificate")
+		}
+	}
+	// Imported sites can't be renewed from here.
+	if st, _ := c.do("POST", "/api/v1/sites/"+siteIDByDomain(t, c, "blog.example.com")+"/ssl/renew", map[string]bool{"dry_run": true}); st != 409 {
+		t.Errorf("renew imported: %d", st)
+	}
 
 	// Switching PHP keeps HTTPS.
 	_, body = c.do("POST", "/api/v1/sites/"+id+"/php", map[string]string{"version": "8.2"})
@@ -124,4 +159,17 @@ func TestVhostNeedsCertForSSL(t *testing.T) {
 	if strings.Contains(string(vhost), "443") {
 		t.Error("vhost switched to HTTPS without a certificate")
 	}
+}
+
+// siteIDByDomain looks a site up in GET /sites.
+func siteIDByDomain(t *testing.T, c *client, domain string) string {
+	t.Helper()
+	_, list := c.do("GET", "/api/v1/sites", nil)
+	for _, x := range list["sites"].([]any) {
+		if s := x.(map[string]any); s["domain"] == domain {
+			return strconv.Itoa(int(s["id"].(float64)))
+		}
+	}
+	t.Fatalf("no site %s", domain)
+	return ""
 }
