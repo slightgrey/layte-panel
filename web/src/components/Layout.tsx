@@ -111,7 +111,7 @@ function NavEntry({ item, compact = false }: { item: NavItem; compact?: boolean 
       <span className={cn(base, "cursor-default text-muted-foreground/60")} title="Coming in a later release">
         <Icon className="size-4" />
         {item.label}
-        <span className="ml-auto text-[10px] uppercase tracking-wide">soon</span>
+        <span className="ml-auto text-[0.6875rem] uppercase tracking-wide">soon</span>
       </span>
     );
   }
@@ -144,7 +144,7 @@ function VersionFooter() {
   const isRelease = /^\d+\.\d+\.\d+$/.test(v);
   const label = formatVersion(v);
   return (
-    <div className="mx-3 mb-3 rounded-[12px] px-3 py-2.5 font-mono text-[11px] text-muted-foreground shadow-inset">
+    <div className="mx-3 mb-3 rounded-[12px] px-3 py-2.5 font-mono text-[0.75rem] text-muted-foreground shadow-inset">
       {isRelease ? (
         <a
           href={`${RELEASES_URL}/tag/${label}`}
