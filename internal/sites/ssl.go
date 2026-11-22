@@ -3,6 +3,7 @@ package sites
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -44,7 +45,7 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 
 		j.Step("Request certificate from Let's Encrypt")
 		j.Log("Domains: %v. Let's Encrypt checks each one over HTTP, so DNS must point here.", append([]string{site.Domain}, site.Aliases...))
-		if err := call("ssl.issue", actions.SSLIssueParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, Email: email}); err != nil {
+		if err := s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, actions.SSLIssueParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, Email: email}, nil); err != nil {
 			return err
 		}
 
@@ -89,7 +90,7 @@ func (s *Service) RenewSSL(ctx context.Context, actor agent.Actor, site store.Si
 	}
 	jobID, err := s.Jobs.Start(kind, site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
 		j.Step(step)
-		if err := s.Agent.Call(ctx, "ssl.renew", actor, actions.SSLRenewParams{Domain: site.Domain, DryRun: dryRun}, nil); err != nil {
+		if err := s.longCall(ctx, 3*time.Minute, "ssl.renew", actor, actions.SSLRenewParams{Domain: site.Domain, DryRun: dryRun}, nil); err != nil {
 			return err
 		}
 		if dryRun {
@@ -133,7 +134,7 @@ func (s *Service) RemoveSSL(ctx context.Context, actor agent.Actor, site store.S
 			}
 		}
 		j.Step("Revoke certificate " + templates.CertName(site.Domain))
-		if err := call("ssl.revoke", actions.DomainParams{Domain: site.Domain}); err != nil {
+		if err := s.longCall(ctx, time.Minute, "ssl.revoke", actor, actions.DomainParams{Domain: site.Domain}, nil); err != nil {
 			j.Log("Warning: revoking failed (%v). The site already serves HTTP; the certificate will simply expire.", err)
 		}
 		return nil
