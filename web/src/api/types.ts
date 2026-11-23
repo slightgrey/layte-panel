@@ -330,3 +330,50 @@ export interface Dashboard {
   versions: Section<Version[]>;
   updates: Section<Updates>;
 }
+
+export interface MemDetail {
+  total: number;
+  available: number;
+  free: number;
+  buffers: number;
+  cached: number;
+  shmem: number;
+  swap_total: number;
+  swap_free: number;
+  apps_used: number;
+  processes_rss: number;
+}
+
+export interface ProcInfo {
+  pid: number;
+  user: string;
+  name: string;
+  command: string;
+  group: string;
+  rss: number;
+  cpu: number; // % of the whole machine
+}
+
+export interface ProcGroup {
+  name: string;
+  processes: number;
+  rss: number;
+  cpu: number;
+}
+
+export interface ProcessesResult {
+  cpus: number;
+  load: [number, number, number];
+  uptime_seconds: number;
+  memory: MemDetail;
+  groups: ProcGroup[];
+  processes: ProcInfo[];
+  sample_ms: number;
+}
+
+export interface DiskBreakdown {
+  path: string;
+  total: number;
+  entries: { path: string; bytes: number }[];
+  partial?: boolean;
+}

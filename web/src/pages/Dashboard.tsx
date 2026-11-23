@@ -1,5 +1,6 @@
-import { ChevronDown, Cpu, HardDrive, MemoryStick, Server } from "lucide-react";
+import { ChevronDown, ChevronRight, Cpu, HardDrive, MemoryStick, Server } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { Link } from "react-router";
 import { useDashboard } from "@/api/dashboard";
 import type { Section, Service, SystemInfo, Updates, Version } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
@@ -10,6 +11,7 @@ import { UsageBar } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Notice } from "@/components/ui/notice";
 import { formatBytes, formatUptime, percent } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export function DashboardPage() {
   const { data, error, isPending, dataUpdatedAt } = useDashboard();
@@ -61,15 +63,28 @@ function SectionBody<T>({ section, children }: { section: Section<T>; children: 
   return <>{children(section.data)}</>;
 }
 
-function Stat({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
-  return (
-    <Card>
+function Stat({ icon, label, to, children }: { icon: ReactNode; label: string; to?: string; children: ReactNode }) {
+  const card = (
+    <Card className={cn("h-full", to && "transition-shadow group-hover:shadow-raised-sm group-focus-visible:ring-2 group-focus-visible:ring-ring")}>
       <CardHeader className="pb-2">
         <CardTitle className="text-muted-foreground font-medium">{label}</CardTitle>
         <span className="text-muted-foreground [&_svg]:size-4">{icon}</span>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2">{children}</CardContent>
+      <CardContent className="flex flex-col gap-2">
+        {children}
+        {to && (
+          <span className="mt-1 flex items-center gap-0.5 self-end text-xs font-medium text-primary group-hover:underline">
+            Details <ChevronRight className="size-3.5" />
+          </span>
+        )}
+      </CardContent>
     </Card>
+  );
+  if (!to) return card;
+  return (
+    <Link to={to} className="group rounded-[1.25rem] focus-visible:outline-none" aria-label={`${label} details`}>
+      {card}
+    </Link>
   );
 }
 
@@ -91,13 +106,13 @@ function SystemCards({ section }: { section: Section<SystemInfo> }) {
         <p className="text-2xl font-semibold tabular-nums">{formatUptime(s.uptime_seconds)}</p>
         <p className="text-xs text-muted-foreground">uptime · kernel {s.kernel}</p>
       </Stat>
-      <Stat icon={<Cpu />} label="Load">
+      <Stat icon={<Cpu />} label="Load" to="/system/load">
         <p className="text-2xl font-semibold tabular-nums">{s.load[0].toFixed(2)}</p>
         <p className="text-xs text-muted-foreground">
           {s.load[1].toFixed(2)} · {s.load[2].toFixed(2)} (5/15 min) · {s.cpus} vCPU
         </p>
       </Stat>
-      <Stat icon={<MemoryStick />} label="Memory">
+      <Stat icon={<MemoryStick />} label="Memory" to="/system/memory">
         <p className="text-2xl font-semibold tabular-nums">{mem}%</p>
         <UsageBar value={mem} label="Memory used" />
         <p className="text-xs text-muted-foreground">
@@ -105,7 +120,7 @@ function SystemCards({ section }: { section: Section<SystemInfo> }) {
           {s.memory.swap_total > 0 && ` · swap ${formatBytes(s.memory.swap_used)}`}
         </p>
       </Stat>
-      <Stat icon={<HardDrive />} label="Disk">
+      <Stat icon={<HardDrive />} label="Disk" to="/system/disk">
         {s.disks.length === 0 && <p className="text-sm text-muted-foreground">No data</p>}
         {s.disks.map((d) => {
           const p = percent(d.used, d.total);
