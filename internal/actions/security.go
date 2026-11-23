@@ -324,11 +324,13 @@ func (d Deps) ufwSetEnabled(ctx context.Context, _ agent.Actor, p UFWEnableParam
 // updatesInstall installs pending security updates with unattended-upgrade
 // (it follows /etc/apt/apt.conf.d/50unattended-upgrades: security by default).
 func (u *updates) install(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any, error) {
-	res, err := u.deps.Runner.RunCmd(ctx, system.Cmd{
+	// Outside the agent's sandbox, like every package install (see
+	// outsideSandbox): a kernel security update must be able to write /lib/modules.
+	res, err := u.deps.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{
 		Bin:  unattendedUpgradeBin,
 		Args: []string{"-v"},
 		Env:  []string{"DEBIAN_FRONTEND=noninteractive"},
-	})
+	}))
 	u.mu.Lock()
 	u.cached = nil // the pending list changed
 	u.mu.Unlock()

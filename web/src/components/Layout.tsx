@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   type LucideIcon,
+  PackageCheck,
   ScrollText,
   Shield,
   ShieldCheck,
@@ -33,6 +34,7 @@ const nav: NavItem[] = [
   { label: "Logs", to: "/logs", icon: ScrollText },
   { label: "Files", to: "/files", icon: FolderOpen },
   { label: "Security", to: "/security", icon: Shield },
+  { label: "Updates", to: "/updates", icon: PackageCheck },
   { label: "API keys", to: "/keys", icon: KeyRound },
 ];
 

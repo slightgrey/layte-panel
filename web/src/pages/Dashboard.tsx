@@ -271,8 +271,11 @@ function UpdatesCard({ section }: { section: Section<Updates> }) {
                   </div>
                 )}
                 <p className="mt-3 text-xs text-muted-foreground">
-                  From the local package lists, checked {new Date(up.checked_at).toLocaleString()}. Installing updates comes in a
-                  later release.
+                  From the local package lists, checked {new Date(up.checked_at).toLocaleString()}.{" "}
+                  <Link to="/updates" className="font-medium text-primary hover:underline">
+                    Review and install them on the Updates page
+                  </Link>
+                  .
                 </p>
               </>
             )

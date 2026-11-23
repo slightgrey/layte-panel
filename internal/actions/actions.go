@@ -60,6 +60,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("services.status", true, 10*time.Second, d.servicesStatus),
 		agent.Def("versions.get", true, 20*time.Second, d.versions),
 		agent.Def("updates.pending", true, 60*time.Second, u.pending),
+		agent.Def("updates.plan", true, 2*time.Minute, u.updatesPlan),
 		agent.Def("sites.discover", true, 20*time.Second, d.sitesDiscover),
 		agent.Def("php.versions", true, 5*time.Second, d.phpVersionsAction),
 		agent.Def("nginx.vhost_read", true, 5*time.Second, d.vhostRead),
@@ -100,6 +101,8 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("ufw.set_enabled", false, 30*time.Second, d.ufwSetEnabled),
 		agent.Def("cloudflare.set_realip", false, 30*time.Second, d.cloudflareSet),
 		agent.Def("updates.install", false, 30*time.Minute, u.install),
+		agent.Def("updates.refresh", false, 5*time.Minute, u.updatesRefresh),
+		agent.Def("updates.apply", false, 45*time.Minute, u.updatesApply),
 		agent.Def("site.adopt", false, 5*time.Minute, d.siteAdopt),
 	)
 }
