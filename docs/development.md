@@ -46,6 +46,16 @@ go vet ./... && go test ./...
 cd web && npm test && npm run typecheck
 ```
 
+## Screenshots
+The README screenshots are generated, not taken by hand:
+```bash
+cd web && npm run screenshots
+```
+It builds the UI and the binary, runs a private dev copy of the panel (its own temp folder and free port, so your
+`.dev/` and a running dev server are untouched), creates a throwaway admin and a demo WordPress site, and captures
+the pages with your installed Google Chrome (`playwright-core`, no browser download). Output: `docs/screenshots/*.png`.
+Re-run it after UI changes.
+
 ## Admin accounts
 ```bash
 layte admin create         --username NAME   # password + 2FA enrolment

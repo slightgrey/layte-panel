@@ -4,17 +4,22 @@
 
 Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on your own Ubuntu server. It ships as one Go binary (about 12 MB) with the web UI built in, and uses about 15 MB of RAM. It's comfortable on a 1 vCPU / 1 GB server.
 
+![Layte Panel dashboard](docs/screenshots/dashboard.png)
+
 ## Features
 - **Sites:**
   - Create sites in one step: Linux user, PHP-FPM pool, nginx vhost, MySQL/MariaDB database, and optionally WordPress via WP-CLI.
   - Switch PHP version per site without downtime.
   - Delete sites.
-  - Existing sites are imported read-only.
-- **SSL:** Let's Encrypt certificates via certbot, renewed automatically, with an expiry overview for every certificate on the server.
-- **Databases:** create databases, reset passwords (shown once), drop, and see sizes.
+  - Existing sites are imported read-only, and can be **adopted**: they get their own Linux user and a Layte-managed PHP pool, while your nginx config stays yours (preview first, automatic rollback).
+  - Size on disk per site.
+- **SSL:** Let's Encrypt certificates via certbot, renewed automatically, with an expiry overview and certificate details. Test renewal or renew now from the panel.
+- **Databases:** create, drop and see sizes. Export and import `.sql` dumps. Reset passwords (shown once); for WordPress sites `wp-config.php` is updated in the same step.
 - **Cron:** per-site jobs that run as the site's own user, with WP-Cron in one click.
 - **Logs:** live tail of nginx, PHP-FPM and site logs.
 - **File manager:** browse, edit, upload and download. It always runs as the site's user, inside the site folder.
+- **Updates:** preview and install package updates. Only upgrades (nothing is removed), your config files are kept, every site is checked afterwards, and you're told when a reboot is needed.
+- **Server insight:** see what uses the CPU and memory (per service and per site's PHP pool), and what takes up disk space.
 - **Security:** ufw rules with lockout protection, security updates in one click, failed SSH logins.
 - **API:** a read-only REST API with scoped, expiring API keys and an OpenAPI spec.
 - **Safe by design:**
@@ -23,6 +28,15 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
   - Configs it didn't create are never touched.
   - 2FA is mandatory.
   - See [docs/security.md](docs/security.md).
+
+## Screenshots
+| | |
+|---|---|
+| ![Sites](docs/screenshots/sites.png) Sites: created and imported | ![Site overview](docs/screenshots/site-overview.png) A site's overview, with its own tabs |
+| ![Memory](docs/screenshots/memory.png) What uses the memory, per service and site | ![Updates](docs/screenshots/updates.png) Updates: preview first, then install |
+| ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) Dark mode | |
+
+*Demo data. The screenshots are generated with `cd web && npm run screenshots`.*
 
 ## Install
 On a fresh or existing **Ubuntu 24.04** server:
