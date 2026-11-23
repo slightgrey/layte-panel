@@ -4,10 +4,33 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/system"
 )
+
+func init() { siteSettle = time.Millisecond }
+
+// mysqlSQL is every SQL statement sent to mysql, in order.
+func mysqlSQL(d Deps) []string {
+	var out []string
+	for _, c := range d.Runner.(*system.FakeRunner).Cmds {
+		if c.Bin == mysqlBin && len(c.Stdin) > 0 {
+			out = append(out, strings.TrimSpace(string(c.Stdin)))
+		}
+	}
+	return out
+}
+
+func indexOf(calls []string, sub string) int {
+	for i, c := range calls {
+		if strings.Contains(c, sub) {
+			return i
+		}
+	}
+	return -1
+}
 
 func TestWPPassword(t *testing.T) {
 	src := "<?php\ndefine( 'DB_NAME', 'wp' );\ndefine( 'DB_PASSWORD', 'old-pass' );\n"
@@ -102,12 +125,22 @@ func TestWPDBPasswordRollsBack(t *testing.T) {
 	if after, _ := d.FS.ReadFile("/var/www/shop/public/wp-config.php"); string(after) != string(before) {
 		t.Errorf("wp-config.php not restored:\n%s", after)
 	}
-	var restored bool
-	for _, c := range d.Runner.(*system.FakeRunner).Cmds {
-		restored = restored || strings.Contains(string(c.Stdin), "ALTER USER 'shopuser'@'localhost' IDENTIFIED BY 'oldSecret'")
+	sql := mysqlSQL(d)
+	back := indexOf(sql, "IDENTIFIED BY 'oldSecret';")
+	if back < 0 {
+		t.Fatalf("old MySQL password not put back: %q", sql)
 	}
-	if !restored {
-		t.Error("old MySQL password not put back")
+	if indexOf(sql[back:], "DISCARD OLD PASSWORD") < 0 {
+		t.Error("the retained second password wasn't discarded after the rollback")
+	}
+	reloads := 0
+	for _, c := range d.Runner.(*system.FakeRunner).CallList() {
+		if c == "/usr/bin/systemctl reload php8.2-fpm" {
+			reloads++
+		}
+	}
+	if reloads < 2 {
+		t.Errorf("PHP-FPM reloaded %d times; want after the change and after the rollback", reloads)
 	}
 }
 
@@ -121,10 +154,71 @@ func TestWPDBPasswordChanges(t *testing.T) {
 	if !strings.Contains(string(b), "define( 'DB_PASSWORD', '"+shopPW.Password+"' );") {
 		t.Errorf("wp-config.php:\n%s", b)
 	}
+	// MySQL keeps the old password valid until PHP has reloaded the new
+	// wp-config.php; only then is the old one dropped.
+	calls := d.Runner.(*system.FakeRunner).CallList()
+	sql := mysqlSQL(d)
+	if indexOf(sql, "IDENTIFIED BY '"+shopPW.Password+"' RETAIN CURRENT PASSWORD;") < 0 {
+		t.Errorf("new password not set with RETAIN CURRENT PASSWORD: %q", sql)
+	}
+	reload := indexOf(calls, "/usr/bin/systemctl reload php8.2-fpm")
+	if reload < 0 {
+		t.Fatalf("PHP-FPM not reloaded: %q", calls)
+	}
+	var discardAt int = -1
+	for i, c := range d.Runner.(*system.FakeRunner).Cmds {
+		if strings.Contains(string(c.Stdin), "DISCARD OLD PASSWORD") {
+			discardAt = i
+		}
+	}
+	if discardAt < reload {
+		t.Errorf("old password discarded (call %d) before the PHP reload (call %d)", discardAt, reload)
+	}
 	// Not adopted / wrong site user: the jail refuses before anything changes.
 	q := shopPW
 	q.Username = "shop"
 	if _, err := d.wpDBPassword(ctx, agent.Actor{}, q); err == nil {
 		t.Error("accepted the old (non-Layte) user")
+	}
+}
+
+// Right after the PHP-FPM reload a request can fail once; that is not a failure.
+func TestWPDBPasswordWaitsForPHP(t *testing.T) {
+	d := devDeps(t)
+	adoptedWPShop(t, d)
+	calls := 0
+	d.SiteCheck = func(context.Context, string, bool) (int, error) {
+		calls++
+		if calls == 2 {
+			return 502, nil // workers restarting
+		}
+		return 200, nil
+	}
+	if _, err := d.wpDBPassword(ctx, agent.Actor{}, shopPW); err != nil {
+		t.Fatalf("a brief 502 during the reload must not roll back: %v", err)
+	}
+	if calls < 3 {
+		t.Errorf("site checked %d times; want a retry", calls)
+	}
+}
+
+// MariaDB has no dual passwords: plain ALTER USER, no DISCARD.
+func TestWPDBPasswordMariaDB(t *testing.T) {
+	d := devDeps(t)
+	adoptedWPShop(t, d)
+	inner := d.Runner.(*system.FakeRunner).Handle
+	d.Runner = &system.FakeRunner{Handle: func(c system.Cmd) (system.Result, error) {
+		if c.String() == mysqlBin+" --version" {
+			return system.Result{Stdout: []byte("mysql  Ver 15.1 Distrib 10.11.6-MariaDB, for debian-linux-gnu (x86_64)\n")}, nil
+		}
+		return inner(c)
+	}}
+	if _, err := d.wpDBPassword(ctx, agent.Actor{}, shopPW); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range mysqlSQL(d) {
+		if strings.Contains(q, "RETAIN") || strings.Contains(q, "DISCARD") {
+			t.Errorf("MariaDB got %q", q)
+		}
 	}
 }

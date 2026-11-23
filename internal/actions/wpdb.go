@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/fileops"
@@ -158,28 +159,89 @@ func (d Deps) wpDBPassword(ctx context.Context, actor agent.Actor, p WPDBPasswor
 		return nil, agent.Errorf("site_check_failed", "%s doesn't answer before the change (%v); fix that first", p.Domain, err)
 	}
 
-	setPW := func(ctx context.Context, pw string) error {
-		return d.mysql(ctx, fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';\n", p.User, sqlString(pw)))
+	// PHP caches wp-config.php (opcache.revalidate_freq, often 2 s), so a
+	// fresh password in the file isn't used right away. Reloading the site's
+	// PHP-FPM (graceful) clears that cache, so we need its version.
+	pools := d.findPools(site.PHPSocket)
+	if site.PHPSocket == "" || len(pools) != 1 {
+		return nil, agent.Errorf(agent.CodeInvalidParams, "can't find the PHP-FPM pool of %s, so its cached wp-config.php couldn't be refreshed", p.Domain)
+	}
+	reloadPHP := func(ctx context.Context) { d.Runner.RunCmd(ctx, fpmReload(pools[0].Version)) }
+	// MySQL 8 can keep the old password valid next to the new one while PHP
+	// switches over (MariaDB can't; the reload keeps that gap tiny).
+	engine, err := d.dbEngine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dual := engine == "mysql"
+
+	alter := func(ctx context.Context, pw string, retain bool) error {
+		sql := fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'", p.User, sqlString(pw))
+		if retain {
+			sql += " RETAIN CURRENT PASSWORD"
+		}
+		return d.mysql(ctx, sql+";\n")
+	}
+	discardOld := func(ctx context.Context) error {
+		return d.mysql(ctx, fmt.Sprintf("ALTER USER '%s'@'localhost' DISCARD OLD PASSWORD;\n", p.User))
 	}
 	bg := context.WithoutCancel(ctx)
-	undoPW := func() { setPW(bg, oldPW) }
-	if err := setPW(ctx, p.Password); err != nil {
+	rollback := func(restoreFile bool) {
+		if restoreFile {
+			d.FileOps.Run(bg, as, fileops.Request{Op: "write", Root: root, Path: rel, Chunk: read.Data, Final: true})
+		}
+		alter(bg, oldPW, false)
+		if dual {
+			discardOld(bg)
+		}
+		reloadPHP(bg)
+	}
+
+	if err := alter(ctx, p.Password, dual); err != nil {
 		return nil, err
 	}
 	if _, err := file(fileops.Request{Op: "write", Chunk: []byte(replace(p.Password)), Final: true}); err != nil {
-		undoPW()
+		rollback(false)
 		return nil, err
 	}
-	undoFile := func() {
-		d.FileOps.Run(bg, as, fileops.Request{Op: "write", Root: root, Path: rel, Chunk: read.Data, Final: true})
+	reloadPHP(ctx)
+	// The new password must work on its own before the old one goes away.
+	if dual {
+		if err := discardOld(ctx); err != nil {
+			rollback(true)
+			return nil, err
+		}
 	}
-	after, err := d.siteStatus(ctx, site)
+	after, err := d.settledStatus(ctx, site, before)
 	if err != nil || after != before {
-		undoFile()
-		undoPW()
+		rollback(true)
 		return nil, agent.Errorf("site_check_failed", "%s answered %d before and %d after the change; the old password and wp-config.php were put back", p.Domain, before, after)
 	}
 	return map[string]any{"changed": true, "status": after}, nil
+}
+
+// siteSettle is how long to wait between checks while PHP-FPM restarts its
+// workers after a reload (tests make it shorter).
+var siteSettle = 500 * time.Millisecond
+
+// settledStatus re-checks the site for a few seconds until it answers like
+// before: right after a PHP-FPM reload a request can briefly fail.
+func (d Deps) settledStatus(ctx context.Context, site DiscoveredSite, want int) (int, error) {
+	var got int
+	var err error
+	for i := 0; i < 10; i++ {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return got, ctx.Err()
+			case <-time.After(siteSettle):
+			}
+		}
+		if got, err = d.siteStatus(ctx, site); err == nil && got == want {
+			return got, nil
+		}
+	}
+	return got, err
 }
 
 // discoveredSite is a domain from the nginx config (for its HTTPS flag).
