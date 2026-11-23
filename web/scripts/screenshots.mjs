@@ -184,6 +184,21 @@ async function main() {
   console.log("Taking screenshots…");
   await shot("dashboard", "/", "Services");
   await shot("sites", "/sites", "demo.example.com");
+
+  // The New site form, filled in (not submitted).
+  await page.goto("/sites/new");
+  await page.locator("#php option").first().waitFor({ state: "attached", timeout: 30000 });
+  await page.fill("#domain", "store.example.com");
+  await page.fill("#aliases", "www.store.example.com");
+  const wp = page.getByLabel("Install WordPress");
+  if (!(await wp.isChecked())) await wp.check();
+  await page.fill("#title", "My Store");
+  await page.fill("#admin_user", "owner");
+  await page.fill("#admin_email", "owner@example.com");
+  await page.locator("body").click({ position: { x: 5, y: 5 } }); // no focus ring / caret in the picture
+  await sleep(500);
+  await page.screenshot({ path: join(out, "new-site.png"), fullPage: true }); // the form is taller than the window
+  console.log("  saved docs/screenshots/new-site.png");
   await shot("site-overview", `/sites/${site.site_id}`, "Size on disk");
   await shot("memory", "/system/memory", "By service and site");
   await shot("updates", "/updates", "Kept back");

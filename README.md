@@ -32,9 +32,9 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
 ## Screenshots
 | | |
 |---|---|
-| ![Sites](docs/screenshots/sites.png) Sites: created and imported | ![Site overview](docs/screenshots/site-overview.png) A site's overview, with its own tabs |
-| ![Memory](docs/screenshots/memory.png) What uses the memory, per service and site | ![Updates](docs/screenshots/updates.png) Updates: preview first, then install |
-| ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) Dark mode | |
+| ![Sites](docs/screenshots/sites.png) Sites: created and imported | ![New site](docs/screenshots/new-site.png) New site: user, PHP pool, nginx, database and WordPress in one step |
+| ![Site overview](docs/screenshots/site-overview.png) A site's overview, with its own tabs | ![Memory](docs/screenshots/memory.png) What uses the memory, per service and site |
+| ![Updates](docs/screenshots/updates.png) Updates: preview first, then install | ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) Dark mode |
 
 *Demo data. The screenshots are generated with `cd web && npm run screenshots`.*
 
