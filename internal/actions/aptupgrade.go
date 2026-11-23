@@ -92,10 +92,46 @@ func (p UpgradeApplyParams) Validate() error {
 }
 
 var (
-	// Inst libgd3 [2.3.3-9ubuntu5] (2.3.3-9ubuntu5.1 Ubuntu:24.04/noble-updates [amd64])
-	instRe = regexp.MustCompile(`^Inst (\S+)(?: \[([^\]]+)\])? \((\S+) (.*?)(?: \[[^\]]+\])?\)`)
 	remvRe = regexp.MustCompile(`^Remv (\S+)`)
+	archRe = regexp.MustCompile(` \[[^\]]*\]$`) // the trailing " [amd64]" inside the parentheses
 )
+
+// parseInst reads one "Inst" line of apt-get --simulate:
+//
+//	Inst libgd3 [2.3.3-9ubuntu5] (2.3.3-9ubuntu5.1 Ubuntu:24.04/noble-updates [amd64])
+//	Inst libgd3 [2.3.3-9ubuntu5] (2.3.3-13+deb.sury.org+1 PPA for PHP (deprecated):24.04/noble [amd64])
+//	Inst libheif1 (1.17.6-1ubuntu4 Ubuntu:24.04/noble [amd64])         (new package: no [old])
+//
+// The origin can itself contain parentheses, so it runs to the line's last ")".
+func parseInst(line string) (PlannedPkg, bool) {
+	rest, ok := strings.CutPrefix(line, "Inst ")
+	if !ok {
+		return PlannedPkg{}, false
+	}
+	name, rest, _ := strings.Cut(rest, " ")
+	if name == "" {
+		return PlannedPkg{}, false
+	}
+	p := PlannedPkg{Name: name}
+	if strings.HasPrefix(rest, "[") {
+		old, after, ok := strings.Cut(rest[1:], "] ")
+		if !ok {
+			return PlannedPkg{}, false
+		}
+		p.From, rest = old, after
+	}
+	end := strings.LastIndexByte(rest, ')')
+	if !strings.HasPrefix(rest, "(") || end < 1 {
+		return PlannedPkg{}, false
+	}
+	inner := archRe.ReplaceAllString(rest[1:end], "")
+	p.To, p.Origin, _ = strings.Cut(inner, " ")
+	if p.To == "" {
+		return PlannedPkg{}, false
+	}
+	p.Security = strings.Contains(p.Origin, "-security")
+	return p, true
+}
 
 // parseSimulation reads `apt-get --simulate` output.
 func parseSimulation(out string) UpgradePlan {
@@ -114,11 +150,10 @@ func parseSimulation(out string) UpgradePlan {
 		case strings.HasPrefix(line, "The following packages have been kept back"):
 			inKept = true
 		case strings.HasPrefix(line, "Inst "):
-			m := instRe.FindStringSubmatch(line)
-			if m == nil {
+			p, ok := parseInst(line)
+			if !ok {
 				continue
 			}
-			p := PlannedPkg{Name: m[1], From: m[2], To: m[3], Origin: m[4], Security: strings.Contains(m[4], "-security")}
 			if p.From == "" {
 				plan.NewPackages = append(plan.NewPackages, p)
 			} else {

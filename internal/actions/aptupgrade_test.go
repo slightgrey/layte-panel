@@ -197,3 +197,30 @@ func TestUpdatesApplyReportsSites(t *testing.T) {
 		t.Errorf("sites: %+v", r.Sites)
 	}
 }
+
+func TestParseInst(t *testing.T) {
+	cases := []struct {
+		line string
+		want PlannedPkg
+	}{
+		{"Inst libgd3 [2.3.3-9ubuntu5] (2.3.3-13+ubuntu24.04.1+deb.sury.org+1 PPA for PHP (deprecated):24.04/noble [amd64])",
+			PlannedPkg{Name: "libgd3", From: "2.3.3-9ubuntu5", To: "2.3.3-13+ubuntu24.04.1+deb.sury.org+1", Origin: "PPA for PHP (deprecated):24.04/noble"}},
+		{"Inst openssl [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])",
+			PlannedPkg{Name: "openssl", From: "3.0.13-0ubuntu3.4", To: "3.0.13-0ubuntu3.5", Origin: "Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security", Security: true}},
+		{"Inst libheif1 (1.17.6-1ubuntu4 Ubuntu:24.04/noble [amd64])",
+			PlannedPkg{Name: "libheif1", To: "1.17.6-1ubuntu4", Origin: "Ubuntu:24.04/noble"}},
+		{"Inst nginx-common [1.24.0-2ubuntu7] (1.24.0-2ubuntu7.1 Ubuntu:24.04/noble-updates [all])",
+			PlannedPkg{Name: "nginx-common", From: "1.24.0-2ubuntu7", To: "1.24.0-2ubuntu7.1", Origin: "Ubuntu:24.04/noble-updates"}},
+	}
+	for _, c := range cases {
+		got, ok := parseInst(c.line)
+		if !ok || got != c.want {
+			t.Errorf("parseInst(%q)\n got  %+v\n want %+v", c.line, got, c.want)
+		}
+	}
+	for _, bad := range []string{"Inst", "Inst x", "Inst x [1]", "Conf x (1 y)", "Inst x [1] 2 y"} {
+		if _, ok := parseInst(bad); ok {
+			t.Errorf("parsed %q", bad)
+		}
+	}
+}
