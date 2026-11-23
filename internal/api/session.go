@@ -83,12 +83,29 @@ func (s *server) loadSession(next http.Handler) http.Handler {
 	})
 }
 
+// "Remember this browser for 30 days" (ticked on the 2FA step): the session
+// lasts up to rememberMax and ends after rememberIdle unused; its cookie is
+// persistent, so it survives closing the browser. Log out, a password change
+// or a 2FA reset end it at once, like any session.
+const (
+	rememberMax  = 30 * 24 * time.Hour
+	rememberIdle = 7 * 24 * time.Hour
+)
+
+// sessionLimits are the idle and maximum ages that apply to a session.
+func (s *server) sessionLimits(remember bool) (idle, max time.Duration) {
+	if remember {
+		return rememberIdle, rememberMax
+	}
+	return s.Config.SessionIdle.Duration, s.Config.SessionMax.Duration
+}
+
 func (s *server) sessionExpired(ss store.Session, now time.Time) bool {
 	if ss.TOTPPending {
 		return now.Sub(ss.CreatedAt) > pendingTTL
 	}
-	return now.Sub(ss.LastSeenAt) > s.Config.SessionIdle.Duration ||
-		now.Sub(ss.CreatedAt) > s.Config.SessionMax.Duration
+	idle, max := s.sessionLimits(ss.Remember)
+	return now.Sub(ss.LastSeenAt) > idle || now.Sub(ss.CreatedAt) > max
 }
 
 // requireAuth allows only fully authenticated sessions (password + TOTP).
@@ -231,11 +248,15 @@ func clientIP(r *http.Request, trusted []string) string {
 	return host
 }
 
-func (s *server) setSessionCookie(w http.ResponseWriter, token string) {
+// setSessionCookie sets the session cookie. maxAge 0 = a browser-session
+// cookie (gone when the browser closes); remembered sessions pass their
+// lifetime so the cookie survives restarts.
+func (s *server) setSessionCookie(w http.ResponseWriter, token string, maxAge time.Duration) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    token,
 		Path:     "/",
+		MaxAge:   int(maxAge.Seconds()),
 		HttpOnly: true,
 		Secure:   !s.Config.Dev,
 		SameSite: http.SameSiteStrictMode,
@@ -266,7 +287,9 @@ func CleanupSessions(ctx context.Context, st *store.Store, cfg config.Config, lo
 		case <-t.C:
 			now := time.Now()
 			n, err := st.DeleteExpiredSessions(ctx,
-				now.Add(-cfg.SessionIdle.Duration), now.Add(-cfg.SessionMax.Duration), now.Add(-pendingTTL))
+				store.SessionLimits{IdleBefore: now.Add(-cfg.SessionIdle.Duration), CreatedBefore: now.Add(-cfg.SessionMax.Duration)},
+				store.SessionLimits{IdleBefore: now.Add(-rememberIdle), CreatedBefore: now.Add(-rememberMax)},
+				now.Add(-pendingTTL))
 			if err != nil {
 				log.Error("session cleanup", "err", err)
 			} else if n > 0 {
