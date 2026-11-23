@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/auth"
 	"github.com/slightgrey/layte-panel/internal/store"
@@ -94,15 +95,17 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "create session", err)
 		return
 	}
-	s.setSessionCookie(w, token)
+	s.setSessionCookie(w, token, 0) // pending 2FA: a browser-session cookie
 	writeJSON(w, http.StatusOK, map[string]any{"totp_required": true, "csrf_token": csrf})
 }
 
-// POST /api/v1/auth/totp {code}
+// POST /api/v1/auth/totp {code, remember}
 // Step 2 of 2: verifies the code and upgrades the session (with a new token).
+// remember = "remember this browser for 30 days" (see rememberMax).
 func (s *server) handleTOTP(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Code string `json:"code"`
+		Code     string `json:"code"`
+		Remember bool   `json:"remember"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -155,12 +158,16 @@ func (s *server) handleTOTP(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "new csrf token", err)
 		return
 	}
-	if err := s.Store.PromoteSession(ctx, si.Session.TokenHash, hash, csrf, now); err != nil {
+	if err := s.Store.PromoteSession(ctx, si.Session.TokenHash, hash, csrf, now, req.Remember); err != nil {
 		s.internalError(w, "promote session", err)
 		return
 	}
-	s.setSessionCookie(w, token)
-	s.Log.Info("login", "user", u.Username, "ip", clientIP(r, s.Config.TrustedProxies))
+	var cookieAge time.Duration // 0 = browser-session cookie
+	if req.Remember {
+		cookieAge = rememberMax // survives closing the browser
+	}
+	s.setSessionCookie(w, token, cookieAge)
+	s.Log.Info("login", "user", u.Username, "ip", clientIP(r, s.Config.TrustedProxies), "remember", req.Remember)
 	writeJSON(w, http.StatusOK, map[string]any{"user": toUserJSON(u), "csrf_token": csrf})
 }
 

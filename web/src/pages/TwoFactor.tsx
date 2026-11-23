@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { useTotp } from "@/api/auth";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/field";
 import { Input, Label } from "@/components/ui/input";
 import { AuthShell, FormError } from "./AuthShell";
 
@@ -10,10 +11,11 @@ export function TwoFactorPage() {
   const totp = useTotp();
   const navigate = useNavigate();
   const [code, setCode] = useState("");
+  const [remember, setRemember] = useState(false);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    totp.mutate(code, {
+    totp.mutate({ code, remember }, {
       onSuccess: () => navigate("/", { replace: true }),
       onError: (err) => {
         setCode("");
@@ -43,6 +45,12 @@ export function TwoFactorPage() {
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
           />
         </div>
+        <Checkbox
+          label="Remember this browser for 30 days"
+          description="Stay signed in here, even after closing the browser. Only on your own computer."
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+        />
         <FormError message={totp.error?.message} />
         <Button type="submit" disabled={totp.isPending || code.length !== 6}>
           {totp.isPending ? "Verifying…" : "Verify"}

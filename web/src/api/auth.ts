@@ -21,11 +21,11 @@ export function useLogin() {
   });
 }
 
-/** POST /auth/totp: step 2, the authenticator code. */
+/** POST /auth/totp: step 2, the authenticator code. remember = stay signed in on this browser for 30 days. */
 export function useTotp() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (code: string) => api<MeResponse>("POST", "/auth/totp", { code }),
+    mutationFn: (v: { code: string; remember: boolean }) => api<MeResponse>("POST", "/auth/totp", v),
     onSuccess: (me) => qc.setQueryData(meKey, me),
   });
 }

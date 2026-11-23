@@ -12,7 +12,7 @@ export function AuthShell({ title, description, children }: { title: string; des
         <Brand className="mb-8 justify-center text-lg" />
         <Card>
           <CardContent className="pt-7">
-            <p className="eyebrow mb-2">Web of D · control panel</p>
+            <p className="eyebrow mb-2 text-center">Web of D · control panel</p>
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
             <p className="mb-5 text-sm text-muted-foreground">{description}</p>
             {children}
