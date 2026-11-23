@@ -16,6 +16,9 @@ import { SiteDatabasePage } from "./pages/SiteDatabase";
 import { SiteDetailPage } from "./pages/SiteDetail";
 import { SiteLogsPage } from "./pages/SiteLogs";
 import { SiteSSLPage } from "./pages/SiteSSL";
+import { SystemDiskPage } from "./pages/SystemDisk";
+import { SystemLoadPage } from "./pages/SystemLoad";
+import { SystemMemoryPage } from "./pages/SystemMemory";
 import { SitesPage } from "./pages/Sites";
 import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
@@ -43,6 +46,9 @@ export function App() {
           <Route path="sites/:id/cron" element={<SiteCronPage />} />
           <Route path="sites/:id/logs" element={<SiteLogsPage />} />
           <Route path="sites/:id/files" element={<SiteFilesPage />} />
+          <Route path="system/load" element={<SystemLoadPage />} />
+          <Route path="system/memory" element={<SystemMemoryPage />} />
+          <Route path="system/disk" element={<SystemDiskPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

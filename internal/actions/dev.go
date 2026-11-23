@@ -140,7 +140,11 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		case c.Bin == chownBin:
 			return system.Result{}, nil // the fake root doesn't track owners
 		case c.Bin == duBin:
-			return fakeDu(c), nil
+			return fakeDu(root, c), nil
+		case c.Bin == findBin && len(args) > 0:
+			// Largest files: two made-up ones under the folder asked for.
+			dir := strings.TrimSuffix(args[0], "/")
+			return system.Result{Stdout: []byte(fmt.Sprintf("734003200\t%s/backup-old.tar.gz\n52428800\t%s/debug.log\n", dir, dir))}, nil
 		case c.Bin == ufwBin:
 			return fakeUFWCmd(root, c)
 		case c.Bin == unattendedUpgradeBin:
@@ -158,12 +162,31 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 
 // fakeDu reports made-up but stable sizes: the whole site is the sum of its
 // folders plus a little, so the overview's breakdown adds up.
-func fakeDu(c system.Cmd) system.Result {
+func fakeDu(root system.FS, c system.Cmd) system.Result {
 	var paths []string
+	oneLevel := false
 	for i, a := range c.Args {
 		if a == "--" {
 			paths = c.Args[i+1:]
 		}
+		oneLevel = oneLevel || a == "--max-depth=1"
+	}
+	if oneLevel && len(paths) == 1 {
+		// The dashboard's disk breakdown: each subfolder of the fake root,
+		// with a made-up but stable size, then the folder's own total.
+		var b strings.Builder
+		var total int64
+		subs, _ := root.Glob(strings.TrimSuffix(paths[0], "/") + "/*")
+		for _, s := range subs {
+			if fi, err := root.Lstat(s); err != nil || !fi.IsDir() {
+				continue
+			}
+			n := int64(len(path.Base(s))*7919%900+10) * 1_048_576
+			total += n
+			fmt.Fprintf(&b, "%d\t%s\n", n, s)
+		}
+		fmt.Fprintf(&b, "%d\t%s\n", total+4096, paths[0])
+		return system.Result{Stdout: []byte(b.String())}
 	}
 	size := func(p string) int64 {
 		switch path.Base(p) {
