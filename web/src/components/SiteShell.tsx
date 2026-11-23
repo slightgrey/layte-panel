@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, type LucideIcon, ScrollText, ShieldCheck, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, LogIn, type LucideIcon, ScrollText, ShieldCheck, XCircle } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link, NavLink, useParams, useSearchParams } from "react-router";
 import { databasesKey } from "@/api/databases";
@@ -47,6 +47,11 @@ export function SiteNav({ siteId }: { siteId: number }) {
   );
 }
 
+/** One-click WP-Admin works for WordPress sites Layte runs (created or adopted). */
+function canWPAdmin(site: Site) {
+  return site.wordpress && (site.managed || site.adopted) && site.status === "active" && !!site.php_version && !!site.system_user;
+}
+
 /** Back link, domain, badges, "Visit", an optional action slot, then the site tabs. */
 export function SiteHeader({ site, actions }: { site: Site; actions?: ReactNode }) {
   return (
@@ -58,6 +63,19 @@ export function SiteHeader({ site, actions }: { site: Site; actions?: ReactNode 
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight">{site.domain}</h1>
           <SiteBadges site={site} />
+          {canWPAdmin(site) && (
+            // A plain link: the server answers with a page that signs in to
+            // WordPress with a one-time token (see handlers_wplogin.go).
+            <a
+              href={`/api/v1/sites/${site.id}/wp-admin`}
+              target="_blank"
+              rel="noreferrer noopener"
+              title="Open WP-Admin, signed in as the site's first administrator"
+              className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
+            >
+              <LogIn className="size-3.5" /> WP-Admin
+            </a>
+          )}
           <a
             href={`${site.ssl ? "https" : "http"}://${site.domain}`}
             target="_blank"

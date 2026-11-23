@@ -97,6 +97,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
 	mux.Handle("POST /api/v1/sites/{id}/ssl/renew", authed(s.handleRenewSSL))
 	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
+	mux.Handle("GET /api/v1/sites/{id}/wp-admin", authed(s.handleWPAdmin))
+	mux.Handle("GET /api/v1/wp-admin.js", authed(s.handleWPAdminScript))
 
 	// Files (session only).
 	mux.Handle("GET /api/v1/sites/{id}/files", authed(s.handleListFiles))

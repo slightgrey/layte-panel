@@ -193,6 +193,10 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 		t.Error(err)
 	}
 
+	t.Run("one-click WP-Admin", func(t *testing.T) {
+		testWPLogin(t, e, site)
+	})
+
 	if len(versions) > 1 {
 		t.Run("switch PHP", func(t *testing.T) {
 			testSwitchPHP(t, e, site, versions[0])

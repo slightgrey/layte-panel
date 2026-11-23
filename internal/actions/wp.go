@@ -194,6 +194,10 @@ func fakeWP(root system.FS, c system.Cmd) (system.Result, error) {
 	}
 	args := strings.Join(c.Args, " ")
 	switch {
+	case strings.Contains(args, " user list"):
+		return system.Result{Stdout: []byte("1\n")}, nil // the first administrator
+	case strings.Contains(args, " transient set "):
+		return system.Result{Stdout: []byte("Success: Transient added.\n")}, nil
 	case strings.Contains(args, " core download"):
 		root.WriteFileAtomic(path+"/index.php", []byte("<?php // fake WordPress (dev mode)\n"), 0o644)
 		root.WriteFileAtomic(path+"/wp-load.php", []byte("<?php\n"), 0o644)
