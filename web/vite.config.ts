@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
-import { writeFileSync } from "node:fs";
+import { realpathSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -15,10 +16,20 @@ const keepGitkeep = (): Plugin => ({
   },
 });
 
+// The project folder in its canonical spelling. On Windows the same folder can
+// arrive as "d:\…" (npm sets the working directory that way) or "D:\…"
+// (shells, and node_modules paths after symlink resolution). Vite treats the
+// two spellings as different files, so React got bundled twice (blank page:
+// "Cannot read properties of null (reading 'useContext')") and Vitest loaded
+// itself twice ("failed to find the current suite"). realpathSync.native asks
+// the OS for the one true spelling; root and alias both use it.
+const here = realpathSync.native(fileURLToPath(new URL(".", import.meta.url)));
+
 export default defineConfig({
+  root: here,
   plugins: [react(), tailwindcss(), keepGitkeep()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: { "@": join(here, "src") },
   },
   server: {
     port: 5173,
