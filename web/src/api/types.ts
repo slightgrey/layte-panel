@@ -377,3 +377,21 @@ export interface DiskBreakdown {
   entries: { path: string; bytes: number }[];
   partial?: boolean;
 }
+
+export interface PlannedPkg {
+  name: string;
+  from?: string; // installed version ("" = new package)
+  to: string;
+  origin: string;
+  security: boolean;
+}
+
+export interface UpgradePlan {
+  upgrades: PlannedPkg[];
+  new_packages: PlannedPkg[];
+  removals: string[];
+  kept_back: string[];
+  restarts: string[];
+  reboot_likely: boolean;
+  hash: string;
+}

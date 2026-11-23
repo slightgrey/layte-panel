@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -105,7 +106,23 @@ var fixtureCommands = map[string]string{
 // that create or delete users mirror the change in the fake root, so DirUsers
 // sees them.
 func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, error) {
-	return func(c system.Cmd) (system.Result, error) {
+	var handle func(c system.Cmd) (system.Result, error)
+	handle = func(c system.Cmd) (system.Result, error) {
+		// systemd-run (outsideSandbox): answer the command it wraps.
+		if c.Bin == systemdRunBin {
+			if i := slices.Index(c.Args, "--"); i >= 0 && i+1 < len(c.Args) {
+				inner := system.Cmd{Bin: c.Args[i+1], Args: c.Args[i+2:]}
+				for _, a := range c.Args[:i] {
+					if e, ok := strings.CutPrefix(a, "--setenv="); ok {
+						inner.Env = append(inner.Env, e)
+					}
+				}
+				return handle(inner)
+			}
+		}
+		if c.Bin == dpkgBin {
+			return system.Result{}, nil // dpkg --configure -a: nothing to finish in dev
+		}
 		if file, ok := fixtureCommands[c.String()]; ok {
 			b, err := fs.ReadFile(cmds, file)
 			if err != nil {
@@ -139,6 +156,10 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return fakeMySQLDump(root, c)
 		case c.Bin == chownBin:
 			return system.Result{}, nil // the fake root doesn't track owners
+		case c.Bin == aptGetBin:
+			return fakeAptGet(cmds, args)
+		case c.Bin == needrestartBin:
+			return system.Result{Stdout: []byte("NEEDRESTART-VER: 3.6\nNEEDRESTART-KSTA: 1\n")}, nil
 		case c.Bin == duBin:
 			return fakeDu(root, c), nil
 		case c.Bin == findBin && len(args) > 0:
@@ -158,6 +179,7 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		}
 		return system.Result{}, fmt.Errorf("run %s: %w", c.Bin, system.ErrNotFound)
 	}
+	return handle
 }
 
 // fakeDu reports made-up but stable sizes: the whole site is the sum of its
@@ -204,4 +226,21 @@ func fakeDu(root system.FS, c system.Cmd) system.Result {
 		fmt.Fprintf(&b, "%d\t%s\n", size(p), p)
 	}
 	return system.Result{Stdout: []byte(b.String())}
+}
+
+// fakeAptGet answers apt-get in dev mode: simulations from fixtures, and a
+// pretend install/update that changes nothing.
+func fakeAptGet(cmds fs.FS, args []string) (system.Result, error) {
+	switch {
+	case slices.Contains(args, "--simulate") && slices.Contains(args, "install"):
+		b, err := fs.ReadFile(cmds, "apt-get-sim-install-kept.txt")
+		return system.Result{Stdout: b}, err
+	case slices.Contains(args, "--simulate"):
+		b, err := fs.ReadFile(cmds, "apt-get-sim-upgrade.txt")
+		return system.Result{Stdout: b}, err
+	case slices.Contains(args, "update"):
+		return system.Result{Stdout: []byte("Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\nReading package lists...\n")}, nil
+	}
+	time.Sleep(time.Second) // pretend to download and install
+	return system.Result{Stdout: []byte("Setting up nginx (1.24.0-2ubuntu7.1) ...\n(dev mode: nothing was really installed)\n")}, nil
 }

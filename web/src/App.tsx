@@ -19,6 +19,7 @@ import { SiteSSLPage } from "./pages/SiteSSL";
 import { SystemDiskPage } from "./pages/SystemDisk";
 import { SystemLoadPage } from "./pages/SystemLoad";
 import { SystemMemoryPage } from "./pages/SystemMemory";
+import { UpdatesPage } from "./pages/Updates";
 import { SitesPage } from "./pages/Sites";
 import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
@@ -49,6 +50,7 @@ export function App() {
           <Route path="system/load" element={<SystemLoadPage />} />
           <Route path="system/memory" element={<SystemMemoryPage />} />
           <Route path="system/disk" element={<SystemDiskPage />} />
+          <Route path="updates" element={<UpdatesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

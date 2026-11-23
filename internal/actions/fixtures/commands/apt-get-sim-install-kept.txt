@@ -1,0 +1,14 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  libheif1
+The following packages will be upgraded:
+  libgd-dev libgd3
+2 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+Inst libheif1 (1.17.6-1ubuntu4 Ubuntu:24.04/noble [amd64])
+Inst libgd3 [2.3.3-9ubuntu5] (2.3.3-9ubuntu5.1~ppa1 LP-PPA-ondrej-php:24.04/noble [amd64])
+Inst libgd-dev [2.3.3-9ubuntu5] (2.3.3-9ubuntu5.1~ppa1 LP-PPA-ondrej-php:24.04/noble [amd64])
+Conf libheif1 (1.17.6-1ubuntu4 Ubuntu:24.04/noble [amd64])
+Conf libgd3 (2.3.3-9ubuntu5.1~ppa1 LP-PPA-ondrej-php:24.04/noble [amd64])
+Conf libgd-dev (2.3.3-9ubuntu5.1~ppa1 LP-PPA-ondrej-php:24.04/noble [amd64])

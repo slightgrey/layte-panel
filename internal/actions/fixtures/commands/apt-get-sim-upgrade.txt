@@ -1,0 +1,15 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages have been kept back:
+  libgd-dev libgd3
+The following packages will be upgraded:
+  nginx nginx-common openssl
+3 upgraded, 0 newly installed, 0 to remove and 2 not upgraded.
+Inst nginx-common [1.24.0-2ubuntu7] (1.24.0-2ubuntu7.1 Ubuntu:24.04/noble-updates [all])
+Inst nginx [1.24.0-2ubuntu7] (1.24.0-2ubuntu7.1 Ubuntu:24.04/noble-updates [amd64])
+Inst openssl [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])
+Conf nginx-common (1.24.0-2ubuntu7.1 Ubuntu:24.04/noble-updates [all])
+Conf nginx (1.24.0-2ubuntu7.1 Ubuntu:24.04/noble-updates [amd64])
+Conf openssl (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])

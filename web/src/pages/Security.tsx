@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Cloud, Download, Lock, Plus, RefreshCw, RotateCw, Shield, ShieldOff, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router";
 import {
   securityKey,
   useAllowRule,
@@ -134,7 +135,13 @@ function UpdatesCard({ data }: { data: SecurityResponse }) {
             <Button disabled={install.isPending || up?.security === 0} onClick={() => install.mutate(undefined, { onSuccess: (r) => setJobId(r.job_id) })}>
               <Download /> Install security updates
             </Button>
-            <p className="mt-2 text-xs text-muted-foreground">Runs unattended-upgrade, which installs security updates only.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Runs unattended-upgrade, which installs security updates only. For all updates, use the{" "}
+              <Link to="/updates" className="text-primary hover:underline">
+                Updates
+              </Link>{" "}
+              page.
+            </p>
           </div>
         )}
         <FormError message={install.error?.message} />
