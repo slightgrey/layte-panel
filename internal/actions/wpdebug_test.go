@@ -119,3 +119,23 @@ func TestLogSourcesReadConfD(t *testing.T) {
 	}
 	t.Errorf("wp-debug.log not listed: %+v", out)
 }
+
+// An adopted site's PHP error log (where WP Debug writes) is a log source,
+// so the panel can stream it.
+func TestLogSourcesIncludePoolErrorLog(t *testing.T) {
+	d := devDeps(t)
+	pool, _ := d.FS.ReadFile(shopPool)
+	d.FS.WriteFileAtomic(shopPool, append(pool, []byte("php_admin_value[error_log] = /home/shop/site/logs/shop-php-error.log\n")...), 0o644)
+	d.FS.MkdirAll("/home/shop/site/logs", 0o755)
+	d.FS.WriteFileAtomic("/home/shop/site/logs/shop-php-error.log", nil, 0o644)
+	out, err := d.logsSources(ctx, agent.Actor{}, agent.NoParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range out.([]LogSource) {
+		if s.Path == "/home/shop/site/logs/shop-php-error.log" && s.Domain == "shop.example.org" && s.Label == "PHP error log" {
+			return
+		}
+	}
+	t.Errorf("pool error log not listed: %+v", out)
+}
