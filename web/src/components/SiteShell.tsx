@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, LogIn, type LucideIcon, ScrollText, ShieldCheck, XCircle } from "lucide-react";
+import { ArrowLeft, Bug, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, LogIn, type LucideIcon, ScrollText, ShieldCheck, XCircle } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link, NavLink, useParams, useSearchParams } from "react-router";
 import { databasesKey } from "@/api/databases";
@@ -14,23 +14,24 @@ import { progressFrame } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { SiteBadges } from "@/pages/SiteBadges";
 
-const tabs: { label: string; path: string; icon: LucideIcon }[] = [
+const tabs: { label: string; path: string; icon: LucideIcon; show?: (site: Site) => boolean }[] = [
   { label: "Overview", path: "", icon: LayoutGrid },
   { label: "SSL", path: "ssl", icon: ShieldCheck },
   { label: "Database", path: "database", icon: Database },
   { label: "Cron", path: "cron", icon: Clock },
+  { label: "WP Debug", path: "wp-debug", icon: Bug, show: (site) => site.wordpress },
   { label: "Logs", path: "logs", icon: ScrollText },
   { label: "Files", path: "files", icon: FolderOpen },
 ];
 
 /** Per-site tabs, so you never need the global sidebar to get around one site. */
-export function SiteNav({ siteId }: { siteId: number }) {
+export function SiteNav({ site }: { site: Site }) {
   return (
     <nav aria-label="Site" className="flex w-full gap-1 overflow-x-auto rounded-[16px] p-1.5 shadow-inset sm:w-fit">
-      {tabs.map(({ label, path, icon: Icon }) => (
+      {tabs.filter((t) => !t.show || t.show(site)).map(({ label, path, icon: Icon }) => (
         <NavLink
           key={label}
-          to={path ? `/sites/${siteId}/${path}` : `/sites/${siteId}`}
+          to={path ? `/sites/${site.id}/${path}` : `/sites/${site.id}`}
           end={!path}
           className={({ isActive }) =>
             cn(
@@ -88,7 +89,7 @@ export function SiteHeader({ site, actions }: { site: Site; actions?: ReactNode 
         </div>
         {site.root_path && <p className="mt-1 font-mono text-xs text-muted-foreground">{site.root_path}</p>}
       </div>
-      <SiteNav siteId={site.id} />
+      <SiteNav site={site} />
     </div>
   );
 }

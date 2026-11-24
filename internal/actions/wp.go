@@ -201,6 +201,16 @@ func fakeWP(root system.FS, c system.Cmd) (system.Result, error) {
 	switch {
 	case strings.Contains(args, " user list"):
 		return system.Result{Stdout: []byte("1\n")}, nil // the first administrator
+	case strings.Contains(args, " config list WP_DEBUG "):
+		on := "false"
+		if ok, _ := root.Exists(path + "/.dev-wp-debug"); ok {
+			on = "true"
+		}
+		return system.Result{Stdout: []byte(`[{"name":"WP_DEBUG","value":` + on + `,"type":"constant"}]`)}, nil
+	case strings.Contains(args, " config set WP_DEBUG true "):
+		root.WriteFileAtomic(path+"/.dev-wp-debug", nil, 0o644)
+	case strings.Contains(args, " config set WP_DEBUG false "):
+		root.Remove(path + "/.dev-wp-debug")
 	case strings.Contains(args, " transient set "):
 		return system.Result{Stdout: []byte("Success: Transient added.\n")}, nil
 	case strings.Contains(args, " core download"):

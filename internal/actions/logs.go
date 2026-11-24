@@ -66,12 +66,8 @@ func (d Deps) logsSources(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 	}
 
 	// Logs referenced by enabled vhosts (imported and managed sites).
-	files, _ := d.FS.Glob(nginxDir + "/sites-enabled/*")
-	for _, f := range files {
-		real, err := d.FS.Resolve(f)
-		if err != nil || !strings.HasPrefix(real, nginxDir+"/") {
-			continue
-		}
+	files, _ := d.vhostConfigs()
+	for _, real := range files {
 		b, err := d.FS.ReadFile(real)
 		if err != nil {
 			continue
