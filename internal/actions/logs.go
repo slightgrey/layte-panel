@@ -87,6 +87,15 @@ func (d Deps) logsSources(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 					add(dir.Arg(0), label, site.Domain)
 				}
 			}
+			// The PHP error log of the site's own PHP-FPM pool (adopted sites
+			// keep theirs where it was; WP Debug writes there).
+			if site.PHPSocket != "" {
+				if pools := d.findPools(site.PHPSocket); len(pools) == 1 {
+					if l := poolErrorLog(pools[0].Content); l != "" {
+						add(l, "PHP error log", site.Domain)
+					}
+				}
+			}
 			// Everything in a Layte site's logs/ folder (php-error.log, cron.log, …).
 			if strings.HasSuffix(site.Root, "/public") {
 				logs, _ := d.FS.Glob(path.Dir(site.Root) + "/logs/*.log")
