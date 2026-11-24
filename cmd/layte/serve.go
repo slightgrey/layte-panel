@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -75,6 +76,11 @@ func runServe(args []string) error {
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	// Live streams (SSE) end as soon as Shutdown starts, so it doesn't wait
+	// for them until its deadline (see api.WithStopping).
+	stopStreams := make(chan struct{})
+	srv.BaseContext = func(net.Listener) context.Context { return api.WithStopping(context.Background(), stopStreams) }
+	srv.RegisterOnShutdown(func() { close(stopStreams) })
 
 	// ListenAndServe blocks, so it runs in a goroutine (a lightweight thread).
 	// Its result is sent on a channel so the main goroutine can wait for either

@@ -111,6 +111,8 @@ func (s *server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-stopping(r.Context()):
+			return // server is shutting down
 		case <-beat.C:
 			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
 				return

@@ -138,6 +138,8 @@ func (s *server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case <-r.Context().Done():
 			return // client went away
+		case <-stopping(r.Context()):
+			return // server is shutting down
 		}
 	}
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"net/http"
 	"net/url"
 	"strings"
@@ -78,6 +79,26 @@ func TestLogStream(t *testing.T) {
 	}
 	if ev != "append" || !strings.Contains(data, "new line") || strings.Contains(data, "wp-login") {
 		t.Errorf("append: %s %s", ev, data)
+	}
+}
+
+// A graceful shutdown doesn't wait for open log streams.
+func TestLogStreamEndsOnShutdown(t *testing.T) {
+	env, c, _ := siteEnv(t)
+	u := env.srv.URL + "/api/v1/logs/stream?path=" + url.QueryEscape("/var/log/nginx/access.log") + "&lines=2"
+	resp, err := c.http.Get(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if !bufio.NewScanner(resp.Body).Scan() {
+		t.Fatal("stream didn't start")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	start := time.Now()
+	if err := env.srv.Config.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown: %v after %s", err, time.Since(start))
 	}
 }
 
