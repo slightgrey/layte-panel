@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -82,7 +83,12 @@ func newTestEnvWithAgent(t *testing.T, ag AgentCaller) *testEnv {
 		Version: "test",
 		Now:     func() time.Time { return env.now },
 	})
-	env.srv = httptest.NewServer(h)
+	// Like layte serve: live streams end when Shutdown starts.
+	env.srv = httptest.NewUnstartedServer(h)
+	stopStreams := make(chan struct{})
+	env.srv.Config.BaseContext = func(net.Listener) context.Context { return WithStopping(context.Background(), stopStreams) }
+	env.srv.Config.RegisterOnShutdown(func() { close(stopStreams) })
+	env.srv.Start()
 	t.Cleanup(env.srv.Close)
 	return env
 }
