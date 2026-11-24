@@ -19,13 +19,21 @@ export function Dialog({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Callers pass a new onClose on every render; read the latest from a ref,
+  // so the effects below don't re-run (and steal focus) while typing.
+  const close = useRef({ onClose, locked });
+  close.current = { onClose, locked };
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !locked && onClose();
+    // Skip keys a child already handled (e.g. Escape closing the editor's search box).
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && !close.current.locked && close.current.onClose();
     document.addEventListener("keydown", onKey);
-    ref.current?.querySelector<HTMLElement>("input, button")?.focus();
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, locked, onClose]);
+  }, [open]);
+  // Focus the first field once, when the dialog opens.
+  useEffect(() => {
+    if (open) ref.current?.querySelector<HTMLElement>("input, button")?.focus();
+  }, [open]);
 
   if (!open) return null;
   return (

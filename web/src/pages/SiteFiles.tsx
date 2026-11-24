@@ -1,9 +1,10 @@
 import { ArrowLeft, ChevronRight, CornerLeftUp, Download, File, FileCode, Folder, FolderPlus, Home, Lock, Pencil, Save, Trash2, Upload } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type FormEvent, lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { downloadURL, useFileActions, useFileContent, useFiles } from "@/api/files";
 import { useSite } from "@/api/sites";
 import type { FileEntry } from "@/api/types";
+import { languageFor } from "@/components/codeLanguages";
 import { SiteHeader } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { FormError } from "./AuthShell";
+
+// The code editor is big, so it loads only when a file is opened.
+const CodeEditor = lazy(() => import("@/components/CodeEditor"));
 
 const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 const editable = /\.(php|html?|css|js|mjs|json|txt|md|xml|svg|ini|conf|htaccess|env|ya?ml|log|sql|csv|ts|tsx|twig|blade\.php)$/i;
@@ -181,7 +185,7 @@ export function SiteFilesPage() {
         </CardContent>
       </Card>
 
-      <Editor siteId={siteId} path={editing} readOnly={readOnly} onClose={() => setEditing(null)} />
+      <Editor key={editing ?? ""} siteId={siteId} path={editing} readOnly={readOnly} onClose={() => setEditing(null)} />
       <NameDialog
         open={newFolder}
         title="New folder"
@@ -271,11 +275,17 @@ function NameDialog(props: { open: boolean; title: string; initial: string; onCl
 function Editor({ siteId, path, readOnly, onClose }: { siteId: number; path: string | null; readOnly: boolean; onClose: () => void }) {
   const file = useFileContent(siteId, path);
   const { save } = useFileActions(siteId);
-  const [text, setText] = useState("");
-  useEffect(() => {
-    if (file.data) setText(file.data.content);
-  }, [file.data]);
-  const dirty = file.data && text !== file.data.content;
+  // null = unchanged since it was loaded.
+  const [text, setText] = useState<string | null>(null);
+  const [cursor, setCursor] = useState({ line: 1, col: 1 });
+  const loaded = file.data?.content ?? "";
+  const current = text ?? loaded;
+  const dirty = !!file.data && current !== loaded;
+  const doSave = () => {
+    if (!readOnly && path && dirty && !save.isPending) save.mutate({ path, content: current });
+  };
+  const name = path?.split("/").pop() ?? "";
+  const lang = languageFor(name)?.name ?? "Plain text";
 
   return (
     <Dialog wide open={Boolean(path)} onClose={() => (!dirty || confirm("Discard unsaved changes?")) && onClose()} title={path ?? ""}>
@@ -285,25 +295,47 @@ function Editor({ siteId, path, readOnly, onClose }: { siteId: number; path: str
         <p className="text-sm text-destructive">{file.error.message}</p>
       ) : (
         <div className="flex flex-col gap-3">
-          <textarea
-            aria-label="File content"
-            spellCheck={false}
-            readOnly={readOnly}
-            className="h-[60vh] w-full resize-none rounded-[12px] bg-background p-3 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "s" && !readOnly) {
-                e.preventDefault();
-                save.mutate({ path: path!, content: text });
-              }
-            }}
-          />
+          <div className="overflow-hidden rounded-[12px] border border-[#181a1f] bg-[#282c34] text-[#abb2bf] shadow-inset">
+            {/* Tab bar */}
+            <div className="flex items-center border-b border-[#181a1f] bg-[#21252b] text-xs">
+              <div className="flex items-center gap-2 border-t-2 border-t-primary bg-[#282c34] px-3 py-2">
+                <FileCode className="size-3.5 text-[#61afef]" />
+                <span className="font-mono">{name}</span>
+                {dirty && <span className="size-2 rounded-full bg-[#e5c07b]" title="Unsaved changes" />}
+              </div>
+              {readOnly && (
+                <span className="ml-auto flex items-center gap-1 px-3 text-[#7f848e]">
+                  <Lock className="size-3" /> Read-only
+                </span>
+              )}
+            </div>
+            <div className="h-[62vh]">
+              <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
+                <CodeEditor
+                  value={loaded}
+                  filename={name}
+                  readOnly={readOnly}
+                  onChange={setText}
+                  onSave={doSave}
+                  onCursor={(line, col) => setCursor({ line, col })}
+                />
+              </Suspense>
+            </div>
+            {/* Status bar */}
+            <div className="flex items-center gap-4 border-t border-[#181a1f] bg-[#21252b] px-3 py-1 font-mono text-[11px] text-[#7f848e]">
+              <span>
+                Ln {cursor.line}, Col {cursor.col}
+              </span>
+              <span className="ml-auto">{lang}</span>
+              <span>UTF-8</span>
+              {!readOnly && <span className="hidden sm:inline">Ctrl+S save · Ctrl+F find</span>}
+            </div>
+          </div>
           <FormError message={save.error?.message} />
           {!readOnly && (
             <div className="flex items-center justify-end gap-2">
               {save.isSuccess && !dirty && <span className="text-xs text-muted-foreground">Saved</span>}
-              <Button disabled={!dirty || save.isPending} onClick={() => save.mutate({ path: path!, content: text })}>
+              <Button disabled={!dirty || save.isPending} onClick={doSave}>
                 <Save /> Save
               </Button>
             </div>
