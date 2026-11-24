@@ -201,3 +201,32 @@ func TestSiteUsesNginxWorkerUser(t *testing.T) {
 		t.Errorf("pool:\n%s", pool)
 	}
 }
+
+func TestWPInstallSetsPrettyPermalinks(t *testing.T) {
+	d := devDeps(t)
+	if _, err := d.siteUserCreate(ctx, agent.Actor{}, UserParams{Username: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.siteDirsCreate(ctx, agent.Actor{}, DirsParams{Username: "acme", Domain: "a.test"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := d.wpInstall(ctx, agent.Actor{}, WPInstallParams{Domain: "a.test", Username: "acme", PHPVersion: "8.3",
+		URL: "https://a.test", Title: "A", AdminUser: "admin", AdminEmail: "a@a.test", AdminPassword: "correct-horse-battery",
+		DBName: "wp_a", DBUser: "wp_a", DBPassword: "correct-horse-battery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed := false
+	for _, c := range d.Runner.(*system.FakeRunner).CallList() {
+		switch {
+		case strings.Contains(c, " core install "):
+			installed = true
+		case strings.Contains(c, " rewrite structure /%postname%/"):
+			if !installed {
+				t.Error("permalinks set before core install")
+			}
+			return
+		}
+	}
+	t.Error("permalinks not set to Post name")
+}
