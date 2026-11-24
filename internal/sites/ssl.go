@@ -16,7 +16,7 @@ import (
 )
 
 func (s *Service) siteConfig(site store.Site, ssl bool) actions.SiteConfigParams {
-	return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion, SSL: ssl}
+	return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion, SSL: ssl, PHP: site.PHPSettings}
 }
 
 func (s *Service) requireManagedActive(site store.Site) error {

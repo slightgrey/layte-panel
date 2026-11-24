@@ -37,7 +37,7 @@ server {
     access_log {{.Dir}}/logs/access.log;
     error_log  {{.Dir}}/logs/error.log;
 
-    client_max_body_size 64m;
+    client_max_body_size {{.PHP.NginxBodySize}};
 
     # Never serve dotfiles (.git, .env, .htaccess), except ACME challenges.
     location ~ /\.(?!well-known/) {
@@ -62,7 +62,7 @@ server {
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param HTTPS $https if_not_empty;
         fastcgi_pass unix:{{.Socket}};
-        fastcgi_read_timeout 300;
+        fastcgi_read_timeout {{.PHP.FastCGIReadTimeout}};
     }
 
     location ~* \.(?:css|js|jpe?g|png|gif|ico|svg|webp|avif|woff2?)$ {

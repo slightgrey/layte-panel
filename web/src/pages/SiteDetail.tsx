@@ -6,6 +6,7 @@ import { databasesKey, useDatabases } from "@/api/databases";
 import { siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
+import { PHPSettingsButton } from "@/components/PHPSettingsDialog";
 import { SiteHeader, SiteJobCard } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,7 @@ function PHPSwitch({ site }: { site: Site }) {
       >
         Switch
       </Button>
+      <PHPSettingsButton site={site} />
       {sw.error && <span className="text-xs text-destructive">{sw.error.message}</span>}
     </div>
   );

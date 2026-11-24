@@ -94,8 +94,19 @@ export interface Site {
   nginx_conf: string;
   fpm_pool: string;
   cert_path: string;
+  /** PHP settings (sites Layte created); empty fields mean the defaults. */
+  php_settings: PHPSettings;
   created_at: string;
   updated_at: string;
+}
+
+/** PUT /sites/{id}/php-settings. Sizes like "256M" or "1G". */
+export interface PHPSettings {
+  memory_limit?: string;
+  /** upload_max_filesize and post_max_size (and nginx's client_max_body_size). */
+  upload_max?: string;
+  max_execution_time?: number;
+  max_input_vars?: number;
 }
 
 export interface SitesResponse {
