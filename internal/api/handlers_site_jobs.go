@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"github.com/slightgrey/layte-panel/internal/phpini"
 	"net/http"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -60,6 +61,24 @@ func (s *server) handleSwitchPHP(w http.ResponseWriter, r *http.Request) {
 	jobID, err := s.sites.SwitchPHP(r.Context(), actorOf(r), site, req.Version)
 	if err != nil {
 		s.writeSiteError(w, "switch php", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
+// PUT /api/v1/sites/{id}/php-settings {memory_limit, upload_max, max_execution_time, max_input_vars} — 202 {job_id}.
+func (s *server) handleSetPHPSettings(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req phpini.Settings
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.SetPHPSettings(r.Context(), actorOf(r), site, req)
+	if err != nil {
+		s.writeSiteError(w, "php settings", err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})

@@ -192,7 +192,7 @@ func (u undoStack) run(j *jobs.Job) bool {
 func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor, site store.Site, aliases []string, wp *WordPressFields) (err error) {
 	var undo undoStack
 	call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
-	cfg := actions.SiteConfigParams{Domain: site.Domain, Aliases: aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion}
+	cfg := actions.SiteConfigParams{Domain: site.Domain, Aliases: aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion, PHP: site.PHPSettings}
 
 	defer func() {
 		if err == nil {

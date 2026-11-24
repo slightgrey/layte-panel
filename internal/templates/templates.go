@@ -7,6 +7,8 @@ import (
 	"embed"
 	"fmt"
 	"text/template"
+
+	"github.com/slightgrey/layte-panel/internal/phpini"
 )
 
 //go:embed *.tmpl
@@ -23,6 +25,7 @@ type Site struct {
 	PHPVersion string
 	SSL        bool   // serve HTTPS with the Let's Encrypt cert CertName()
 	WebUser    string // nginx's worker user, owns the FPM socket ("" = www-data)
+	PHP        phpini.Settings
 }
 
 // CertName is the certbot certificate name Layte uses for the site. The

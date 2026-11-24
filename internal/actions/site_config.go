@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/slightgrey/layte-panel/internal/phpini"
 	"regexp"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -19,6 +20,8 @@ type SiteConfigParams struct {
 	Username   string   `json:"username"`
 	PHPVersion string   `json:"php_version"`
 	SSL        bool     `json:"ssl,omitempty"`
+	// PHP settings for the pool (and the vhost's upload size / timeout).
+	PHP phpini.Settings `json:"php,omitempty"`
 }
 
 func (p SiteConfigParams) Validate() error {
@@ -37,11 +40,17 @@ func (p SiteConfigParams) Validate() error {
 	if err := validate.SiteUsername(p.Username); err != nil {
 		return err
 	}
+	if err := p.PHP.Validate(); err != nil {
+		return err
+	}
+	if p.PHP != p.PHP.Normalize() {
+		return fmt.Errorf("php settings must be in normalised form")
+	}
 	return validate.PHPVersion(p.PHPVersion, []string{p.PHPVersion}) // format; installed is checked in the handler
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP}
 }
 
 // requireInstalledPHP checks the version against what's really installed.

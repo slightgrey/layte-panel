@@ -91,6 +91,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
 	mux.Handle("DELETE /api/v1/sites/{id}", authed(s.handleDeleteSite))
 	mux.Handle("POST /api/v1/sites/{id}/php", authed(s.handleSwitchPHP))
+	mux.Handle("PUT /api/v1/sites/{id}/php-settings", authed(s.handleSetPHPSettings))
 	mux.Handle("GET /api/v1/sites/{id}/adopt", authed(s.handleAdoptPreview))
 	mux.Handle("POST /api/v1/sites/{id}/adopt", authed(s.handleAdopt))
 	mux.Handle("POST /api/v1/sites/{id}/ssl", authed(s.handleIssueSSL))

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/slightgrey/layte-panel/internal/phpini"
 	"github.com/slightgrey/layte-panel/internal/system"
 )
 
@@ -18,6 +19,8 @@ func TestGolden(t *testing.T) {
 	site := Site{Domain: "example.com", Aliases: []string{"www.example.com"}, User: "examplecom", PHPVersion: "8.3"}
 	sslSite := site
 	sslSite.SSL = true
+	tuned := site
+	tuned.PHP = phpini.Settings{MemoryLimit: "512M", UploadMax: "1G", MaxExecutionTime: 600, MaxInputVars: 5000}
 	tests := []struct {
 		golden string
 		render func(Site) ([]byte, error)
@@ -25,6 +28,8 @@ func TestGolden(t *testing.T) {
 		{"nginx-site.golden", Vhost},
 		{"nginx-site-ssl.golden", func(Site) ([]byte, error) { return Vhost(sslSite) }},
 		{"fpm-pool.golden", Pool},
+		{"fpm-pool-php-settings.golden", func(Site) ([]byte, error) { return Pool(tuned) }},
+		{"nginx-site-php-settings.golden", func(Site) ([]byte, error) { return Vhost(tuned) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {
