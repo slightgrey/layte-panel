@@ -159,6 +159,11 @@ func (d Deps) wpInstall(ctx context.Context, _ agent.Actor, p WPInstallParams) (
 		"--admin_user="+p.AdminUser, "--admin_email="+p.AdminEmail, "--skip-email", "--prompt=admin_password"); err != nil {
 		return nil, err
 	}
+	// WordPress defaults to "Plain" permalinks, which breaks /wp-json/ URLs
+	// (REST API clients get the homepage). Use "Post name" like other hosts.
+	if err := wp("", "rewrite", "structure", "/%postname%/"); err != nil {
+		return nil, err
+	}
 	d.FS.Chmod(public+"/wp-config.php", 0o640)
 	return map[string]string{"path": public, "wp_cli": wpCLIVersion}, nil
 }
