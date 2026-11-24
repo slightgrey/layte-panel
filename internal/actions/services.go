@@ -49,7 +49,9 @@ func (d Deps) servicesStatus(ctx context.Context, _ agent.Actor, _ agent.NoParam
 	return parseSystemctlShow(string(res.Stdout)), nil
 }
 
-// phpVersions lists installed PHP-FPM versions ("8.3") from /etc/php/*/fpm.
+// phpVersions lists installed PHP-FPM versions ("8.3"): an /etc/php/X.Y/fpm
+// directory plus the /usr/sbin/php-fpmX.Y binary. Removing the packages can
+// leave config files behind in /etc/php, so the directory alone isn't proof.
 func (d Deps) phpVersions() ([]string, error) {
 	dirs, err := d.FS.Glob("/etc/php/*/fpm")
 	if err != nil {
@@ -58,7 +60,10 @@ func (d Deps) phpVersions() ([]string, error) {
 	var out []string
 	for _, dir := range dirs {
 		v := path.Base(path.Dir(dir))
-		if phpVersionRe.MatchString(v) {
+		if !phpVersionRe.MatchString(v) {
+			continue
+		}
+		if ok, _ := d.FS.Exists(phpFPMBin(v)); ok {
 			out = append(out, v)
 		}
 	}

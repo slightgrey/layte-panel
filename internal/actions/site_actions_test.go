@@ -230,3 +230,18 @@ func TestWPInstallSetsPrettyPermalinks(t *testing.T) {
 	}
 	t.Error("permalinks not set to Post name")
 }
+
+func TestPHPVersionsIgnoresLeftoverConfig(t *testing.T) {
+	d := devDeps(t)
+	// Packages removed, config left behind: no php-fpm8.1 binary.
+	if err := d.FS.MkdirAll("/etc/php/8.1/fpm/pool.d", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.phpVersions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "8.2,8.3" {
+		t.Errorf("phpVersions = %v, want [8.2 8.3]", got)
+	}
+}
