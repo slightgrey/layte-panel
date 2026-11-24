@@ -1,5 +1,4 @@
 import { Bug, Power } from "lucide-react";
-import { useLogSources } from "@/api/logs";
 import { useSetWPDebug, useWPDebug } from "@/api/sites";
 import type { LogSource, Site } from "@/api/types";
 import { LogViewer } from "@/components/LogViewer";
@@ -37,13 +36,11 @@ function WPDebugTab({ site }: { site: Site }) {
 function DebugPanel({ site }: { site: Site }) {
   const debug = useWPDebug(site.id);
   const set = useSetWPDebug(site.id);
-  const sources = useLogSources();
 
   if (debug.isPending) return <Spinner />;
   if (debug.error) return <p className="text-sm text-destructive">{debug.error.message}</p>;
 
   const { enabled, log_path: logPath } = debug.data;
-  const logExists = !!logPath && (sources.data?.sources ?? []).some((s) => s.path === logPath);
   const source: LogSource | null = logPath ? { path: logPath, label: "WP debug log", domain: site.domain, site_id: site.id } : null;
 
   return (
@@ -80,7 +77,7 @@ function DebugPanel({ site }: { site: Site }) {
         </CardContent>
       </Card>
 
-      {source && (enabled || logExists) && (
+      {source && enabled && (
         <LogViewer sources={[source]} path={source.path} onPathChange={() => {}} heightClass="h-[55vh]" />
       )}
     </>
