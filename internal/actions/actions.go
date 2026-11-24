@@ -74,6 +74,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("site.adopt_preview", true, 30*time.Second, d.adoptPreview),
 		agent.Def("system.processes", true, 15*time.Second, d.systemProcesses),
 		agent.Def("system.disk_breakdown", true, 3*time.Minute, d.diskBreakdown),
+		agent.Def("wp.debug_get", true, 30*time.Second, d.wpDebugGet),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
@@ -92,6 +93,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("wp.install", false, 5*time.Minute, d.wpInstall),
 		agent.Def("wp.set_url", false, time.Minute, d.wpSetURL),
 		agent.Def("wp.login_token", false, time.Minute, d.wpLoginToken),
+		agent.Def("wp.debug_set", false, 2*time.Minute, d.wpDebugSet),
 		agent.Def("ssl.issue", false, 3*time.Minute, d.sslIssue),
 		agent.Def("ssl.revoke", false, time.Minute, d.sslRevoke),
 		agent.Def("ssl.renew", false, 3*time.Minute, d.sslRenew),

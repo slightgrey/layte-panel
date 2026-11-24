@@ -33,28 +33,41 @@ const nginxDir = "/etc/nginx"
 var phpSocketRe = regexp.MustCompile(`php([0-9]+\.[0-9]+)-fpm\.sock$|php([0-9]+\.[0-9]+)\.sock$`)
 
 // sitesDiscover scans enabled nginx configs (read-only) and returns sites.
-func (d Deps) sitesDiscover(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any, error) {
-	var files []string
+// vhostConfigs lists the nginx files that define sites (sites-enabled and
+// conf.d), resolved to their real paths inside /etc/nginx. Backups, editor
+// leftovers and the panel's own vhost are skipped.
+func (d Deps) vhostConfigs() ([]string, error) {
+	var out []string
 	for _, pattern := range []string{nginxDir + "/sites-enabled/*", nginxDir + "/conf.d/*.conf"} {
 		m, err := d.FS.Glob(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("glob %s: %w", pattern, err)
 		}
-		files = append(files, m...)
+		for _, f := range m {
+			base := path.Base(f)
+			if strings.HasPrefix(base, ".") || strings.HasSuffix(base, ".layte-bak") || strings.HasSuffix(base, "~") || base == "layte-panel.conf" {
+				continue
+			}
+			real, err := d.FS.Resolve(f)
+			if err != nil || !strings.HasPrefix(real, nginxDir+"/") {
+				continue // dangling link, or a link pointing outside /etc/nginx
+			}
+			out = append(out, real)
+		}
+	}
+	return out, nil
+}
+
+func (d Deps) sitesDiscover(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any, error) {
+	files, err := d.vhostConfigs()
+	if err != nil {
+		return nil, err
 	}
 	pools := d.poolSockets()
 
 	byDomain := map[string]*DiscoveredSite{}
 	var order []string
-	for _, f := range files {
-		base := path.Base(f)
-		if strings.HasPrefix(base, ".") || strings.HasSuffix(base, ".layte-bak") || strings.HasSuffix(base, "~") || base == "layte-panel.conf" {
-			continue
-		}
-		real, err := d.FS.Resolve(f)
-		if err != nil || !strings.HasPrefix(real, nginxDir+"/") {
-			continue // dangling link, or a link pointing outside /etc/nginx
-		}
+	for _, real := range files {
 		b, err := d.FS.ReadFile(real)
 		if err != nil {
 			continue

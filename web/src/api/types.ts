@@ -203,6 +203,13 @@ export interface LogSource {
   site_id?: number;
 }
 
+/** GET/PUT /sites/{id}/wp-debug */
+export interface WPDebugState {
+  enabled: boolean;
+  /** Where WordPress debug messages go ("" if unknown). */
+  log_path: string;
+}
+
 export interface LogSourcesResponse {
   sources: LogSource[];
 }

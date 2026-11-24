@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { AdoptPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, Site, SitesResponse, ScanResponse, Vhost } from "./types";
+import type { AdoptPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
 
 /** POST /sites: starts a creation job. */
 export function useCreateSite() {
@@ -105,3 +105,26 @@ export function useAdoptSite(id: number) {
   });
 }
 
+
+export const wpDebugKey = (id: number) => ["sites", id, "wp-debug"] as const;
+
+/** GET /sites/{id}/wp-debug: is WP_DEBUG on, and where do its messages go. */
+export function useWPDebug(id: number, enabled = true) {
+  return useQuery({
+    queryKey: wpDebugKey(id),
+    queryFn: () => api<WPDebugState>("GET", `/sites/${id}/wp-debug`),
+    enabled: enabled && id > 0,
+  });
+}
+
+/** PUT /sites/{id}/wp-debug: turn WP Debug on or off. */
+export function useSetWPDebug(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => api<WPDebugState>("PUT", `/sites/${id}/wp-debug`, { enabled }),
+    onSuccess: (state) => {
+      qc.setQueryData(wpDebugKey(id), state);
+      qc.invalidateQueries({ queryKey: ["logs", "sources"] }); // the log file may be new
+    },
+  });
+}

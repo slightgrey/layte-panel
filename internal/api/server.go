@@ -99,6 +99,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
 	mux.Handle("GET /api/v1/sites/{id}/wp-admin", authed(s.handleWPAdmin))
 	mux.Handle("GET /api/v1/wp-admin.js", authed(s.handleWPAdminScript))
+	mux.Handle("GET /api/v1/sites/{id}/wp-debug", authed(s.handleGetWPDebug))
+	mux.Handle("PUT /api/v1/sites/{id}/wp-debug", authed(s.handleSetWPDebug))
 
 	// Files (session only).
 	mux.Handle("GET /api/v1/sites/{id}/files", authed(s.handleListFiles))
