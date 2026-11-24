@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 )
 
@@ -19,10 +20,11 @@ func TestSitePHPSettings(t *testing.T) {
 		t.Errorf("new site: %+v", site.PHPSettings)
 	}
 	site.PHPSettings = phpini.Settings{MemoryLimit: "512M", UploadMax: "128M", MaxExecutionTime: 120, MaxInputVars: 5000}
+	site.PageCache = pagecache.Settings{Enabled: true, TTLMinutes: 30}
 	if err := st.UpdateSite(ctx, site); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := st.SiteByID(ctx, id); got.PHPSettings != site.PHPSettings {
-		t.Errorf("saved %+v, got %+v", site.PHPSettings, got.PHPSettings)
+	if got, _ := st.SiteByID(ctx, id); got.PHPSettings != site.PHPSettings || got.PageCache != site.PageCache {
+		t.Errorf("saved %+v %+v, got %+v %+v", site.PHPSettings, site.PageCache, got.PHPSettings, got.PageCache)
 	}
 }

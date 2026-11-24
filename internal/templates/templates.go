@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"text/template"
 
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 )
 
@@ -26,7 +27,12 @@ type Site struct {
 	SSL        bool   // serve HTTPS with the Let's Encrypt cert CertName()
 	WebUser    string // nginx's worker user, owns the FPM socket ("" = www-data)
 	PHP        phpini.Settings
+	Cache      pagecache.Settings // page cache (nginx FastCGI cache)
 }
+
+// CacheDir is the site's page cache folder; CacheZone its nginx zone name.
+func (s Site) CacheDir() string  { return pagecache.Dir(s.Domain) }
+func (s Site) CacheZone() string { return pagecache.Zone(s.Domain) }
 
 // CertName is the certbot certificate name Layte uses for the site. The
 // "layte-" prefix keeps it apart from certificates the admin made by hand.

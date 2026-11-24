@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 	"github.com/slightgrey/layte-panel/internal/system"
 )
@@ -19,6 +20,8 @@ func TestGolden(t *testing.T) {
 	site := Site{Domain: "example.com", Aliases: []string{"www.example.com"}, User: "examplecom", PHPVersion: "8.3"}
 	sslSite := site
 	sslSite.SSL = true
+	cached := sslSite
+	cached.Cache = pagecache.Settings{Enabled: true, TTLMinutes: 30}
 	tuned := site
 	tuned.PHP = phpini.Settings{MemoryLimit: "512M", UploadMax: "1G", MaxExecutionTime: 600, MaxInputVars: 5000}
 	tests := []struct {
@@ -30,6 +33,7 @@ func TestGolden(t *testing.T) {
 		{"fpm-pool.golden", Pool},
 		{"fpm-pool-php-settings.golden", func(Site) ([]byte, error) { return Pool(tuned) }},
 		{"nginx-site-php-settings.golden", func(Site) ([]byte, error) { return Vhost(tuned) }},
+		{"nginx-site-cache.golden", func(Site) ([]byte, error) { return Vhost(cached) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {

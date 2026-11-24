@@ -6,6 +6,7 @@ import { databasesKey, useDatabases } from "@/api/databases";
 import { siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
+import { PageCacheCard } from "@/components/PageCacheCard";
 import { PHPSettingsButton } from "@/components/PHPSettingsDialog";
 import { SiteHeader, SiteJobCard } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
@@ -78,6 +79,7 @@ export function SiteDetailPage() {
       )}
 
       <OverviewCard site={s} />
+      {s.managed && s.wordpress && <PageCacheCard site={s} />}
       <VhostCard site={s} />
     </div>
   );

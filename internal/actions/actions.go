@@ -94,6 +94,8 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("wp.set_url", false, time.Minute, d.wpSetURL),
 		agent.Def("wp.login_token", false, time.Minute, d.wpLoginToken),
 		agent.Def("wp.debug_set", false, 2*time.Minute, d.wpDebugSet),
+		agent.Def("cache.purge", false, time.Minute, d.cachePurge),
+		agent.Def("cache.plugin", false, 30*time.Second, d.cachePlugin),
 		agent.Def("ssl.issue", false, 3*time.Minute, d.sslIssue),
 		agent.Def("ssl.revoke", false, time.Minute, d.sslRevoke),
 		agent.Def("ssl.renew", false, 3*time.Minute, d.sslRenew),

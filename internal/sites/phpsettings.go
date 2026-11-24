@@ -33,8 +33,9 @@ func (s *Service) SetPHPSettings(ctx context.Context, actor agent.Actor, site st
 	vhostToo := next.NginxBodySize() != old.NginxBodySize() || next.FastCGIReadTimeout() != old.FastCGIReadTimeout()
 
 	cfg := func(p phpini.Settings) actions.SiteConfigParams {
-		return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser,
-			PHPVersion: site.PHPVersion, SSL: site.SSL, PHP: p}
+		c := s.siteConfig(site, site.SSL)
+		c.PHP = p
+		return c
 	}
 	jobID, err := s.Jobs.Start("site.php_settings", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) (err error) {
 		var undo undoStack

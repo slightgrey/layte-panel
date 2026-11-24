@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 	"net/http"
 
@@ -82,6 +83,37 @@ func (s *server) handleSetPHPSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
+// PUT /api/v1/sites/{id}/page-cache {enabled, ttl_minutes} — 202 {job_id}.
+func (s *server) handleSetPageCache(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req pagecache.Settings
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.SetPageCache(r.Context(), actorOf(r), site, req)
+	if err != nil {
+		s.writeSiteError(w, "page cache", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
+// POST /api/v1/sites/{id}/page-cache/purge — delete the cached pages now.
+func (s *server) handlePurgeCache(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	if err := s.sites.PurgeCache(r.Context(), actorOf(r), site); err != nil {
+		s.writeSiteError(w, "purge cache", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DELETE /api/v1/sites/{id} {confirm_domain, remove_files, drop_db} — 202 {job_id}.

@@ -216,6 +216,7 @@ func fakeWP(root system.FS, c system.Cmd) (system.Result, error) {
 	case strings.Contains(args, " core download"):
 		root.WriteFileAtomic(path+"/index.php", []byte("<?php // fake WordPress (dev mode)\n"), 0o644)
 		root.WriteFileAtomic(path+"/wp-load.php", []byte("<?php\n"), 0o644)
+		root.MkdirAll(path+"/wp-content/plugins", 0o755)
 	case strings.Contains(args, " config create"):
 		if !bytes.HasSuffix(c.Stdin, []byte("\n")) {
 			return system.Result{}, fmt.Errorf("wp config create: expected password on stdin")

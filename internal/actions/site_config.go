@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 	"regexp"
 
@@ -22,6 +23,8 @@ type SiteConfigParams struct {
 	SSL        bool     `json:"ssl,omitempty"`
 	// PHP settings for the pool (and the vhost's upload size / timeout).
 	PHP phpini.Settings `json:"php,omitempty"`
+	// Page cache (nginx FastCGI cache) in the vhost.
+	Cache pagecache.Settings `json:"cache,omitempty"`
 }
 
 func (p SiteConfigParams) Validate() error {
@@ -43,6 +46,9 @@ func (p SiteConfigParams) Validate() error {
 	if err := p.PHP.Validate(); err != nil {
 		return err
 	}
+	if err := p.Cache.Validate(); err != nil {
+		return err
+	}
 	if p.PHP != p.PHP.Normalize() {
 		return fmt.Errorf("php settings must be in normalised form")
 	}
@@ -50,7 +56,7 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache}
 }
 
 // requireInstalledPHP checks the version against what's really installed.
@@ -163,6 +169,12 @@ func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigPa
 	content, err := templates.Vhost(p.site())
 	if err != nil {
 		return nil, err
+	}
+	if p.Cache.Enabled {
+		// nginx creates the site's cache folder itself, but not its parents.
+		if err := d.FS.MkdirAll(pagecache.Root, 0o755); err != nil {
+			return nil, fmt.Errorf("create %s: %w", pagecache.Root, err)
+		}
 	}
 	path, link := d.vhostFiles(p.Domain)
 	err = system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{

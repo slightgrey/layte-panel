@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { AdoptPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, PHPSettings, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
+import type { AdoptPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, PageCache, PHPSettings, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
 
 /** POST /sites: starts a creation job. */
 export function useCreateSite() {
@@ -22,6 +22,20 @@ export function useSwitchPHP(id: number) {
 export function useSetPHPSettings(id: number) {
   return useMutation({
     mutationFn: (settings: PHPSettings) => api<JobStarted>("PUT", `/sites/${id}/php-settings`, settings),
+  });
+}
+
+/** PUT /sites/{id}/page-cache: starts a job that turns the page cache on/off. */
+export function useSetPageCache(id: number) {
+  return useMutation({
+    mutationFn: (cache: PageCache) => api<JobStarted>("PUT", `/sites/${id}/page-cache`, cache),
+  });
+}
+
+/** POST /sites/{id}/page-cache/purge: delete the cached pages now. */
+export function usePurgeCache(id: number) {
+  return useMutation({
+    mutationFn: () => api<void>("POST", `/sites/${id}/page-cache/purge`),
   });
 }
 
