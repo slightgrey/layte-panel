@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"slices"
 	"strings"
 	"time"
@@ -192,7 +193,8 @@ func (u undoStack) run(j *jobs.Job) bool {
 func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor, site store.Site, aliases []string, wp *WordPressFields) (err error) {
 	var undo undoStack
 	call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
-	cfg := actions.SiteConfigParams{Domain: site.Domain, Aliases: aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion, PHP: site.PHPSettings}
+	cfg := s.siteConfig(site, false) // HTTPS comes later, in its own step
+	cfg.Aliases = aliases
 
 	defer func() {
 		if err == nil {
@@ -322,6 +324,12 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		j.Step("Remove nginx config")
 		if err := call("nginx.vhost_remove", actions.DomainParams{Domain: site.Domain}); err != nil {
 			return fail(err)
+		}
+		if site.PageCache.Enabled {
+			j.Step("Remove cached pages")
+			if err := call("cache.purge", actions.CacheParams{Domain: site.Domain, Username: site.SystemUser, Remove: true}); err != nil {
+				j.Log("Warning: couldn't delete the cached pages in %s (%v).", pagecache.Dir(site.Domain), err)
+			}
 		}
 		j.Step("Remove cron jobs")
 		if err := call("cron.write", actions.CronWriteParams{Domain: site.Domain, Username: site.SystemUser}); err != nil {

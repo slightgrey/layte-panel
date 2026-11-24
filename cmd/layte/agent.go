@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -51,6 +52,10 @@ func runAgent(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Page cache: purge a site's cache soon after WordPress content changes
+	// (its must-use plugin leaves a marker file; see actions.WatchCachePurges).
+	go deps.WatchCachePurges(ctx, 15*time.Second, log)
 
 	srv := &agent.Server{
 		Registry:   reg,

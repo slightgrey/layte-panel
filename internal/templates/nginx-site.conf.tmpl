@@ -1,4 +1,8 @@
 # Managed by Layte Panel — do not edit by hand (site: {{.Domain}})
+{{- if .Cache.Enabled}}
+# Page cache: finished pages are kept here and served without PHP.
+fastcgi_cache_path {{.CacheDir}} levels=1:2 keys_zone={{.CacheZone}}:2m max_size=256m inactive={{.Cache.TTL}}m use_temp_path=off;
+{{- end}}
 {{- if .SSL}}
 # HTTP: only ACME challenges (renewals); everything else goes to HTTPS.
 server {
@@ -38,6 +42,25 @@ server {
     error_log  {{.Dir}}/logs/error.log;
 
     client_max_body_size {{.PHP.NginxBodySize}};
+{{- if .Cache.Enabled}}
+
+    # Never cache: form posts, URLs with a query, admin/login/API/feeds,
+    # WooCommerce cart pages, and visitors who are logged in, commented, or
+    # have something in the cart.
+    set $layte_skip_cache 0;
+    if ($request_method = POST) {
+        set $layte_skip_cache 1;
+    }
+    if ($query_string != "") {
+        set $layte_skip_cache 1;
+    }
+    if ($request_uri ~* "/wp-admin/|/wp-json/|/xmlrpc\.php|wp-.*\.php|/feed/|sitemap(_index)?\.xml|/cart/|/checkout/|/my-account/") {
+        set $layte_skip_cache 1;
+    }
+    if ($http_cookie ~* "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_no_cache|wordpress_logged_in|woocommerce_items_in_cart|woocommerce_cart_hash|wp_woocommerce_session") {
+        set $layte_skip_cache 1;
+    }
+{{- end}}
 
     # Never serve dotfiles (.git, .env, .htaccess), except ACME challenges.
     location ~ /\.(?!well-known/) {
@@ -63,6 +86,17 @@ server {
         fastcgi_param HTTPS $https if_not_empty;
         fastcgi_pass unix:{{.Socket}};
         fastcgi_read_timeout {{.PHP.FastCGIReadTimeout}};
+{{- if .Cache.Enabled}}
+
+        fastcgi_cache {{.CacheZone}};
+        fastcgi_cache_key "$scheme$request_method$host$request_uri";
+        fastcgi_cache_valid 200 301 302 {{.Cache.TTL}}m;
+        fastcgi_cache_use_stale error timeout updating invalid_header http_500 http_503;
+        fastcgi_cache_lock on;
+        fastcgi_cache_bypass $layte_skip_cache;
+        fastcgi_no_cache $layte_skip_cache;
+        add_header X-Layte-Cache $upstream_cache_status always;
+{{- end}}
     }
 
     location ~* \.(?:css|js|jpe?g|png|gif|ico|svg|webp|avif|woff2?)$ {

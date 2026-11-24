@@ -15,8 +15,11 @@ import (
 	"github.com/slightgrey/layte-panel/internal/validate"
 )
 
+// siteConfig is what the agent needs to render a managed site's vhost and
+// pool. Every rewrite goes through here, so none of them drops a setting.
 func (s *Service) siteConfig(site store.Site, ssl bool) actions.SiteConfigParams {
-	return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion, SSL: ssl, PHP: site.PHPSettings}
+	return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion,
+		SSL: ssl, PHP: site.PHPSettings, Cache: site.PageCache}
 }
 
 func (s *Service) requireManagedActive(site store.Site) error {

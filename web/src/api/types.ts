@@ -96,6 +96,8 @@ export interface Site {
   cert_path: string;
   /** PHP settings (sites Layte created); empty fields mean the defaults. */
   php_settings: PHPSettings;
+  /** Page cache (nginx FastCGI cache; WordPress sites Layte created). */
+  page_cache: PageCache;
   created_at: string;
   updated_at: string;
 }
@@ -107,6 +109,13 @@ export interface PHPSettings {
   upload_max?: string;
   max_execution_time?: number;
   max_input_vars?: number;
+}
+
+/** PUT /sites/{id}/page-cache */
+export interface PageCache {
+  enabled?: boolean;
+  /** Minutes a cached page stays fresh (0/absent = 60). */
+  ttl_minutes?: number;
 }
 
 export interface SitesResponse {
