@@ -51,7 +51,7 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `Layte Panel — a lightweight control panel for unmanaged VPS.
+	fmt.Fprint(w, `Layte Panel — a lightweight control panel for PHP and WordPress sites on an unmanaged VPS.
 
 Usage:
   layte serve   [--config PATH] [--dev]

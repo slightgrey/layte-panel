@@ -1,6 +1,6 @@
 # CLAUDE.md — Layte Panel
 
-**Layte Panel** — a lightweight control panel for unmanaged VPS. *By Web of D.*
+**Layte Panel** — a lightweight control panel for PHP and WordPress sites on an unmanaged VPS. *By Web of D.*
 
 Open-source, self-hosted server control panel for WordPress/PHP servers (a cPanel/SpinupWP/RunCloud alternative).
 Ships as **one Go binary** with the React UI embedded inside it. Anyone can install it on their own Ubuntu server.

@@ -1,6 +1,6 @@
 # Layte Panel
 
-**A lightweight control panel for unmanaged VPS.** *By Web of D.*
+**A lightweight control panel for PHP and WordPress sites on an unmanaged VPS.** *By Web of D.*
 
 Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on your own Ubuntu server. It ships as one Go binary (about 12 MB) with the web UI built in, and uses about 15 MB of RAM, so it runs even on low-resource servers: 1 GB of RAM is the minimum.
 
