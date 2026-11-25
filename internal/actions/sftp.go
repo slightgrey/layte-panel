@@ -65,7 +65,7 @@ const sftpRules = `    ChrootDirectory ` + sftpJailRoot + `/%u
 // sftpConfig is the sshd drop-in. sshd uses the first value it finds for
 // each setting, so the password group's block comes first.
 const sftpConfig = system.Marker + ` — do not edit by hand
-# SFTP logins for sites (site → Files → SFTP). Members of ` + sftpGroup + ` are
+# SFTP logins for sites (site → Files & SFTP). Members of ` + sftpGroup + ` are
 # jailed to their site's folder with SFTP only; members of ` + sftpPasswordGroup + `
 # may also use a password. No other login is affected.
 Match Group ` + sftpPasswordGroup + `

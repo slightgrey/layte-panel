@@ -2,7 +2,7 @@
 
 Each site Layte created or adopted can get its own **SFTP login**: it only reaches that site's folder and works as the site's own Linux user, so files you upload keep the right owner and WordPress can still update them.
 
-Turn it on under **site → Files → SFTP access**.
+Turn it on under **site → Files & SFTP → SFTP access**.
 
 ## Connecting
 | Setting | Value |
