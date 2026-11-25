@@ -88,8 +88,8 @@ function DebugPanel({ site }: { site: Site }) {
         <Spinner />
       ) : (
         <Notice>
-          Layte Panel can't show <span className="font-mono text-xs">{logPath}</span> here: it's outside the folders the panel may read
-          (or it doesn't exist yet). Open it over SSH instead.
+          Layte Panel can't show <span className="font-mono text-xs">{logPath}</span> here yet. Either PHP hasn't written to it
+          (turn WP Debug off and on again to create it), or it's outside the folders the panel may read; then open it over SSH.
         </Notice>
       ))}
     </>

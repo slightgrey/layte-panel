@@ -139,3 +139,36 @@ func TestLogSourcesIncludePoolErrorLog(t *testing.T) {
 	}
 	t.Errorf("pool error log not listed: %+v", out)
 }
+
+// After a takeover the pool logs to /home/<user>/logs/php-error.log, which PHP
+// only creates with its first message: WP Debug creates it, so the panel can
+// follow it right away.
+func TestWPDebugCreatesTakenOverLog(t *testing.T) {
+	d := devDeps(t)
+	adoptedWPShop(t, d)
+	if _, err := takeoverShop(t, d); err != nil {
+		t.Fatal(err)
+	}
+	const log = "/home/shopexampleorg/logs/php-error.log"
+	if ok, _ := d.FS.Exists(log); ok {
+		t.Fatal("log exists before WP Debug")
+	}
+	out, err := d.wpDebugSet(ctx, agent.Actor{}, WPDebugSetParams{WPLoginParams: shopLogin, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.(WPDebugState).LogPath != log {
+		t.Errorf("log path %q", out.(WPDebugState).LogPath)
+	}
+	if ok, _ := d.FS.Exists(log); !ok {
+		t.Fatal("log not created")
+	}
+	srcs, _ := d.logsSources(ctx, agent.Actor{}, agent.NoParams{})
+	found := false
+	for _, s := range srcs.([]LogSource) {
+		found = found || s.Path == log
+	}
+	if !found {
+		t.Errorf("%s isn't a log source: %+v", log, srcs)
+	}
+}

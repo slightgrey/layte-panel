@@ -239,5 +239,15 @@ func (d Deps) wpDebugSet(ctx context.Context, _ agent.Actor, p WPDebugSetParams)
 			d.FileOps.Run(ctx, s.as, fileops.Request{Op: "write", Root: s.root, Path: logs, Final: true})
 		}
 	}
+	// Adopted sites log to their pool's PHP error log; PHP creates it only
+	// with the first message. If it's in the site user's home (as after a
+	// takeover), create it now as the site user, so the panel can follow it.
+	home := "/home/" + p.Username + "/"
+	if p.Enabled && !s.setLog && strings.HasPrefix(s.logPath, home) && logAllowed(s.logPath) {
+		rel := strings.TrimPrefix(s.logPath, home)
+		if st, err := d.FileOps.Run(ctx, s.as, fileops.Request{Op: "stat", Root: home, Path: rel}); err == nil && st.Entry == nil {
+			d.FileOps.Run(ctx, s.as, fileops.Request{Op: "write", Root: home, Path: rel, Final: true})
+		}
+	}
 	return WPDebugState{Enabled: p.Enabled, LogPath: s.logPath}, nil
 }
