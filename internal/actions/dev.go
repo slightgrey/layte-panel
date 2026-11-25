@@ -159,7 +159,7 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		case c.Bin == chownBin:
 			return system.Result{}, nil // the fake root doesn't track owners
 		case c.Bin == aptGetBin:
-			return fakeAptGet(cmds, args)
+			return fakeAptGet(root, cmds, args)
 		case c.Bin == needrestartBin:
 			return system.Result{Stdout: []byte("NEEDRESTART-VER: 3.6\nNEEDRESTART-KSTA: 1\n")}, nil
 		case c.Bin == duBin:
@@ -180,6 +180,14 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{}, nil
 		case c.Bin == sshdBin && len(args) > 0 && args[0] == "-T":
 			return system.Result{Stdout: []byte("port 22\npasswordauthentication yes\n")}, nil
+		case c.Bin == redisCliBin:
+			switch {
+			case slices.Contains(args, "DBSIZE"):
+				return system.Result{Stdout: []byte("42\n")}, nil
+			case slices.Contains(args, "INFO"):
+				return system.Result{Stdout: []byte("# Memory\r\nused_memory:1572864\r\n")}, nil
+			}
+			return system.Result{Stdout: []byte("OK\n")}, nil
 		case c.Bin == mountpointBin:
 			return system.Result{}, &system.ExitError{Bin: c.Bin, ExitCode: 1} // nothing is mounted in dev
 		case strings.HasPrefix(c.Bin, "/usr/bin/php") && len(args) > 0 && strings.HasSuffix(args[0], ".phar"):
@@ -240,7 +248,7 @@ func fakeDu(root system.FS, c system.Cmd) system.Result {
 
 // fakeAptGet answers apt-get in dev mode: simulations from fixtures, and a
 // pretend install/update that changes nothing.
-func fakeAptGet(cmds fs.FS, args []string) (system.Result, error) {
+func fakeAptGet(root system.FS, cmds fs.FS, args []string) (system.Result, error) {
 	switch {
 	case slices.Contains(args, "--simulate") && slices.Contains(args, "install"):
 		b, err := fs.ReadFile(cmds, "apt-get-sim-install-kept.txt")
@@ -250,6 +258,19 @@ func fakeAptGet(cmds fs.FS, args []string) (system.Result, error) {
 		return system.Result{Stdout: b}, err
 	case slices.Contains(args, "update"):
 		return system.Result{Stdout: []byte("Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\nReading package lists...\n")}, nil
+	}
+	if slices.Contains(args, "install") && !slices.Contains(args, "--only-upgrade") {
+		// Packages the object cache installs: leave the files they'd create.
+		for _, a := range args {
+			if a == "redis-server" {
+				root.MkdirAll("/usr/bin", 0o755)
+				root.WriteFileAtomic(redisServerBin, []byte("#!/bin/sh\n"), 0o755)
+			}
+			if v, ok := strings.CutSuffix(strings.TrimPrefix(a, "php"), "-redis"); ok && phpVersionRe.MatchString(v) {
+				root.MkdirAll("/etc/php/"+v+"/mods-available", 0o755)
+				root.WriteFileAtomic(redisExtIni(v), []byte("extension=redis.so\n"), 0o644)
+			}
+		}
 	}
 	time.Sleep(time.Second) // pretend to download and install
 	return system.Result{Stdout: []byte("Setting up nginx (1.24.0-2ubuntu7.1) ...\n(dev mode: nothing was really installed)\n")}, nil

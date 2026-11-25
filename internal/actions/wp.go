@@ -211,6 +211,12 @@ func fakeWP(root system.FS, c system.Cmd) (system.Result, error) {
 		root.WriteFileAtomic(path+"/.dev-wp-debug", nil, 0o644)
 	case strings.Contains(args, " config set WP_DEBUG false "):
 		root.Remove(path + "/.dev-wp-debug")
+	case strings.Contains(args, " plugin install redis-cache"):
+		dir := path + "/wp-content/plugins/redis-cache"
+		root.MkdirAll(dir+"/includes", 0o755)
+		root.WriteFileAtomic(dir+"/includes/object-cache.php", []byte("<?php\n/*\nPlugin Name: Redis Object Cache Drop-In\n*/\n"), 0o644)
+	case strings.Contains(args, " plugin delete redis-cache"):
+		root.RemoveAll(path + "/wp-content/plugins/redis-cache")
 	case strings.Contains(args, " transient set "):
 		return system.Result{Stdout: []byte("Success: Transient added.\n")}, nil
 	case strings.Contains(args, " core download"):

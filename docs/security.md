@@ -30,6 +30,14 @@ Browser ── HTTPS ──▶ nginx (TLS, optional IP allowlist) ──▶ layt
 - **Imported sites are read-only:** sites found on the server can be viewed and their files downloaded, but nothing is changed.
 - **Unprivileged site work:** site files are handled by a helper process (`layte fsop`) running **as the site's own Linux user**, jailed to the site folder with `os.Root`. WP-CLI and cron jobs also run as the site user, never as root.
 
+## Object cache (Redis)
+Each WordPress site with the object cache on gets **its own Redis**, run by systemd (`layte-redis@<user>.service`) as the site's own user:
+- it listens only on a Unix socket, `/run/layte-redis/<user>/redis.sock`, in a folder only that user can open, with no TCP port, so other sites and other local users can't connect;
+- it saves nothing to disk and has a memory cap (32 MB, least recently used keys are evicted);
+- Redis's shared default instance (`127.0.0.1:6379`, no password) isn't used: when Layte installs Redis, it stops and disables it.
+
+WordPress uses it through the Redis Object Cache plugin; Layte only sets the socket path and a key prefix in `wp-config.php`. Turning it on is undone if the site answers differently afterwards.
+
 ## SFTP logins
 Per-site SFTP (see [sftp.md](sftp.md)) uses Layte's own sshd drop-in, `/etc/ssh/sshd_config.d/zz-layte-sftp.conf`, which applies only to members of the `layte-sftp` group (site users Layte created or adopted; never sudo users or system accounts):
 - chrooted to `/srv/layte-sftp/<user>`, which contains only the site folder (a bind mount);
