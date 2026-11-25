@@ -56,6 +56,7 @@ type SecurityOverview struct {
 	FailedLogins   []FailedLogin    `json:"failed_logins"`
 	FailedTotal    int              `json:"failed_total"`
 	Cloudflare     CloudflareStatus `json:"cloudflare"`
+	SSHGuard       SSHGuardStatus   `json:"sshguard"`
 }
 
 var (
@@ -74,7 +75,7 @@ func (d Deps) securityOverview(ctx context.Context, _ agent.Actor, _ agent.NoPar
 	logins, total := d.failedLogins()
 	reboot, _ := d.FS.Exists("/run/reboot-required")
 	return SecurityOverview{UFW: ufw, SSHPorts: ports, RebootRequired: reboot, FailedLogins: logins, FailedTotal: total,
-		Cloudflare: d.cloudflareStatus()}, nil
+		Cloudflare: d.cloudflareStatus(), SSHGuard: d.sshguardStatus(ctx)}, nil
 }
 
 // sshPorts reads Port lines from sshd_config (and its .d drop-ins); default 22.

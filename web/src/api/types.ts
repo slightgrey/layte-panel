@@ -317,6 +317,17 @@ export interface CloudflareStatus {
   problem?: string; // why it can't be turned on here
 }
 
+/** sshguard: blocks IPs after failed SSH logins (installed by the admin). */
+export interface SSHGuardStatus {
+  installed: boolean;
+  running: boolean;
+  blocked_now: number;
+  permanent: number;
+  attacks_24h: number;
+  blocks_24h: number;
+  recent: { time: string; address: string; for: string }[];
+}
+
 export interface SecurityResponse {
   overview: {
     ufw: { installed: boolean; active: boolean; default_incoming: string; rules: UFWRule[] };
@@ -325,6 +336,7 @@ export interface SecurityResponse {
     failed_logins: FailedLogin[];
     failed_total: number;
     cloudflare: CloudflareStatus;
+    sshguard: SSHGuardStatus;
   };
   updates: Updates;
   updates_error?: SectionError;
