@@ -159,6 +159,11 @@ func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParam
 	if _, err := d.Users.Lookup(p.Username); err != nil {
 		return nil, err
 	}
+	// Before the pool's reload, so later reloads don't cut off requests
+	// (e.g. a PHP version installed after the agent started).
+	if _, err := d.ensureFPMGraceful(ctx, p.PHPVersion); err != nil {
+		return nil, err
+	}
 	site := p.site()
 	site.WebUser = d.webUser() // the socket must be reachable by nginx's workers
 	content, err := templates.Pool(site)
@@ -171,6 +176,10 @@ func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParam
 	})
 	if err != nil {
 		return nil, configError(err)
+	}
+	// Callers point nginx at the pool next (create, PHP switch): only once it serves.
+	if err := d.waitFPMSocket(ctx, site.Socket()); err != nil {
+		return nil, err
 	}
 	return map[string]string{"path": path}, nil
 }

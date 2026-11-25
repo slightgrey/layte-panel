@@ -24,6 +24,9 @@ type Deps struct {
 	// SiteCheck returns a site's HTTP status (nil = real request over
 	// loopback). Used by adoption to verify the site still works.
 	SiteCheck func(ctx context.Context, domain string, https bool) (int, error)
+	// WaitSocket waits until a unix socket accepts connections (nil = don't
+	// wait: dev and tests have no real PHP-FPM).
+	WaitSocket func(ctx context.Context, path string) error
 }
 
 // HostDeps returns dependencies that operate on the real machine.
@@ -37,12 +40,13 @@ func HostDeps() (Deps, error) {
 		return Deps{}, fmt.Errorf("find own binary for the file helper: %w", err)
 	}
 	return Deps{
-		Runner:  system.ExecRunner{},
-		FS:      root,
-		Users:   system.HostUsers{},
-		WPCLI:   downloadWPCLI{fs: root, client: &http.Client{Timeout: 2 * time.Minute}},
-		FileOps: helperFileOps{bin: self, runner: system.ExecRunner{}},
-		Now:     time.Now,
+		Runner:     system.ExecRunner{},
+		FS:         root,
+		Users:      system.HostUsers{},
+		WPCLI:      downloadWPCLI{fs: root, client: &http.Client{Timeout: 2 * time.Minute}},
+		FileOps:    helperFileOps{bin: self, runner: system.ExecRunner{}},
+		Now:        time.Now,
+		WaitSocket: waitUnixSocket,
 	}, nil
 }
 
@@ -81,7 +85,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
 		agent.Def("site.user_remove", false, 60*time.Second, d.siteUserRemove),
 		agent.Def("site.dirs_create", false, 15*time.Second, d.siteDirsCreate),
-		agent.Def("php.pool_write", false, 30*time.Second, d.phpPoolWrite),
+		agent.Def("php.pool_write", false, time.Minute, d.phpPoolWrite),
 		agent.Def("php.pool_remove", false, 30*time.Second, d.phpPoolRemove),
 		agent.Def("nginx.vhost_write", false, 30*time.Second, d.nginxVhostWrite),
 		agent.Def("nginx.vhost_remove", false, 30*time.Second, d.nginxVhostRemove),

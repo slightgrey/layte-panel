@@ -53,6 +53,9 @@ func runAgent(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// PHP-FPM reloads let running requests finish (see actions/fpmgraceful.go).
+	deps.EnsureFPMGraceful(ctx, log)
+
 	// Page cache: purge a site's cache soon after WordPress content changes
 	// (its must-use plugin leaves a marker file; see actions.WatchCachePurges).
 	go deps.WatchCachePurges(ctx, 15*time.Second, log)
