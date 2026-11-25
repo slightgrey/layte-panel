@@ -16,6 +16,7 @@ import { SiteDatabasePage } from "./pages/SiteDatabase";
 import { SiteDetailPage } from "./pages/SiteDetail";
 import { SiteLogsPage } from "./pages/SiteLogs";
 import { SiteSSLPage } from "./pages/SiteSSL";
+import { SiteRedirectsPage } from "./pages/SiteRedirects";
 import { SiteWPDebugPage } from "./pages/SiteWPDebug";
 import { SystemDiskPage } from "./pages/SystemDisk";
 import { SystemLoadPage } from "./pages/SystemLoad";
@@ -47,6 +48,7 @@ export function App() {
           <Route path="sites/:id/database" element={<SiteDatabasePage />} />
           <Route path="sites/:id/cron" element={<SiteCronPage />} />
           <Route path="sites/:id/wp-debug" element={<SiteWPDebugPage />} />
+          <Route path="sites/:id/redirects" element={<SiteRedirectsPage />} />
           <Route path="sites/:id/logs" element={<SiteLogsPage />} />
           <Route path="sites/:id/files" element={<SiteFilesPage />} />
           <Route path="system/load" element={<SystemLoadPage />} />
