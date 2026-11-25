@@ -63,7 +63,11 @@ func (s *Service) requireManagedActive(site store.Site) error {
 // IssueSSL starts a job that gets a Let's Encrypt certificate for the site
 // (all its domains) and switches its vhost to HTTPS. The domains' DNS must
 // already point to this server.
-func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Site, email string) (string, error) {
+//
+// For a taken-over adopted site still on its own certbot certificate, this
+// switches it to a Layte one; deleteOldCert then deletes the old one.
+func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Site, email string, deleteOldCert bool) (string, error) {
+	oldCert := ownCert(site) // "" unless an adopted site uses its own certificate
 	if err := s.requireManagedActive(site); err != nil {
 		return "", err
 	}
@@ -101,6 +105,9 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 			if err := call("wp.set_url", actions.WPURLParams{Domain: site.Domain, Username: site.SystemUser, PHPVersion: site.PHPVersion, URL: "https://" + site.Domain}); err != nil {
 				j.Log("Warning: couldn't update the WordPress URL (%v). Change it under Settings → General.", err)
 			}
+		}
+		if deleteOldCert && oldCert != "" {
+			s.deleteOldCert(ctx, j, actor, site, oldCert)
 		}
 		j.SetResult(map[string]any{"site_id": site.ID, "url": "https://" + site.Domain})
 		return nil

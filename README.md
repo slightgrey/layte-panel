@@ -14,7 +14,7 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
   - Switch PHP version per site without downtime.
   - Delete sites.
   - Existing sites are imported read-only, and can be **adopted**: they get their own Linux user and a Layte-managed PHP pool, while your nginx config stays yours (preview first, automatic rollback).
-  - Optionally let Layte Panel manage an adopted site's nginx config too (diff first, files stay where they are) to unlock PHP switching, PHP settings and the page cache. Your original config is kept.
+  - Optionally let Layte Panel manage an adopted site's nginx config too (diff first, files stay where they are) to unlock PHP switching, PHP settings and the page cache. Your original config is kept; the site's old certificate can be deleted once Layte's replaces it.
   - Redirects per site (old path → new page or another site, 301/302) on their own tab, with CSV import/export. They live in a separate file the site's nginx config includes, checked with `nginx -t` before they go live.
   - Size on disk per site.
 - **SSL:** Let's Encrypt certificates via certbot, renewed automatically, with an expiry overview and certificate details. Test renewal or renew now from the panel.

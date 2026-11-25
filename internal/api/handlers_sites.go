@@ -201,13 +201,14 @@ func (s *server) handleTakeover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		VhostHash string `json:"vhost_hash"`
-		Email     string `json:"email"`
+		VhostHash     string `json:"vhost_hash"`
+		Email         string `json:"email"`
+		DeleteOldCert bool   `json:"delete_old_cert"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	jobID, err := s.sites.Takeover(r.Context(), actorOf(r), site, req.VhostHash, req.Email)
+	jobID, err := s.sites.Takeover(r.Context(), actorOf(r), site, req.VhostHash, req.Email, req.DeleteOldCert)
 	if err != nil {
 		s.writeSiteError(w, "take over nginx config", err)
 		return

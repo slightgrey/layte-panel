@@ -12,7 +12,8 @@ export function useCertificates() {
 /** POST /sites/{id}/ssl: issue a Let's Encrypt certificate (job). */
 export function useIssueSSL(siteId: number) {
   return useMutation({
-    mutationFn: (email: string) => api<JobStarted>("POST", `/sites/${siteId}/ssl`, { email }),
+    /** delete_old_cert: an adopted site switching from its own certificate deletes that one afterwards. */
+    mutationFn: (v: { email: string; delete_old_cert?: boolean }) => api<JobStarted>("POST", `/sites/${siteId}/ssl`, v),
   });
 }
 

@@ -49,6 +49,7 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
   const [, setParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [understood, setUnderstood] = useState(false);
+  const [deleteOld, setDeleteOld] = useState(true);
   useEffect(() => {
     if (preview.data?.email && !email) setEmail(preview.data.email);
   }, [preview.data, email]);
@@ -69,7 +70,7 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
               takeover.mutate(
-                { vhost_hash: p.vhost_hash, email: email.trim() },
+                { vhost_hash: p.vhost_hash, email: email.trim(), delete_old_cert: Boolean(p.own_cert) && deleteOld },
                 {
                   onSuccess: (r) => {
                     onClose();
@@ -142,6 +143,7 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
                   HTTPS keeps using your certificate in <code className="font-mono">{p.own_cert}</code> until Layte has its
                   own: it then gets a Layte certificate from Let's Encrypt (Layte's config serves the challenge files) and
                   switches to it. If that fails, the site keeps your certificate and you can retry on the SSL tab.
+                  {deleteOld && " Then your old certificate is deleted, unless nginx still uses it somewhere."}
                 </li>
               )}
             </ol>
@@ -153,6 +155,17 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
               <Field label="Email for certificate expiry notices" htmlFor="takeover-email">
                 <Input id="takeover-email" type="email" required className="max-w-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
               </Field>
+            )}
+
+            {p.ssl && p.own_cert && (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={deleteOld} onChange={(e) => setDeleteOld(e.target.checked)} />
+                <span>
+                  After switching, delete the old certificate <code className="font-mono">{p.own_cert.split("/").pop()}</code>,
+                  so certbot stops renewing it (its renewal could otherwise edit Layte's config). It's kept if nginx still uses it
+                  anywhere, or if the switch fails.
+                </span>
+              </label>
             )}
 
             <label className="flex items-start gap-2 text-sm">

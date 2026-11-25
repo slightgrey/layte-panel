@@ -315,3 +315,38 @@ func TestOwnCertChecks(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+func TestSSLDeleteUnused(t *testing.T) {
+	d := devDeps(t)
+	for _, bad := range []SSLDeleteParams{
+		{Domain: "shop.example.org", CertName: "layte-shop.example.org"},
+		{Domain: "shop.example.org", CertName: "../x"},
+		{Domain: "bad domain", CertName: "x"},
+	} {
+		if bad.Validate() == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+	if err := writeFakeCert(d.FS, "old-shop", []string{"shop.example.org"}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	// Not for this domain: kept.
+	if _, err := d.sslDeleteUnused(ctx, agent.Actor{}, SSLDeleteParams{Domain: "blog.example.com", CertName: "old-shop"}); err == nil {
+		t.Error("deleted a certificate of another domain")
+	}
+	// Still used by an enabled vhost: kept.
+	b := mustRead(t, d, shopVhost)
+	d.FS.WriteFileAtomic(shopVhost, append(b, []byte("\n# ssl_certificate /etc/letsencrypt/live/old-shop/fullchain.pem;\n")...), 0o644)
+	if _, err := d.sslDeleteUnused(ctx, agent.Actor{}, SSLDeleteParams{Domain: "shop.example.org", CertName: "old-shop"}); err == nil ||
+		!strings.Contains(err.Error(), "still uses") {
+		t.Errorf("got %v", err)
+	}
+	// Unused: deleted.
+	d.FS.WriteFileAtomic(shopVhost, b, 0o644)
+	if _, err := d.sslDeleteUnused(ctx, agent.Actor{}, SSLDeleteParams{Domain: "shop.example.org", CertName: "old-shop"}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := d.FS.Exists("/etc/letsencrypt/live/old-shop"); ok {
+		t.Error("certificate not deleted")
+	}
+}
