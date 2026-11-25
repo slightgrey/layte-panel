@@ -109,6 +109,19 @@ func PoolPath(phpVersion, domain string) string {
 	return fmt.Sprintf("/etc/php/%s/fpm/pool.d/layte-%s.conf", phpVersion, domain)
 }
 
+// RedirectsDir holds one file of redirects per site, included by its vhost
+// (outside conf.d and sites-enabled, so nginx never loads them on their own).
+const RedirectsDir = "/etc/nginx/layte-redirects"
+
+// RedirectsPath is the site's redirects file.
+func RedirectsPath(domain string) string { return RedirectsDir + "/" + domain + ".conf" }
+
+// RedirectsFile is the site's redirects file (for the vhost's include).
+func (s Site) RedirectsFile() string { return RedirectsPath(s.Domain) }
+
+// Redirects renders the site's redirects file (location blocks).
+func Redirects(s Site) ([]byte, error) { return render("nginx-redirects.conf.tmpl", s) }
+
 // Vhost renders the nginx server block.
 func Vhost(s Site) ([]byte, error) { return render("nginx-site.conf.tmpl", s) }
 

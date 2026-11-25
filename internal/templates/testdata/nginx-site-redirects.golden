@@ -44,11 +44,8 @@ server {
         deny all;
     }
 
-    # Redirects (set in Layte Panel).
-    location = /hire-vince { return 301 /hire/; }
-    location = /hire-vince/ { return 301 /hire/; }
-    location = /old { return 302 https://example.org/new?a=1&b=2; }
-    location = /old/ { return 302 https://example.org/new?a=1&b=2; }
+    # Redirects (set on the site's Redirects tab).
+    include /etc/nginx/layte-redirects/example.com.conf;
 
     location / {
         try_files $uri $uri/ /index.php?$args;

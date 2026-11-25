@@ -76,10 +76,8 @@ server {
 
 {{- if .Redirects}}
 
-    # Redirects (set in Layte Panel).
-{{- range .Redirects}}{{$r := .}}{{range .Paths}}
-    location = {{.}} { return {{$r.Code}} {{$r.To}}; }
-{{- end}}{{end}}
+    # Redirects (set on the site's Redirects tab).
+    include {{.RedirectsFile}};
 {{- end}}
 
     location / {

@@ -1,0 +1,5 @@
+# Managed by Layte Panel — do not edit by hand (site: {{.Domain}})
+# Redirects, set on the site's Redirects tab. Included by the site's vhost.
+{{- range .Redirects}}{{$r := .}}{{range .Paths}}
+location = {{.}} { return {{$r.Code}} {{$r.To}}; }
+{{- end}}{{end}}

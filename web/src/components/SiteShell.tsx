@@ -1,9 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bug, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, LogIn, type LucideIcon, ScrollText, ShieldCheck, XCircle } from "lucide-react";
+import { ArrowLeft, Bug, CheckCircle2, Clock, Database, ExternalLink, FolderOpen, LayoutGrid, LoaderCircle, LogIn, type LucideIcon, ScrollText, ShieldCheck, Signpost, XCircle } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link, NavLink, useParams, useSearchParams } from "react-router";
 import { databasesKey } from "@/api/databases";
-import { siteKey, sitesKey, useSite } from "@/api/sites";
+import { layteConfigs, siteKey, sitesKey, useSite } from "@/api/sites";
 import { certsKey } from "@/api/ssl";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
@@ -19,6 +19,7 @@ const tabs: { label: string; path: string; icon: LucideIcon; show?: (site: Site)
   { label: "SSL", path: "ssl", icon: ShieldCheck },
   { label: "Database", path: "database", icon: Database },
   { label: "Cron", path: "cron", icon: Clock },
+  { label: "Redirects", path: "redirects", icon: Signpost, show: layteConfigs },
   { label: "WP Debug", path: "wp-debug", icon: Bug, show: (site) => site.wordpress },
   { label: "Logs", path: "logs", icon: ScrollText },
   { label: "Files", path: "files", icon: FolderOpen },

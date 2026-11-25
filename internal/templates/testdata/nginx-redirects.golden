@@ -1,0 +1,6 @@
+# Managed by Layte Panel — do not edit by hand (site: example.com)
+# Redirects, set on the site's Redirects tab. Included by the site's vhost.
+location = /hire-vince { return 301 /hire/; }
+location = /hire-vince/ { return 301 /hire/; }
+location = /old { return 302 https://example.org/new?a=1&b=2; }
+location = /old/ { return 302 https://example.org/new?a=1&b=2; }

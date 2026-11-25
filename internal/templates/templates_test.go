@@ -43,6 +43,7 @@ func TestGolden(t *testing.T) {
 		{"nginx-site-adopted.golden", func(Site) ([]byte, error) { return Vhost(adopted) }},
 		{"fpm-pool-adopted.golden", func(Site) ([]byte, error) { return Pool(adopted) }},
 		{"nginx-site-redirects.golden", func(Site) ([]byte, error) { return Vhost(redirected) }},
+		{"nginx-redirects.golden", func(Site) ([]byte, error) { return Redirects(redirected) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {

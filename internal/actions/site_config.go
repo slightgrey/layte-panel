@@ -247,14 +247,57 @@ func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigPa
 			return nil, fmt.Errorf("create %s: %w", pagecache.Root, err)
 		}
 	}
+	// Redirects live in their own file, which the vhost includes. With
+	// redirects, that file is written first (the vhost's nginx -t then checks
+	// it); if the vhost can't be written, the file is put back as it was.
+	// Without, the file is removed after the vhost no longer includes it.
+	rpath := templates.RedirectsPath(p.Domain)
+	restoreRedirects := func() {}
+	if len(p.Redirects) > 0 {
+		if restoreRedirects, err = d.writeRedirects(ctx, rpath, p.site()); err != nil {
+			return nil, configError(err)
+		}
+	}
 	path, link := d.vhostFiles(p.Domain)
 	err = system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
 		Path: path, Content: content, Link: link, Test: nginxTest, Reload: nginxReload,
 	})
 	if err != nil {
+		restoreRedirects()
 		return nil, configError(err)
 	}
+	if len(p.Redirects) == 0 {
+		if err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: rpath, Test: nginxTest, Reload: nginxReload}); err != nil {
+			return nil, configError(err)
+		}
+	}
 	return map[string]string{"path": path}, nil
+}
+
+// writeRedirects installs the site's redirects file and returns a function
+// that puts the previous one back (or removes it if there was none).
+func (d Deps) writeRedirects(ctx context.Context, rpath string, site templates.Site) (func(), error) {
+	content, err := templates.Redirects(site)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.FS.MkdirAll(templates.RedirectsDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create %s: %w", templates.RedirectsDir, err)
+	}
+	old, oldErr := d.FS.ReadFile(rpath)
+	spec := system.WriteSpec{Path: rpath, Content: content, Test: nginxTest, Reload: nginxReload}
+	if err := system.WriteConfig(ctx, d.FS, d.Runner, spec); err != nil {
+		return nil, err
+	}
+	bg := context.WithoutCancel(ctx)
+	return func() {
+		if oldErr == nil {
+			spec.Content = old
+			system.WriteConfig(bg, d.FS, d.Runner, spec)
+		} else {
+			system.RemoveConfig(bg, d.FS, d.Runner, system.RemoveSpec{Path: rpath, Test: nginxTest, Reload: nginxReload})
+		}
+	}, nil
 }
 
 type DomainParams struct {
@@ -270,6 +313,10 @@ func (d Deps) nginxVhostRemove(ctx context.Context, _ agent.Actor, p DomainParam
 		Path: path, Link: link, Test: nginxTest, Reload: nginxReload,
 	})
 	if err != nil {
+		return nil, configError(err)
+	}
+	// The site's redirects file (nothing includes it any more).
+	if err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: templates.RedirectsPath(p.Domain)}); err != nil {
 		return nil, configError(err)
 	}
 	return map[string]bool{"removed": true}, nil

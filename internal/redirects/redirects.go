@@ -22,7 +22,7 @@ type Redirect struct {
 }
 
 // Max is how many redirects a site may have.
-const Max = 200
+const Max = 1000
 
 var (
 	// A path: letters, digits and - . _ ~ / only (no % encoding, no query).

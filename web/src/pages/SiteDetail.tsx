@@ -7,7 +7,6 @@ import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVers
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { PageCacheCard } from "@/components/PageCacheCard";
-import { RedirectsCard } from "@/components/RedirectsCard";
 import { PHPSettingsButton } from "@/components/PHPSettingsDialog";
 import { SiteHeader, SiteJobCard } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
@@ -89,7 +88,6 @@ export function SiteDetailPage() {
 
       <OverviewCard site={s} />
       {layteConfigs(s) && s.wordpress && <PageCacheCard site={s} />}
-      {layteConfigs(s) && <RedirectsCard key={JSON.stringify(s.redirects ?? [])} site={s} />}
       <VhostCard site={s} />
     </div>
   );
