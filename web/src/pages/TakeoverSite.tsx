@@ -1,6 +1,5 @@
 import { TriangleAlert, Wrench } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
 import { useTakeover, useTakeoverPreview } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
@@ -11,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { FormError } from "./AuthShell";
+import { useJobFeedback } from "@/components/JobFeedback";
 
 /** "Let Layte manage nginx" button + dialog for adopted sites: shows the diff, then starts the job. */
 export function TakeoverSite({ site }: { site: Site }) {
@@ -46,7 +46,7 @@ function Diff({ title, lines }: { title: string; lines: string[] }) {
 function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) {
   const preview = useTakeoverPreview(site.id);
   const takeover = useTakeover(site.id);
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`takeover-${site.id}`, `Letting Layte manage nginx for ${site.domain}`);
   const [email, setEmail] = useState("");
   const [understood, setUnderstood] = useState(false);
   const [deleteOld, setDeleteOld] = useState(true);
@@ -74,7 +74,7 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
                 {
                   onSuccess: (r) => {
                     onClose();
-                    setParams({ job: r.job_id }, { replace: true });
+                    job.start(r);
                   },
                 },
               );

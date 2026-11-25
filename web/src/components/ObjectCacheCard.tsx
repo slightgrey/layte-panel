@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format";
 import { FormError } from "@/pages/AuthShell";
+import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 
 /** Redis object cache for a WordPress site Layte runs (created or adopted). */
 export function ObjectCacheCard({ site }: { site: Site }) {
@@ -16,7 +17,7 @@ export function ObjectCacheCard({ site }: { site: Site }) {
   const set = useSetObjectCache(site.id);
   const flush = useFlushObjectCache(site.id);
   const qc = useQueryClient();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const s = oc.data;
 
   // A finished job (the site's status flips back to active) changes the state.
@@ -25,6 +26,7 @@ export function ObjectCacheCard({ site }: { site: Site }) {
   }, [site.status, params, qc, site.id]);
 
   const enabled = !!s?.enabled;
+  const job = useJobFeedback(`object-cache-${site.id}`, enabled ? "Turning off the object cache" : "Turning on the object cache");
   const busy = set.isPending || site.status !== "active";
   const usedPct = s?.limit_bytes ? Math.round(((s.used_bytes ?? 0) / s.limit_bytes) * 100) : 0;
 
@@ -44,10 +46,12 @@ export function ObjectCacheCard({ site }: { site: Site }) {
           <Button
             size="sm"
             variant={enabled ? "outline" : "default"}
-            disabled={busy || !s}
-            onClick={() => set.mutate(!enabled, { onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }) })}
+            disabled={busy || !s || job.working}
+            onClick={() => set.mutate(!enabled, { onSuccess: job.start })}
           >
-            <Power /> {enabled ? "Turn off" : "Turn on"}
+            <JobButtonLabel state={job.state}>
+              <Power /> {enabled ? "Turn off" : "Turn on"}
+            </JobButtonLabel>
           </Button>
         </div>
       </CardHeader>

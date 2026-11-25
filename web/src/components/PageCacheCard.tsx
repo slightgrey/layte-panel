@@ -1,12 +1,12 @@
 import { Eraser, Gauge, Power } from "lucide-react";
 import { useState } from "react";
-import { useSearchParams } from "react-router";
 import { usePurgeCache, useSetPageCache } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/field";
+import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 
 const defaultTTL = 60; // keep in sync with internal/pagecache
 const ttlOptions = [10, 30, 60, 180, 720, 1440];
@@ -21,8 +21,8 @@ function ttlLabel(m: number) {
 export function PageCacheCard({ site }: { site: Site }) {
   const set = useSetPageCache(site.id);
   const purge = usePurgeCache(site.id);
-  const [, setParams] = useSearchParams();
   const enabled = !!site.page_cache?.enabled;
+  const job = useJobFeedback(`page-cache-${site.id}`, "Updating the page cache");
   const current = site.page_cache?.ttl_minutes || defaultTTL;
   const [ttl, setTTL] = useState(current);
   const options = ttlOptions.includes(current) ? ttlOptions : [...ttlOptions, current].sort((a, b) => a - b);
@@ -30,7 +30,7 @@ export function PageCacheCard({ site }: { site: Site }) {
 
   const apply = (on: boolean, minutes = ttl) =>
     set.mutate(on ? { enabled: true, ttl_minutes: minutes } : { enabled: false }, {
-      onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }),
+      onSuccess: job.start,
     });
 
   return (
@@ -46,8 +46,10 @@ export function PageCacheCard({ site }: { site: Site }) {
               <Eraser /> {purge.isSuccess && !purge.isPending ? "Purged" : "Purge cache"}
             </Button>
           )}
-          <Button size="sm" variant={enabled ? "outline" : "default"} disabled={busy} onClick={() => apply(!enabled)}>
-            <Power /> {enabled ? "Turn off" : "Turn on"}
+          <Button size="sm" variant={enabled ? "outline" : "default"} disabled={busy || job.working} onClick={() => apply(!enabled)}>
+            <JobButtonLabel state={job.state}>
+              <Power /> {enabled ? "Turn off" : "Turn on"}
+            </JobButtonLabel>
           </Button>
         </div>
       </CardHeader>

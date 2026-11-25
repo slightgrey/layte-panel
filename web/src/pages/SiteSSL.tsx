@@ -1,6 +1,5 @@
 import { FlaskConical, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
 import { layteConfigs } from "@/api/sites";
 import { useCertificates, useIssueSSL, useRemoveSSL, useRenewSSL } from "@/api/ssl";
 import type { Site } from "@/api/types";
@@ -12,12 +11,15 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { SiteShell } from "@/components/SiteShell";
 import { FormError } from "./AuthShell";
+import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 
 /** HTTPS card on the site page: status, and issue/remove for managed sites. */
 export function SiteSSLCard({ site }: { site: Site }) {
   const certs = useCertificates();
   const cert = certs.data?.certificates.find((c) => c.site_id === site.id);
-  const [, setParams] = useSearchParams();
+  const issueJob = useJobFeedback(`ssl-issue-${site.id}`, `Getting a certificate for ${site.domain}`);
+  const removeJob = useJobFeedback(`ssl-remove-${site.id}`, `Removing HTTPS from ${site.domain}`);
+  const switchJob = useJobFeedback(`ssl-switch-${site.id}`, `Switching ${site.domain} to a Layte certificate`);
   const issue = useIssueSSL(site.id);
   const remove = useRemoveSSL(site.id);
   const [email, setEmail] = useState("");
@@ -25,7 +27,6 @@ export function SiteSSLCard({ site }: { site: Site }) {
     if (certs.data?.email && !email) setEmail(certs.data.email);
   }, [certs.data, email]);
 
-  const showJob = (r: { job_id: string }) => setParams({ job: r.job_id }, { replace: true });
   const busy = site.status !== "active";
   // A taken-over adopted site still on its own certificate can switch to a Layte one.
   const canSwitch = site.ssl && site.adopted && site.nginx_managed && !!cert && !cert.managed;
@@ -51,8 +52,10 @@ export function SiteSSLCard({ site }: { site: Site }) {
               )}
             </p>
             {layteConfigs(site) && (
-              <Button variant="outline" size="sm" disabled={busy || remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: showJob })}>
-                <ShieldOff /> Remove HTTPS
+              <Button variant="outline" size="sm" disabled={busy || remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: removeJob.start })}>
+                <JobButtonLabel state={removeJob.state}>
+                  <ShieldOff /> Remove HTTPS
+                </JobButtonLabel>
               </Button>
             )}
           </div>
@@ -61,7 +64,7 @@ export function SiteSSLCard({ site }: { site: Site }) {
             className="flex flex-col gap-3"
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
-              issue.mutate({ email: email.trim() }, { onSuccess: showJob });
+              issue.mutate({ email: email.trim() }, { onSuccess: issueJob.start });
             }}
           >
             <p className="text-sm text-muted-foreground">
@@ -75,7 +78,9 @@ export function SiteSSLCard({ site }: { site: Site }) {
                 </Field>
               </div>
               <Button type="submit" disabled={busy || issue.isPending}>
-                <ShieldCheck /> Enable HTTPS
+                <JobButtonLabel state={issueJob.state}>
+                  <ShieldCheck /> Enable HTTPS
+                </JobButtonLabel>
               </Button>
             </div>
             <FormError message={issue.error?.message} />
@@ -88,7 +93,7 @@ export function SiteSSLCard({ site }: { site: Site }) {
             className="flex flex-col gap-3 border-t pt-4"
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
-              issue.mutate({ email: email.trim(), delete_old_cert: deleteOld }, { onSuccess: showJob });
+              issue.mutate({ email: email.trim(), delete_old_cert: deleteOld }, { onSuccess: switchJob.start });
             }}
           >
             <p className="text-sm text-muted-foreground">
@@ -102,7 +107,9 @@ export function SiteSSLCard({ site }: { site: Site }) {
                 </Field>
               </div>
               <Button type="submit" disabled={busy || issue.isPending}>
-                <ShieldCheck /> Switch to a Layte certificate
+                <JobButtonLabel state={switchJob.state}>
+                  <ShieldCheck /> Switch to a Layte certificate
+                </JobButtonLabel>
               </Button>
             </div>
             <label className="flex items-start gap-2 text-sm">
@@ -189,14 +196,14 @@ function CertificateDetails({ site }: { site: Site }) {
 
 function RenewCard({ site }: { site: Site }) {
   const renew = useRenewSSL(site.id);
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`ssl-renew-${site.id}`, "Renewing the certificate");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const busy = site.status !== "active" || renew.isPending;
   const start = (dryRun: boolean) =>
     renew.mutate(dryRun, {
       onSuccess: (r) => {
         setConfirmOpen(false);
-        setParams({ job: r.job_id }, { replace: true });
+        job.start(r);
       },
     });
   return (

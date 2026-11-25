@@ -1,6 +1,5 @@
 import { ArrowRight, Download, Signpost, FileDown, Plus, Save, Search, Trash2, Undo2, Upload } from "lucide-react";
 import { type ChangeEvent, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
 import { layteConfigs, useSetRedirects } from "@/api/sites";
 import type { Redirect, Site } from "@/api/types";
 import { EmptyState, SiteShell } from "@/components/SiteShell";
@@ -11,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { downloadText, parseCSV, toCSV } from "@/lib/csv";
 import { FormError } from "./AuthShell";
+import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 
 /** /sites/:id/redirects */
 export function SiteRedirectsPage() {
@@ -76,7 +76,7 @@ function RedirectsEditor({ site }: { site: Site }) {
   const [imported, setImported] = useState<{ added: number; updated: number; problems: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = useSetRedirects(site.id);
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`redirects-${site.id}`, "Saving redirects");
   const busy = set.isPending || site.status !== "active";
   const dirty = !same(rows, saved);
   const q = filter.trim().toLowerCase();
@@ -125,11 +125,13 @@ function RedirectsEditor({ site }: { site: Site }) {
             onClick={() =>
               set.mutate(
                 rows.filter((r) => r.from.trim() || r.to.trim()),
-                { onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }) },
+                { onSuccess: job.start },
               )
             }
           >
-            <Save /> Save
+            <JobButtonLabel state={job.state}>
+              <Save /> Save
+            </JobButtonLabel>
           </Button>
         </div>
       </CardHeader>

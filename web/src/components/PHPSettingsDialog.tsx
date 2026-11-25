@@ -1,6 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { useSearchParams } from "react-router";
 import { useSetPHPSettings } from "@/api/sites";
 import type { PHPSettings, Site } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/pages/AuthShell";
+import { useJobFeedback } from "@/components/JobFeedback";
 
 // Layte's defaults (keep in sync with internal/phpini).
 const defaults = { memory_limit: "256M", upload_max: "64M", max_execution_time: 30, max_input_vars: 1000 };
@@ -56,7 +56,7 @@ export function PHPSettingsButton({ site }: { site: Site }) {
 
 function PHPSettingsDialog({ site, onClose }: { site: Site; onClose: () => void }) {
   const set = useSetPHPSettings(site.id);
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`php-settings-${site.id}`, "Saving PHP settings");
   const [form, setForm] = useState<Form>(() => fromSite(site.php_settings));
   const [error, setError] = useState<string | null>(null);
   const field = (key: keyof Form) => ({
@@ -78,7 +78,7 @@ function PHPSettingsDialog({ site, onClose }: { site: Site; onClose: () => void 
     set.mutate(toSettings(form), {
       onSuccess: (r) => {
         onClose();
-        setParams({ job: r.job_id }, { replace: true });
+        job.start(r);
       },
     });
   };

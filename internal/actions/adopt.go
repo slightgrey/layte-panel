@@ -415,7 +415,7 @@ func (d Deps) adoptedDataDirs(user string) error {
 
 // siteStatus fetches the site's home page over loopback (HTTPS if it has a
 // certificate, since the HTTP block often only redirects) without following
-// redirects. Only the status code matters.
+// redirects, bypassing the page cache. Only the status code matters.
 func (d Deps) siteStatus(ctx context.Context, site DiscoveredSite) (int, error) {
 	if d.SiteCheck != nil {
 		return d.SiteCheck(ctx, site.Domain, site.SSL)
@@ -440,7 +440,10 @@ func loopbackStatus(ctx context.Context, domain string, https bool) (int, error)
 		},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://"+domain+"/", nil)
+	// A unique query string: the page cache never answers it (and other
+	// caches don't either), so PHP really runs. WordPress ignores it.
+	url := fmt.Sprintf("%s://%s/?layte-check=%d", scheme, domain, time.Now().UnixNano())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, err
 	}
