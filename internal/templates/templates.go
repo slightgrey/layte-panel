@@ -28,6 +28,10 @@ type Site struct {
 	WebUser    string // nginx's worker user, owns the FPM socket ("" = www-data)
 	PHP        phpini.Settings
 	Cache      pagecache.Settings // page cache (nginx FastCGI cache)
+	// OwnCert is a certbot live folder to use instead of the Layte
+	// certificate's: an adopted site keeps its own certificate until it has
+	// a Layte one. "" = CertDir(Domain).
+	OwnCert string
 	// WebRoot is an adopted site's own web root (its files stay where they
 	// were). "" for sites Layte created: Dir()/public.
 	WebRoot string
@@ -40,6 +44,14 @@ func (s Site) CacheZone() string { return pagecache.Zone(s.Domain) }
 // CertName is the certbot certificate name Layte uses for the site. The
 // "layte-" prefix keeps it apart from certificates the admin made by hand.
 func (s Site) CertName() string { return CertName(s.Domain) }
+
+// CertLive is the certbot live folder the vhost's HTTPS block uses.
+func (s Site) CertLive() string {
+	if s.OwnCert != "" {
+		return s.OwnCert
+	}
+	return CertDir(s.Domain)
+}
 
 // CertName for a domain.
 func CertName(domain string) string { return "layte-" + domain }

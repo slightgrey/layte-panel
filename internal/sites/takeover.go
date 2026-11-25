@@ -53,14 +53,20 @@ func (s *Service) TakeoverPreview(ctx context.Context, actor agent.Actor, site s
 
 // Takeover starts a job that lets Layte manage an adopted site's nginx
 // config and PHP pool (files stay in their web root). A site with HTTPS
-// first gets a Layte certificate; if that fails, nothing has changed.
-// vhostHash comes from the preview the admin confirmed.
+// keeps its own certificate at first, then gets a Layte one through Layte's
+// config (which always serves Let's Encrypt's challenge files, unlike many
+// hand-written configs). If that fails, the site keeps its own certificate.
+// A site with HTTPS but no certbot certificate gets the Layte certificate
+// first. vhostHash comes from the preview the admin confirmed.
 func (s *Service) Takeover(ctx context.Context, actor agent.Actor, site store.Site, vhostHash, email string) (string, error) {
 	if err := takeoverable(site); err != nil {
 		return "", err
 	}
 	params := takeoverParams(site)
 	params.VhostHash, params.SSL = vhostHash, site.SSL
+	if site.SSL {
+		params.OwnCert = actions.OwnCertOf(site.CertPath)
+	}
 	if err := params.Validate(); err != nil {
 		return "", badRequest("%v", err)
 	}
@@ -75,19 +81,25 @@ func (s *Service) Takeover(ctx context.Context, actor agent.Actor, site store.Si
 			return "", err
 		}
 	}
+	issue := func(ctx context.Context, j *jobs.Job) error {
+		j.Log("certbot puts a challenge file in %s, which nginx serves.", site.RootPath)
+		return s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, s.sslIssueParams(site, email), nil)
+	}
 	jobID, err := s.Jobs.Start("site.nginx_takeover", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
-		if site.SSL {
+		if site.SSL && params.OwnCert == "" {
 			j.Step("Get a Layte certificate from Let's Encrypt")
-			j.Log("certbot puts a challenge file in %s, which your current nginx config serves.", site.RootPath)
-			if err := s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, s.sslIssueParams(site, email), nil); err != nil {
+			if err := issue(ctx, j); err != nil {
 				return err
 			}
 		}
 		j.Step("Let Layte Panel manage the nginx config of " + site.Domain)
 		j.Log("Every step is undone if a later one fails or the site answers differently afterwards.")
+		if params.OwnCert != "" {
+			j.Log("HTTPS keeps using your certificate in %s for now.", params.OwnCert)
+		}
 		var res actions.TakeoverResult
 		if err := s.longCall(ctx, 5*time.Minute, "site.nginx_takeover", actor, params, &res); err != nil {
-			if site.SSL {
+			if site.SSL && params.OwnCert == "" {
 				j.Log("The new certificate %s stays; it is unused until you try again.", templates.CertName(site.Domain))
 			}
 			return err
@@ -98,16 +110,42 @@ func (s *Service) Takeover(ctx context.Context, actor agent.Actor, site store.Si
 		j.Step("Save site")
 		site.NginxManaged, site.NginxConf, site.FPMPool, site.PHPVersion = true, res.VhostFile, res.PoolFile, res.PHPVersion
 		site.PHPSettings = phpini.Settings{} // Layte's defaults, as in the new pool
-		if site.SSL {
-			site.CertPath = templates.CertDir(site.Domain) + "/fullchain.pem"
+		if site.SSL && params.OwnCert == "" {
+			site.CertPath = layteCertPath(site.Domain)
 		}
-		if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
+		bg := context.WithoutCancel(ctx)
+		if err := s.Store.UpdateSite(bg, site); err != nil {
 			return err
 		}
 		if res.KeptAs != "" {
 			j.Log("Your original nginx config is kept as %s.", res.KeptAs)
 		}
 		j.SetResult(map[string]any{"site_id": site.ID, "vhost": res.VhostFile, "kept_as": res.KeptAs})
+
+		if params.OwnCert == "" {
+			return nil
+		}
+		// Taken over. Switching to a Layte certificate is best effort: if it
+		// fails, the site keeps serving HTTPS with its own certificate.
+		j.Step("Switch to a Layte certificate")
+		keep := func(err error) error {
+			j.Log("Warning: %v", err)
+			j.Log("%s keeps using its own certificate (%s). Try again on the SSL tab: Switch to a Layte certificate.", site.Domain, params.OwnCert)
+			return nil
+		}
+		if err := issue(ctx, j); err != nil {
+			return keep(err)
+		}
+		next := site
+		next.CertPath = layteCertPath(site.Domain)
+		if err := s.Agent.Call(ctx, "nginx.vhost_write", actor, s.siteConfig(next, true), nil); err != nil {
+			return keep(err)
+		}
+		if err := s.Store.UpdateSite(bg, next); err != nil {
+			return err
+		}
+		j.Log("HTTPS now uses %s, which Layte renews. Your old certificate %s is no longer used; you can delete it with certbot.",
+			templates.CertName(site.Domain), params.OwnCert)
 		return nil
 	})
 	if errors.Is(err, jobs.ErrSiteBusy) {

@@ -27,19 +27,36 @@ import (
 // symlink is just removed (its target stays). The adopted pool's original
 // from before the adoption (<pool>.layte-orig) stays as well.
 
-// TakeoverParams name an adopted site. SSL: the new vhost serves HTTPS with
-// the site's Layte certificate (issued beforehand). VhostHash comes from the
-// preview the admin confirmed.
+// TakeoverParams name an adopted site. SSL: the new vhost serves HTTPS,
+// with the certificate the admin's vhost already uses (OwnCert, its certbot
+// live folder) or else the site's Layte certificate (issued beforehand).
+// VhostHash comes from the preview the admin confirmed.
 type TakeoverParams struct {
 	Domain    string `json:"domain"`
 	Username  string `json:"username"`
 	WebRoot   string `json:"web_root"`
 	SSL       bool   `json:"ssl,omitempty"`
+	OwnCert   string `json:"own_cert,omitempty"`
 	VhostHash string `json:"vhost_hash,omitempty"`
 }
 
 func (p TakeoverParams) Validate() error {
+	if p.OwnCert != "" {
+		if err := validOwnCert(p.OwnCert); err != nil {
+			return err
+		}
+	}
 	return FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Op: "stat", Path: "."}.validate(readOps)
+}
+
+// OwnCertOf is the certbot live folder of the site's current certificate,
+// or "" if it doesn't use one.
+func OwnCertOf(certPath string) string {
+	dir := path.Dir(certPath)
+	if path.Base(certPath) != "fullchain.pem" || validOwnCert(dir) != nil {
+		return ""
+	}
+	return dir
 }
 
 // TakeoverPreview is what taking over would change. Nothing is changed.
@@ -48,6 +65,7 @@ type TakeoverPreview struct {
 	WebRoot      string   `json:"web_root"`
 	PHPVersion   string   `json:"php_version"`
 	SSL          bool     `json:"ssl"`
+	OwnCert      string   `json:"own_cert"`   // the certificate kept for now ("" = none usable)
 	VhostFile    string   `json:"vhost_file"` // the admin's file, as nginx loads it
 	KeptAs       string   `json:"kept_as"`    // where it goes ("" = only the link is removed)
 	NewVhostFile string   `json:"new_vhost_file"`
@@ -163,7 +181,7 @@ func (d Deps) takeoverTarget(ctx context.Context, p TakeoverParams) (takeover, e
 		t.blockers = append(t.blockers, t.pool.Path+" already has the name of a Layte pool")
 	}
 	t.newVhost = templates.Site{Domain: p.Domain, Aliases: t.site.Aliases, User: p.Username, PHPVersion: t.pool.Version,
-		SSL: t.site.SSL, WebRoot: p.WebRoot, WebUser: d.webUser()}
+		SSL: t.site.SSL, WebRoot: p.WebRoot, WebUser: d.webUser(), OwnCert: OwnCertOf(t.site.CertPath)}
 	t.warnings = customDirectives(ds)
 	return t, nil
 }
@@ -216,7 +234,7 @@ func (d Deps) takeoverPreview(ctx context.Context, _ agent.Actor, p TakeoverPara
 		return nil, err
 	}
 	return TakeoverPreview{
-		Domain: p.Domain, WebRoot: p.WebRoot, PHPVersion: t.pool.Version, SSL: t.site.SSL,
+		Domain: p.Domain, WebRoot: p.WebRoot, PHPVersion: t.pool.Version, SSL: t.site.SSL, OwnCert: t.newVhost.OwnCert,
 		VhostFile: t.enabled, KeptAs: t.keep, NewVhostFile: t.vhost,
 		PoolFile: t.pool.Path, NewPoolFile: templates.PoolPath(t.pool.Version, p.Domain),
 		VhostDiff: lineDiff(string(t.oldVhost), string(newVhost)), PoolDiff: lineDiff(t.pool.Content, string(newPool)),
@@ -247,11 +265,13 @@ func (d Deps) siteNginxTakeover(ctx context.Context, _ agent.Actor, p TakeoverPa
 		return nil, agent.Errorf(agent.CodeInvalidParams, "%s changed since the preview; review it again", t.site.ConfigFile)
 	}
 	t.newVhost.SSL = p.SSL
+	if p.OwnCert != "" && p.OwnCert != t.newVhost.OwnCert {
+		return nil, agent.Errorf(agent.CodeInvalidParams, "%s doesn't use the certificate in %s", p.Domain, p.OwnCert)
+	}
+	t.newVhost.OwnCert = p.OwnCert // "" = the Layte certificate
 	if p.SSL {
-		for _, f := range []string{"fullchain.pem", "privkey.pem"} {
-			if ok, _ := d.FS.Exists(templates.CertDir(p.Domain) + "/" + f); !ok {
-				return nil, agent.Errorf(agent.CodeInvalidParams, "no Layte certificate for %s yet (%s missing)", p.Domain, f)
-			}
+		if err := d.requireCertFiles(p.Domain, t.newVhost.CertLive()); err != nil {
+			return nil, err
 		}
 	}
 	vhost, err := templates.Vhost(t.newVhost)

@@ -268,3 +268,36 @@ func TestNginxWorkers(t *testing.T) {
 		t.Error("old workers are gone, but still waiting")
 	}
 }
+
+func TestOwnCertChecks(t *testing.T) {
+	for _, bad := range []string{"/etc/letsencrypt/live", "/etc/letsencrypt/live/../x", "/etc/ssl/private", "/etc/letsencrypt/live/a/b"} {
+		p := SiteConfigParams{Domain: "shop.example.org", Username: "shopexampleorg", PHPVersion: "8.2", WebRoot: "/var/www/shop/public", OwnCert: bad}
+		if p.Validate() == nil {
+			t.Errorf("accepted own_cert %s", bad)
+		}
+	}
+	if (SiteConfigParams{Domain: "a.test", Username: "atest", PHPVersion: "8.2", OwnCert: "/etc/letsencrypt/live/a.test"}).Validate() == nil {
+		t.Error("own_cert accepted for a site Layte created")
+	}
+	if got := OwnCertOf("/etc/letsencrypt/live/a.test/fullchain.pem"); got != "/etc/letsencrypt/live/a.test" {
+		t.Errorf("OwnCertOf = %q", got)
+	}
+	if got := OwnCertOf("/etc/ssl/certs/a.pem"); got != "" {
+		t.Errorf("OwnCertOf(non-certbot) = %q", got)
+	}
+
+	// Taken over without a certificate: pointing at another one is refused.
+	d := devDeps(t)
+	if _, err := adoptShop(t, d); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := takeoverShop(t, d); err != nil {
+		t.Fatal(err)
+	}
+	d.FS.MkdirAll("/etc/letsencrypt/live/other.example.org", 0o755)
+	cfg := SiteConfigParams{Domain: "shop.example.org", Aliases: []string{"www.shop.example.org"}, Username: "shopexampleorg",
+		PHPVersion: "8.2", WebRoot: "/var/www/shop/public", SSL: true, OwnCert: "/etc/letsencrypt/live/other.example.org"}
+	if _, err := d.nginxVhostWrite(ctx, agent.Actor{}, cfg); err == nil || !strings.Contains(err.Error(), "doesn't use the certificate") {
+		t.Errorf("got %v", err)
+	}
+}

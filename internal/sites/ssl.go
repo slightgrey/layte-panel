@@ -22,9 +22,25 @@ func (s *Service) siteConfig(site store.Site, ssl bool) actions.SiteConfigParams
 		SSL: ssl, PHP: site.PHPSettings, Cache: site.PageCache}
 	if site.Adopted {
 		c.WebRoot = site.RootPath // its files stay where they were
+		c.OwnCert = ownCert(site)
 	}
 	return c
 }
+
+// ownCert: a taken-over adopted site may still use its own certbot
+// certificate (its live folder) instead of a Layte one.
+func ownCert(site store.Site) string {
+	if !site.Adopted || !site.SSL {
+		return ""
+	}
+	if dir := actions.OwnCertOf(site.CertPath); dir != templates.CertDir(site.Domain) {
+		return dir
+	}
+	return ""
+}
+
+// layteCertPath is where the site's Layte certificate lives.
+func layteCertPath(domain string) string { return templates.CertDir(domain) + "/fullchain.pem" }
 
 // requireManagedActive: Layte renders the site's nginx config (created, or
 // adopted and taken over), and no job is running.
@@ -64,8 +80,11 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 		}
 
 		j.Step("Enable HTTPS in nginx")
+		if site.Adopted {
+			site.CertPath = layteCertPath(site.Domain) // replaces the site's own certificate
+		}
 		if err := call("nginx.vhost_write", s.siteConfig(site, true)); err != nil {
-			return err // WriteConfig already restored the HTTP-only vhost
+			return err // WriteConfig already restored the previous vhost
 		}
 		site.SSL = true
 		if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {

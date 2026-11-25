@@ -49,10 +49,16 @@ After **Let Layte manage nginx**, your original config is kept: as `<file>.layte
 The site's PHP pool is then Layte's standard pool (`/etc/php/<v>/fpm/pool.d/layte-<domain>.conf`); point your config's
 `fastcgi_pass` at its socket, or restore the pool from before the adoption (`<pool>.layte-orig`).
 
-### Letting Layte manage nginx fails at the certificate step
-For sites with HTTPS, Layte first gets its own certificate (HTTP-01, files in the site's web root, served by your
-current config). Nothing is changed when this fails. Common causes: your config denies `/.well-known/` (e.g. a
-`location ~ /\.` rule without an exception), or a CDN/proxy doesn't pass `/.well-known/acme-challenge/` through.
+### Layte couldn't switch a taken-over site to its own certificate
+A site with HTTPS keeps its existing certbot certificate when Layte takes over its nginx config. Layte then
+asks Let's Encrypt for a `layte-<domain>` certificate through its own config (which always serves
+`/.well-known/acme-challenge/`) and switches to it. If that fails, the site keeps working with its old
+certificate; retry with **Switch to a Layte certificate** on the SSL tab. Common causes: DNS doesn't point to
+this server, or a CDN/proxy doesn't pass `/.well-known/acme-challenge/` through.
+
+A site with HTTPS that doesn't use a certbot certificate gets the Layte certificate *before* the takeover,
+through your current config; there, a rule such as `location ~ /\. { deny all; }` without an exception for
+`/.well-known/` makes it fail (nothing is changed).
 
 ### Everything else
 Run `layte version` and include its output, plus the relevant journal lines, in a GitHub issue.

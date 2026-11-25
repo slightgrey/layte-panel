@@ -27,6 +27,8 @@ export function SiteSSLCard({ site }: { site: Site }) {
 
   const showJob = (r: { job_id: string }) => setParams({ job: r.job_id }, { replace: true });
   const busy = site.status !== "active";
+  // A taken-over adopted site still on its own certificate can switch to a Layte one.
+  const canSwitch = site.ssl && site.adopted && site.nginx_managed && !!cert && !cert.managed;
 
   return (
     <Card>
@@ -79,6 +81,31 @@ export function SiteSSLCard({ site }: { site: Site }) {
           </form>
         ) : (
           <p className="text-sm text-muted-foreground">This site serves HTTP only.</p>
+        )}
+        {canSwitch && (
+          <form
+            className="flex flex-col gap-3 border-t pt-4"
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              issue.mutate(email.trim(), { onSuccess: showJob });
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              This site still uses its own certificate <code className="font-mono">{cert.name}</code>. Switch to a Layte
+              certificate so Layte Panel renews it; the old one is left alone.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-64 flex-1">
+                <Field label="Email for expiry notices" htmlFor="le-email-switch">
+                  <Input id="le-email-switch" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+              </div>
+              <Button type="submit" disabled={busy || issue.isPending}>
+                <ShieldCheck /> Switch to a Layte certificate
+              </Button>
+            </div>
+            <FormError message={issue.error?.message} />
+          </form>
         )}
         <FormError message={remove.error?.message} />
       </CardContent>

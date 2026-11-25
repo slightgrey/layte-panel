@@ -113,10 +113,10 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
             )}
 
             <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm">
-              {p.ssl && (
+              {p.ssl && !p.own_cert && (
                 <li>
                   Get a Layte certificate from Let's Encrypt (certbot puts a challenge file in the web root, served by your
-                  current config). If that fails, nothing is changed. Your current certificate is left alone.
+                  current config). If that fails, nothing is changed.
                 </li>
               )}
               <li>
@@ -137,9 +137,16 @@ function TakeoverDialog({ site, onClose }: { site: Site; onClose: () => void }) 
                 and use <code className="font-mono">{p.new_vhost_file}</code> instead (one <code>nginx -t</code> and reload).
               </li>
               <li>Check that the site answers exactly as before, then remove the old pool {p.pool_file}.</li>
+              {p.ssl && p.own_cert && (
+                <li>
+                  HTTPS keeps using your certificate in <code className="font-mono">{p.own_cert}</code> until Layte has its
+                  own: it then gets a Layte certificate from Let's Encrypt (Layte's config serves the challenge files) and
+                  switches to it. If that fails, the site keeps your certificate and you can retry on the SSL tab.
+                </li>
+              )}
             </ol>
 
-            <Diff title={`${p.vhost_file} → ${p.new_vhost_file}${p.ssl ? " (HTTPS block uses the new certificate)" : ""}`} lines={p.vhost_diff} />
+            <Diff title={`${p.vhost_file} → ${p.new_vhost_file}`} lines={p.vhost_diff} />
             <Diff title={`${p.pool_file} → ${p.new_pool_file}`} lines={p.pool_diff} />
 
             {p.ssl && (

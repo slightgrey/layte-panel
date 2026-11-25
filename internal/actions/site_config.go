@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
+	"path"
 	"regexp"
+	"strings"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/system"
@@ -28,6 +30,28 @@ type SiteConfigParams struct {
 	// WebRoot: an adopted site whose nginx config Layte took over (its files
 	// stay there). The agent checks it against the server's config.
 	WebRoot string `json:"web_root,omitempty"`
+	// OwnCert: a taken-over adopted site that still uses its own certbot
+	// certificate (live folder), until it gets a Layte one.
+	OwnCert string `json:"own_cert,omitempty"`
+}
+
+// validOwnCert checks a certbot live folder (/etc/letsencrypt/live/<name>).
+func validOwnCert(dir string) error {
+	name, ok := strings.CutPrefix(dir, letsencryptLive+"/")
+	if !ok || !certNameRe.MatchString(name) || strings.Contains(name, "..") || strings.Contains(name, "/") {
+		return fmt.Errorf("certificate folder %s is not a certbot live folder", dir)
+	}
+	return nil
+}
+
+// requireCertFiles checks that the live folder has the certificate and key.
+func (d Deps) requireCertFiles(domain, dir string) error {
+	for _, f := range []string{"fullchain.pem", "privkey.pem"} {
+		if ok, _ := d.FS.Exists(dir + "/" + f); !ok {
+			return agent.Errorf(agent.CodeInvalidParams, "no certificate for %s yet (%s/%s missing)", domain, dir, f)
+		}
+	}
+	return nil
 }
 
 func (p SiteConfigParams) Validate() error {
@@ -51,6 +75,14 @@ func (p SiteConfigParams) Validate() error {
 			return err
 		}
 	}
+	if p.OwnCert != "" {
+		if p.WebRoot == "" {
+			return errors.New("own_cert is only for adopted sites")
+		}
+		if err := validOwnCert(p.OwnCert); err != nil {
+			return err
+		}
+	}
 	if err := p.PHP.Validate(); err != nil {
 		return err
 	}
@@ -64,7 +96,7 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert}
 }
 
 // checkWebRoot: config writes for an adopted site need its vhost taken over.
@@ -72,7 +104,20 @@ func (d Deps) checkWebRoot(ctx context.Context, p SiteConfigParams) error {
 	if p.WebRoot == "" {
 		return nil
 	}
-	return d.verifyTakenOver(ctx, p.Domain, p.Username, p.WebRoot)
+	if err := d.verifyTakenOver(ctx, p.Domain, p.Username, p.WebRoot); err != nil {
+		return err
+	}
+	if p.OwnCert != "" {
+		// Only the certificate the site's config already uses.
+		site, err := d.discoveredSite(ctx, p.Domain)
+		if err != nil {
+			return err
+		}
+		if path.Dir(site.CertPath) != p.OwnCert {
+			return agent.Errorf(agent.CodeInvalidParams, "%s doesn't use the certificate in %s", p.Domain, p.OwnCert)
+		}
+	}
+	return nil
 }
 
 // requireInstalledPHP checks the version against what's really installed.
@@ -182,10 +227,8 @@ func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigPa
 		return nil, err
 	}
 	if p.SSL {
-		for _, f := range []string{"fullchain.pem", "privkey.pem"} {
-			if ok, _ := d.FS.Exists(templates.CertDir(p.Domain) + "/" + f); !ok {
-				return nil, agent.Errorf(agent.CodeInvalidParams, "no certificate for %s yet (%s missing)", p.Domain, f)
-			}
+		if err := d.requireCertFiles(p.Domain, p.site().CertLive()); err != nil {
+			return nil, err
 		}
 	}
 	content, err := templates.Vhost(p.site())

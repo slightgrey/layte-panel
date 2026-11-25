@@ -41,7 +41,8 @@ func (s *server) handleListSSL(w http.ResponseWriter, r *http.Request) {
 	for _, site := range sites {
 		if site.LayteConfigs() {
 			byName[templates.CertName(site.Domain)] = site
-		} else if site.CertPath != "" {
+		}
+		if !site.Managed && site.CertPath != "" { // imported/adopted: the certificate its vhost uses
 			byName[path.Base(path.Dir(site.CertPath))] = site
 		}
 	}
