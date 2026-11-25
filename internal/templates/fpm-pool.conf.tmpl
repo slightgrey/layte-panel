@@ -18,11 +18,11 @@ chdir = /
 security.limit_extensions = .php
 
 ; Keep PHP inside the site's own directory.
-php_admin_value[open_basedir] = {{.Dir}}/
-php_admin_value[upload_tmp_dir] = {{.Dir}}/tmp
-php_admin_value[sys_temp_dir] = {{.Dir}}/tmp
-php_admin_value[session.save_path] = {{.Dir}}/tmp
-php_admin_value[error_log] = {{.Dir}}/logs/php-error.log
+php_admin_value[open_basedir] = {{.BaseDirs}}
+php_admin_value[upload_tmp_dir] = {{.DataDir}}/tmp
+php_admin_value[sys_temp_dir] = {{.DataDir}}/tmp
+php_admin_value[session.save_path] = {{.DataDir}}/tmp
+php_admin_value[error_log] = {{.DataDir}}/logs/php-error.log
 php_admin_flag[log_errors] = on
 
 php_value[upload_max_filesize] = {{.PHP.Upload}}

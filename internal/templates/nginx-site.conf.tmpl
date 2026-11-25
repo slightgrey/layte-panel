@@ -11,7 +11,7 @@ server {
     server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
 
     location ^~ /.well-known/acme-challenge/ {
-        root {{.Dir}}/public;
+        root {{.Public}};
     }
     location / {
         return 301 https://$host$request_uri;
@@ -35,11 +35,11 @@ server {
 {{- end}}
     server_name {{.Domain}}{{range .Aliases}} {{.}}{{end}};
 
-    root {{.Dir}}/public;
+    root {{.Public}};
     index index.php index.html index.htm;
 
-    access_log {{.Dir}}/logs/access.log;
-    error_log  {{.Dir}}/logs/error.log;
+    access_log {{.DataDir}}/logs/access.log;
+    error_log  {{.DataDir}}/logs/error.log;
 
     client_max_body_size {{.PHP.NginxBodySize}};
 {{- if .Cache.Enabled}}

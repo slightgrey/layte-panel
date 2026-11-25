@@ -72,6 +72,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("security.overview", true, 15*time.Second, d.securityOverview),
 		agent.Def("site.disk_usage", true, 60*time.Second, d.siteDiskUsage),
 		agent.Def("site.adopt_preview", true, 30*time.Second, d.adoptPreview),
+		agent.Def("site.takeover_preview", true, 30*time.Second, d.takeoverPreview),
 		agent.Def("system.processes", true, 15*time.Second, d.systemProcesses),
 		agent.Def("system.disk_breakdown", true, 3*time.Minute, d.diskBreakdown),
 		agent.Def("wp.debug_get", true, 30*time.Second, d.wpDebugGet),
@@ -109,5 +110,6 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("updates.refresh", false, 5*time.Minute, u.updatesRefresh),
 		agent.Def("updates.apply", false, 45*time.Minute, u.updatesApply),
 		agent.Def("site.adopt", false, 5*time.Minute, d.siteAdopt),
+		agent.Def("site.nginx_takeover", false, 5*time.Minute, d.siteNginxTakeover),
 	)
 }

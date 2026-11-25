@@ -25,6 +25,9 @@ type SiteConfigParams struct {
 	PHP phpini.Settings `json:"php,omitempty"`
 	// Page cache (nginx FastCGI cache) in the vhost.
 	Cache pagecache.Settings `json:"cache,omitempty"`
+	// WebRoot: an adopted site whose nginx config Layte took over (its files
+	// stay there). The agent checks it against the server's config.
+	WebRoot string `json:"web_root,omitempty"`
 }
 
 func (p SiteConfigParams) Validate() error {
@@ -43,6 +46,11 @@ func (p SiteConfigParams) Validate() error {
 	if err := validate.SiteUsername(p.Username); err != nil {
 		return err
 	}
+	if p.WebRoot != "" {
+		if err := (FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Op: "stat", Path: "."}).validate(readOps); err != nil {
+			return err
+		}
+	}
 	if err := p.PHP.Validate(); err != nil {
 		return err
 	}
@@ -56,7 +64,15 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot}
+}
+
+// checkWebRoot: config writes for an adopted site need its vhost taken over.
+func (d Deps) checkWebRoot(ctx context.Context, p SiteConfigParams) error {
+	if p.WebRoot == "" {
+		return nil
+	}
+	return d.verifyTakenOver(ctx, p.Domain, p.Username, p.WebRoot)
 }
 
 // requireInstalledPHP checks the version against what's really installed.
@@ -84,6 +100,9 @@ var (
 // phpPoolWrite renders and safely installs the site's PHP-FPM pool.
 func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParams) (any, error) {
 	if err := d.requireInstalledPHP(p.PHPVersion); err != nil {
+		return nil, err
+	}
+	if err := d.checkWebRoot(ctx, p); err != nil {
 		return nil, err
 	}
 	if _, err := d.Users.Lookup(p.Username); err != nil {
@@ -157,6 +176,9 @@ func (d Deps) vhostFiles(domain string) (path, link string) {
 // nginxVhostWrite renders and safely installs + enables the site's vhost.
 func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigParams) (any, error) {
 	if err := d.requireInstalledPHP(p.PHPVersion); err != nil {
+		return nil, err
+	}
+	if err := d.checkWebRoot(ctx, p); err != nil {
 		return nil, err
 	}
 	if p.SSL {

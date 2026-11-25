@@ -111,3 +111,134 @@ func RestoreAdopted(ctx context.Context, fsys FS, r Runner, path string, test, r
 	}
 	return nil
 }
+
+// ReplaceSpec describes swapping a config file Layte didn't create (the
+// admin's nginx vhost of an adopted site) for one Layte renders.
+type ReplaceSpec struct {
+	New WriteSpec // the Layte file (+ its enable link); must not exist yet
+	// Old is the admin's file as the service loads it: a regular file, or a
+	// symlink (e.g. sites-enabled/x → sites-available/x).
+	Old string
+	// Keep is where a regular Old file is moved, so the service no longer
+	// loads it but the admin keeps it (unused when Old is a symlink: only
+	// the link is removed; its target stays where it is).
+	Keep string
+	// Expected is the content the admin saw in the preview.
+	Expected []byte
+}
+
+// ReplaceConfig disables the old file and installs the new one, with one
+// config test and reload for both, so the two are never loaded together. On
+// any failure everything is put back. The returned undo does the same after
+// success (used when a later check fails).
+func ReplaceConfig(ctx context.Context, fsys FS, r Runner, s ReplaceSpec) (undo func(context.Context) error, err error) {
+	n := s.New
+	if !IsManaged(n.Content) {
+		return nil, fmt.Errorf("replace %s: content must start with the Layte marker", s.Old)
+	}
+	if n.Perm == 0 {
+		n.Perm = 0o644
+	}
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	old, err := fsys.ReadFile(s.Old) // through the link, if it is one
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", s.Old, err)
+	}
+	if IsManaged(old) {
+		return nil, fmt.Errorf("%s is already managed by Layte Panel", s.Old)
+	}
+	if string(old) != string(s.Expected) {
+		return nil, fmt.Errorf("%s changed since the preview; review the changes again", s.Old)
+	}
+	target, isLink, err := fsys.LinkTarget(s.Old)
+	if err != nil {
+		return nil, fmt.Errorf("check %s: %w", s.Old, err)
+	}
+	var perm fs.FileMode = 0o644
+	if !isLink {
+		fi, err := fsys.Lstat(s.Old)
+		if err != nil || !fi.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s is not a regular file", s.Old)
+		}
+		perm = fi.Mode().Perm()
+		if s.Keep == "" {
+			return nil, fmt.Errorf("replace %s: no place to keep the original", s.Old)
+		}
+		if ok, _ := fsys.Exists(s.Keep); ok {
+			return nil, fmt.Errorf("%s already exists; move it away first", s.Keep)
+		}
+	}
+	for _, p := range []string{n.Path, n.Link} {
+		if ok, _ := fsys.Exists(p); p != "" && ok {
+			return nil, fmt.Errorf("%s already exists; move it away first", p)
+		}
+	}
+
+	// Put the old file back and the new one away (best effort, idempotent).
+	restore := func() {
+		if n.Link != "" {
+			fsys.Remove(n.Link)
+		}
+		fsys.Remove(n.Path)
+		if isLink {
+			if ok, _ := fsys.Exists(s.Old); !ok {
+				fsys.Symlink(target, s.Old)
+			}
+		} else if ok, _ := fsys.Exists(s.Keep); ok {
+			if fsys.WriteFileAtomic(s.Old, old, perm) == nil {
+				fsys.Remove(s.Keep)
+			}
+		}
+	}
+
+	if !isLink {
+		if err := fsys.WriteFileAtomic(s.Keep, old, perm); err != nil {
+			return nil, fmt.Errorf("keep original %s: %w", s.Old, err)
+		}
+	}
+	if err := fsys.Remove(s.Old); err != nil {
+		restore()
+		return nil, fmt.Errorf("disable %s: %w", s.Old, err)
+	}
+	if err := fsys.WriteFileAtomic(n.Path, n.Content, n.Perm); err != nil {
+		restore()
+		return nil, fmt.Errorf("write %s: %w", n.Path, err)
+	}
+	if n.Link != "" {
+		if err := fsys.Symlink(n.Path, n.Link); err != nil {
+			restore()
+			return nil, fmt.Errorf("enable %s: %w", n.Link, err)
+		}
+	}
+	if n.Test.Bin != "" {
+		if res, err := r.RunCmd(ctx, n.Test); err != nil {
+			restore()
+			return nil, &TestError{Cmd: n.Test.String(), Output: testOutput(res, err)}
+		}
+	}
+	if n.Reload.Bin != "" {
+		if res, err := r.RunCmd(ctx, n.Reload); err != nil {
+			restore()
+			r.RunCmd(ctx, n.Reload)
+			return nil, fmt.Errorf("reload after replacing %s: %s", s.Old, testOutput(res, err))
+		}
+	}
+	return func(ctx context.Context) error {
+		configMu.Lock()
+		defer configMu.Unlock()
+		restore()
+		if n.Test.Bin != "" {
+			if res, err := r.RunCmd(ctx, n.Test); err != nil {
+				return &TestError{Cmd: n.Test.String(), Output: testOutput(res, err)}
+			}
+		}
+		if n.Reload.Bin != "" {
+			if res, err := r.RunCmd(ctx, n.Reload); err != nil {
+				return fmt.Errorf("reload after restoring %s: %s", s.Old, testOutput(res, err))
+			}
+		}
+		return nil
+	}, nil
+}

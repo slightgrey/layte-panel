@@ -3,7 +3,7 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { databasesKey, useDatabases } from "@/api/databases";
-import { siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
+import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { PageCacheCard } from "@/components/PageCacheCard";
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { formatBytes } from "@/lib/format";
 import { AdoptSite } from "./AdoptSite";
+import { TakeoverSite } from "./TakeoverSite";
 import { FormError } from "./AuthShell";
 
 export function SiteDetailPage() {
@@ -71,15 +72,22 @@ export function SiteDetailPage() {
           it didn't create. Adopt it to manage it here: it gets its own Linux user, and its nginx config stays yours.
         </Notice>
       )}
-      {s.adopted && (
-        <Notice>
+      {s.adopted && !s.nginx_managed && (
+        <Notice action={s.status === "active" && <TakeoverSite site={s} />}>
           Adopted: this site runs as <code className="font-mono">{s.system_user}</code> with a Layte-managed PHP-FPM pool. Its
-          nginx config is still yours and is never rewritten by Layte Panel.
+          nginx config is still yours and is never rewritten by Layte Panel. Let Layte Panel manage it to switch PHP
+          versions, change PHP settings and use the page cache.
+        </Notice>
+      )}
+      {s.adopted && s.nginx_managed && (
+        <Notice>
+          Adopted: this site runs as <code className="font-mono">{s.system_user}</code>. Layte Panel manages its nginx config
+          and PHP-FPM pool; its files stay in <code className="font-mono">{s.root_path}</code>.
         </Notice>
       )}
 
       <OverviewCard site={s} />
-      {s.managed && s.wordpress && <PageCacheCard site={s} />}
+      {layteConfigs(s) && s.wordpress && <PageCacheCard site={s} />}
       <VhostCard site={s} />
     </div>
   );
@@ -261,7 +269,7 @@ function OverviewCard({ site: s }: { site: Site }) {
         <dl className="divide-y">
           <Row label="Aliases">{s.aliases.length ? s.aliases.join(", ") : "–"}</Row>
           <Row label="PHP version">
-            {s.managed && s.status === "active" ? <PHPSwitch site={s} /> : s.php_version || "none (static)"}
+            {layteConfigs(s) && s.status === "active" ? <PHPSwitch site={s} /> : s.php_version || "none (static)"}
           </Row>
           <Row label="Web root">
             <span className={mono}>{s.root_path || "–"}</span>

@@ -11,6 +11,7 @@ import (
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/nginx"
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 // allowedLogs are the only files logs.read will open. Paths are checked both
@@ -20,7 +21,12 @@ var allowedLogs = []*regexp.Regexp{
 	regexp.MustCompile(`^/var/log/nginx/[A-Za-z0-9._-]+\.log$`),
 	regexp.MustCompile(`^/var/log/php[0-9]+\.[0-9]+-fpm\.log$`),
 	regexp.MustCompile(`^/home/[a-z][a-z0-9_-]{2,31}/[a-z0-9.-]+/logs/[A-Za-z0-9._-]+\.log$`),
+	// Adopted sites: their logs/ folder is in the user's home.
+	regexp.MustCompile(`^/home/[a-z][a-z0-9_-]{2,31}/logs/[A-Za-z0-9._-]+\.log$`),
 }
+
+// adoptedLogDir matches an adopted site's logs folder (from its Layte vhost).
+var adoptedLogDir = regexp.MustCompile(`^/home/[a-z][a-z0-9_-]{2,31}/logs$`)
 
 func logAllowed(p string) bool {
 	if path.Clean(p) != p {
@@ -96,9 +102,17 @@ func (d Deps) logsSources(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 					}
 				}
 			}
-			// Everything in a Layte site's logs/ folder (php-error.log, cron.log, …).
+			// Everything in a Layte site's logs/ folder (php-error.log, cron.log, …):
+			// next to public/, or (adopted sites Layte took over) where the
+			// vhost's access log is.
+			logDir := ""
 			if strings.HasSuffix(site.Root, "/public") {
-				logs, _ := d.FS.Glob(path.Dir(site.Root) + "/logs/*.log")
+				logDir = path.Dir(site.Root) + "/logs"
+			} else if a := nginx.First(srv.Block, "access_log"); system.IsManaged(b) && a != nil && adoptedLogDir.MatchString(path.Dir(a.Arg(0))) {
+				logDir = path.Dir(a.Arg(0))
+			}
+			if logDir != "" {
+				logs, _ := d.FS.Glob(logDir + "/*.log")
 				sort.Strings(logs)
 				for _, l := range logs {
 					add(l, strings.TrimSuffix(path.Base(l), ".log"), site.Domain)

@@ -96,6 +96,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/sites/{id}/page-cache/purge", authed(s.handlePurgeCache))
 	mux.Handle("GET /api/v1/sites/{id}/adopt", authed(s.handleAdoptPreview))
 	mux.Handle("POST /api/v1/sites/{id}/adopt", authed(s.handleAdopt))
+	mux.Handle("GET /api/v1/sites/{id}/takeover", authed(s.handleTakeoverPreview))
+	mux.Handle("POST /api/v1/sites/{id}/takeover", authed(s.handleTakeover))
 	mux.Handle("POST /api/v1/sites/{id}/ssl", authed(s.handleIssueSSL))
 	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
 	mux.Handle("POST /api/v1/sites/{id}/ssl/renew", authed(s.handleRenewSSL))

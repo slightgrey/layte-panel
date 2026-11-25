@@ -22,6 +22,9 @@ func TestGolden(t *testing.T) {
 	sslSite.SSL = true
 	cached := sslSite
 	cached.Cache = pagecache.Settings{Enabled: true, TTLMinutes: 30}
+	// An adopted site Layte took over: its files stay in their own web root.
+	adopted := cached
+	adopted.WebRoot = "/var/www/example"
 	tuned := site
 	tuned.PHP = phpini.Settings{MemoryLimit: "512M", UploadMax: "1G", MaxExecutionTime: 600, MaxInputVars: 5000}
 	tests := []struct {
@@ -34,6 +37,8 @@ func TestGolden(t *testing.T) {
 		{"fpm-pool-php-settings.golden", func(Site) ([]byte, error) { return Pool(tuned) }},
 		{"nginx-site-php-settings.golden", func(Site) ([]byte, error) { return Vhost(tuned) }},
 		{"nginx-site-cache.golden", func(Site) ([]byte, error) { return Vhost(cached) }},
+		{"nginx-site-adopted.golden", func(Site) ([]byte, error) { return Vhost(adopted) }},
+		{"fpm-pool-adopted.golden", func(Site) ([]byte, error) { return Pool(adopted) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {

@@ -179,6 +179,42 @@ func (s *server) handleAdopt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
 }
 
+// GET /api/v1/sites/{id}/takeover — what letting Layte manage an adopted
+// site's nginx config would change (nothing is changed).
+func (s *server) handleTakeoverPreview(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.sites.TakeoverPreview(r.Context(), actorOf(r), site)
+	if err != nil {
+		s.writeSiteError(w, "takeover preview", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// POST /api/v1/sites/{id}/takeover {vhost_hash, email} — take over (job).
+func (s *server) handleTakeover(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		VhostHash string `json:"vhost_hash"`
+		Email     string `json:"email"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.Takeover(r.Context(), actorOf(r), site, req.VhostHash, req.Email)
+	if err != nil {
+		s.writeSiteError(w, "take over nginx config", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
 // GET /api/v1/php/versions
 func (s *server) handlePHPVersions(w http.ResponseWriter, r *http.Request) {
 	var versions []string

@@ -21,7 +21,8 @@ const (
 	// Root is the folder that holds one cache folder per site.
 	Root = "/var/cache/nginx/layte"
 	// MarkerName is the file the site's must-use plugin creates in the
-	// site's tmp/ folder when content changes; the agent then purges.
+	// site's tmp/ folder (<site>/tmp, or /home/<user>/tmp for adopted sites)
+	// when content changes; the agent then purges.
 	MarkerName = "layte-purge-cache"
 	// PluginRel is the must-use plugin, relative to the WordPress folder.
 	PluginRel = "wp-content/mu-plugins/layte-page-cache.php"
@@ -81,8 +82,14 @@ function layte_page_cache_purge() {
 		return;
 	}
 	$done = true;
-	// <site>/public/ is ABSPATH; the marker goes to <site>/tmp/ (not public).
-	@touch( dirname( ABSPATH ) . '/tmp/` + MarkerName + `' );
+	// The marker goes to the site's tmp/ folder (never public): Layte's PHP
+	// pool sets sys_temp_dir to it. Without it (WP-CLI), <site>/public/ is
+	// ABSPATH, so <site>/tmp/ is next to it.
+	$dir = ini_get( 'sys_temp_dir' );
+	if ( ! $dir ) {
+		$dir = dirname( ABSPATH ) . '/tmp';
+	}
+	@touch( rtrim( $dir, '/' ) . '/` + MarkerName + `' );
 }
 
 add_action(

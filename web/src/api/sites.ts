@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { AdoptPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, PageCache, PHPSettings, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
+import type { AdoptPreview, TakeoverPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, PageCache, PHPSettings, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
 
 /** POST /sites: starts a creation job. */
 export function useCreateSite() {
@@ -116,6 +116,28 @@ export function useAdoptPreview(id: number, enabled: boolean) {
     enabled,
     retry: false,
     gcTime: 0,
+  });
+}
+
+/** Layte renders the site's nginx config and PHP pool: sites it created, and adopted sites it took over. */
+export function layteConfigs(site: Site) {
+  return site.managed || (site.adopted && site.nginx_managed);
+}
+
+/** GET /sites/{id}/takeover: what letting Layte manage the nginx config changes (nothing is changed). */
+export function useTakeoverPreview(id: number) {
+  return useQuery({
+    queryKey: ["sites", id, "takeover"],
+    queryFn: () => api<TakeoverPreview>("GET", `/sites/${id}/takeover`),
+    retry: false,
+    gcTime: 0,
+  });
+}
+
+/** POST /sites/{id}/takeover: let Layte manage the adopted site's nginx config (job). */
+export function useTakeover(id: number) {
+  return useMutation({
+    mutationFn: (v: { vhost_hash: string; email: string }) => api<JobStarted>("POST", `/sites/${id}/takeover`, v),
   });
 }
 
