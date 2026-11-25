@@ -152,6 +152,7 @@ export interface TakeoverPreview {
   web_root: string;
   php_version: string;
   ssl: boolean;
+  own_cert: string; // certbot live folder of the certificate kept at first ("" = none usable)
   vhost_file: string; // the admin's file, as nginx loads it
   kept_as: string; // where it goes ("" = only the sites-enabled link is removed)
   new_vhost_file: string;

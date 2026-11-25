@@ -35,6 +35,9 @@ func TestTakeoverAdopted(t *testing.T) {
 	}
 	site, _ := e.st.SiteByID(ctx, id)
 	site.Adopted = true
+	if c := os.Getenv("LAYTE_IT_CERT"); c != "" { // the site's own certbot certificate (fullchain.pem)
+		site.SSL, site.CertPath = true, c
+	}
 	e.st.UpdateSite(ctx, site)
 	before := get(t, f[0])
 
@@ -47,7 +50,9 @@ func TestTakeoverAdopted(t *testing.T) {
 	if len(p.Blockers) > 0 {
 		t.Fatal("blocked")
 	}
-	jobID, err := e.svc.Takeover(ctx, e.actor, site, p.VhostHash, "")
+	site, _ = e.st.SiteByID(ctx, id)
+	email := os.Getenv("LAYTE_IT_EMAIL") // needed for sites with HTTPS
+	jobID, err := e.svc.Takeover(ctx, e.actor, site, p.VhostHash, email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,6 +65,7 @@ func TestTakeoverAdopted(t *testing.T) {
 	if !site.NginxManaged || !site.LayteConfigs() {
 		t.Fatalf("site after takeover: %+v", site)
 	}
+	t.Logf("after takeover: ssl=%v cert=%s", site.SSL, site.CertPath)
 
 	// PHP settings now rewrite the Layte pool and vhost (web root kept).
 	jobID, err = e.svc.SetPHPSettings(ctx, e.actor, site, phpini.Settings{UploadMax: "128M", MaxExecutionTime: 120})

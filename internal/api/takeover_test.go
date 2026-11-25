@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/system"
 )
 
@@ -75,5 +76,89 @@ func TestTakeoverAdoptedSite(t *testing.T) {
 	// Files and cron still work as for an adopted site.
 	if st, body := c.do("POST", "/api/v1/sites/"+shop+"/files/mkdir", map[string]string{"path": "uploads"}); st != 204 {
 		t.Errorf("mkdir after takeover: %d %v", st, body)
+	}
+}
+
+// httpsAdoptedShop gives the shop an HTTPS vhost with its own certbot
+// certificate, whose dotfile rule also blocks Let's Encrypt's challenge path
+// (like many hand-written configs), adopts it and returns its takeover preview.
+func httpsAdoptedShop(t *testing.T, c *client, deps actions.Deps) (string, map[string]any) {
+	t.Helper()
+	const vhost = "/etc/nginx/sites-enabled/shop.example.org.conf"
+	b, _ := deps.FS.ReadFile(vhost)
+	https := strings.Replace(string(b), "    listen 80;", `    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/shop.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/shop.example.org/privkey.pem;
+    location ~ /\. { deny all; }`, 1)
+	deps.FS.WriteFileAtomic(vhost, []byte(https), 0o644)
+	deps.FS.MkdirAll("/etc/letsencrypt/live/shop.example.org", 0o755)
+	for _, f := range []string{"fullchain.pem", "privkey.pem"} {
+		deps.FS.WriteFileAtomic("/etc/letsencrypt/live/shop.example.org/"+f, []byte("x"), 0o600)
+	}
+	c.do("POST", "/api/v1/sites/scan", nil)
+	shop := siteIDByDomain(t, c, "shop.example.org")
+	_, prev := c.do("GET", "/api/v1/sites/"+shop+"/adopt", nil)
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/adopt", map[string]string{"username": "shopexampleorg", "pool_hash": prev["pool_hash"].(string)})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("adopt job: %v", job)
+	}
+	_, tp := c.do("GET", "/api/v1/sites/"+shop+"/takeover", nil)
+	if tp["ssl"] != true || tp["own_cert"] != "/etc/letsencrypt/live/shop.example.org" {
+		t.Fatalf("preview: %v", tp)
+	}
+	return shop, tp
+}
+
+const (
+	shopOwnCert   = "/etc/letsencrypt/live/shop.example.org/fullchain.pem"
+	shopLayteCert = "/etc/letsencrypt/live/layte-shop.example.org/fullchain.pem"
+	shopVhostPath = "/etc/nginx/sites-available/layte-shop.example.org.conf"
+)
+
+// The takeover keeps the site's certificate first, then switches to a Layte one.
+func TestTakeoverSwitchesToLayteCertificate(t *testing.T) {
+	_, c, deps := siteEnv(t)
+	shop, tp := httpsAdoptedShop(t, c, deps)
+	if st, _ := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]string{"vhost_hash": tp["vhost_hash"].(string)}); st != 400 {
+		t.Errorf("HTTPS takeover without an email: %d", st)
+	}
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]string{"vhost_hash": tp["vhost_hash"].(string), "email": "admin@example.org"})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("takeover job: %v", job)
+	}
+	_, site := c.do("GET", "/api/v1/sites/"+shop, nil)
+	if site["nginx_managed"] != true || site["cert_path"] != shopLayteCert {
+		t.Errorf("site after takeover: %v", site)
+	}
+	if v, _ := deps.FS.ReadFile(shopVhostPath); !strings.Contains(string(v), "ssl_certificate     "+shopLayteCert+";") {
+		t.Errorf("vhost doesn't use the Layte certificate:\n%s", v)
+	}
+	c.do("POST", "/api/v1/sites/scan", nil)
+	if _, site := c.do("GET", "/api/v1/sites/"+shop, nil); site["cert_path"] != shopLayteCert {
+		t.Errorf("after rescan: %v", site["cert_path"])
+	}
+}
+
+// If the Layte certificate can't be issued, the site is still taken over and
+// keeps serving HTTPS with its own certificate; later config writes keep it.
+func TestTakeoverKeepsOwnCertificate(t *testing.T) {
+	_, c, deps := siteEnv(t)
+	shop, tp := httpsAdoptedShop(t, c, deps)
+	deps.FS.Remove("/usr/bin/certbot") // issuing fails
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]string{"vhost_hash": tp["vhost_hash"].(string), "email": "admin@example.org"})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("takeover job: %v", job)
+	}
+	_, site := c.do("GET", "/api/v1/sites/"+shop, nil)
+	if site["nginx_managed"] != true || site["cert_path"] != shopOwnCert {
+		t.Errorf("site after takeover: %v", site)
+	}
+	_, body = c.do("PUT", "/api/v1/sites/"+shop+"/php-settings", map[string]any{"upload_max": "128M"})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("php settings job: %v", job)
+	}
+	if v, _ := deps.FS.ReadFile(shopVhostPath); !strings.Contains(string(v), "ssl_certificate     "+shopOwnCert+";") ||
+		!strings.Contains(string(v), "client_max_body_size 128m;") {
+		t.Errorf("vhost lost the site's own certificate:\n%s", v)
 	}
 }
