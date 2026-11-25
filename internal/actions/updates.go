@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -18,8 +19,9 @@ const updatesTTL = 10 * time.Minute
 // Updates is the result of updates.pending. It reflects the local package
 // lists (as of the last `apt update`, usually run daily by unattended-upgrades).
 type Updates struct {
-	Total     int       `json:"total"`
+	Total     int       `json:"total"` // ready to install (phased ones not counted)
 	Security  int       `json:"security"`
+	Phased    int       `json:"phased"` // deferred by Ubuntu's phased rollout
 	Packages  []Package `json:"packages"`
 	CheckedAt time.Time `json:"checked_at"`
 }
@@ -29,6 +31,7 @@ type Package struct {
 	Version  string `json:"version"`
 	From     string `json:"from"`
 	Security bool   `json:"security"`
+	Phased   bool   `json:"phased,omitempty"` // Ubuntu's rollout hasn't reached this server yet
 }
 
 type updates struct {
@@ -51,6 +54,11 @@ func (u *updates) pending(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 		return nil, fmt.Errorf("apt list: %w", err)
 	}
 	up := parseAptUpgradable(string(res.Stdout))
+	// Which of them Ubuntu's phased rollout holds back on this server (apt's
+	// own plan, outside the sandbox; see simulate). Best effort.
+	if plan, err := u.simulate(ctx, UpgradeParams{}); err == nil {
+		markPhased(&up, plan.Phased)
+	}
 	up.CheckedAt = now.UTC()
 	u.cached, u.at = &up, now
 	return up, nil
@@ -86,4 +94,21 @@ func parseAptUpgradable(out string) Updates {
 		}
 	}
 	return up
+}
+
+// markPhased flags phased packages and leaves them out of the counts of
+// updates ready to install.
+func markPhased(up *Updates, phased []string) {
+	for i := range up.Packages {
+		p := &up.Packages[i]
+		if !slices.Contains(phased, p.Name) {
+			continue
+		}
+		p.Phased = true
+		up.Phased++
+		up.Total--
+		if p.Security {
+			up.Security--
+		}
+	}
 }

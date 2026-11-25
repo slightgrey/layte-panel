@@ -121,11 +121,12 @@ func TestUpdatesRepair(t *testing.T) {
 	inner := d.Runner.(*system.FakeRunner).Handle
 	broken := true
 	d.Runner = &system.FakeRunner{Handle: func(c system.Cmd) (system.Result, error) {
-		if broken && c.Bin == aptGetBin && slices.Contains(c.Args, "upgrade") {
+		apt := c.Bin == aptGetBin || (c.Bin == systemdRunBin && slices.Contains(c.Args, aptGetBin)) // the plan runs outside the sandbox
+		if broken && apt && slices.Contains(c.Args, "upgrade") {
 			return system.Result{Stdout: []byte("E: Unmet dependencies. Try 'apt --fix-broken install' with no packages (or specify a solution).\n")},
 				&system.ExitError{Bin: c.Bin, ExitCode: 100}
 		}
-		if c.Bin == aptGetBin && slices.Contains(c.Args, "--fix-broken") {
+		if apt && slices.Contains(c.Args, "--fix-broken") {
 			return system.Result{Stdout: []byte("Inst linux-image-6.8.0-151-generic (6.8.0-151.151 Ubuntu:24.04/noble-updates [amd64])\n")}, nil
 		}
 		return inner(c)
@@ -222,5 +223,41 @@ func TestParseInst(t *testing.T) {
 		if _, ok := parseInst(bad); ok {
 			t.Errorf("parsed %q", bad)
 		}
+	}
+}
+
+// Ubuntu's phased rollout: apt defers some upgrades; the plan lists them
+// apart, and pending doesn't count them as ready.
+func TestPhasedUpdates(t *testing.T) {
+	out := `Reading package lists...
+The following upgrades have been deferred due to phasing:
+  libsqlite3-0 libfoo1
+The following packages have been kept back:
+  libgd3
+0 upgraded, 0 newly installed, 0 to remove and 3 not upgraded.
+`
+	plan := parseSimulation(out)
+	if !slices.Equal(plan.Phased, []string{"libsqlite3-0", "libfoo1"}) || !slices.Equal(plan.KeptBack, []string{"libgd3"}) || len(plan.Upgrades) != 0 {
+		t.Errorf("plan: %+v", plan)
+	}
+
+	up := Updates{Total: 3, Security: 1, Packages: []Package{{Name: "libsqlite3-0"}, {Name: "libgd3"}, {Name: "openssl", Security: true}}}
+	markPhased(&up, plan.Phased)
+	if up.Total != 2 || up.Phased != 1 || up.Security != 1 || !up.Packages[0].Phased || up.Packages[1].Phased {
+		t.Errorf("updates: %+v", up)
+	}
+}
+
+// The plan runs outside the agent's sandbox (where apt honours phasing),
+// like the install itself.
+func TestPlanRunsOutsideSandbox(t *testing.T) {
+	d := devDeps(t)
+	u := newUpdates(d)
+	if _, err := u.simulate(ctx, UpgradeParams{}); err != nil {
+		t.Fatal(err)
+	}
+	calls := d.Runner.(*system.FakeRunner).CallList()
+	if len(calls) == 0 || !strings.HasPrefix(calls[len(calls)-1], systemdRunBin+" ") {
+		t.Errorf("plan not run through systemd-run: %v", calls)
 	}
 }

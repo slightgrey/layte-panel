@@ -231,6 +231,7 @@ function UpdatesCard({ section }: { section: Section<Updates> }) {
         {u && (
           <div className="flex gap-2">
             {u.security > 0 && <Badge variant="danger">{u.security} security</Badge>}
+            {u.phased > 0 && <Badge title="Ubuntu is still rolling these out; they install by themselves later">{u.phased} phased</Badge>}
             <Badge variant={u.total > 0 ? "warning" : "success"}>{u.total === 0 ? "up to date" : `${u.total} total`}</Badge>
           </div>
         )}
@@ -238,9 +239,16 @@ function UpdatesCard({ section }: { section: Section<Updates> }) {
       <CardContent>
         <SectionBody section={section}>
           {(up) =>
-            up.total === 0 ? (
+            up.total === 0 && up.phased === 0 ? (
               <p className="text-sm text-muted-foreground">All packages are up to date.</p>
             ) : (
+              <>
+                {up.total === 0 && (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Up to date. {up.phased} update{up.phased === 1 ? " is" : "s are"} still being rolled out by Ubuntu and will
+                    install by {up.phased === 1 ? "itself" : "themselves"} later.
+                  </p>
+                )}
               <>
                 <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
                   <ChevronDown className={open ? "rotate-180 transition-transform" : "transition-transform"} />
@@ -263,7 +271,10 @@ function UpdatesCard({ section }: { section: Section<Updates> }) {
                             <TableCell className="font-medium">{p.name}</TableCell>
                             <TableCell className="font-mono text-xs text-muted-foreground">{p.from}</TableCell>
                             <TableCell className="font-mono text-xs">{p.version}</TableCell>
-                            <TableCell className="text-right">{p.security && <Badge variant="danger">security</Badge>}</TableCell>
+                            <TableCell className="text-right">
+                              {p.security && <Badge variant="danger">security</Badge>}
+                              {p.phased && <Badge title="Ubuntu's phased rollout hasn't reached this server yet">phased</Badge>}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -277,6 +288,7 @@ function UpdatesCard({ section }: { section: Section<Updates> }) {
                   </Link>
                   .
                 </p>
+              </>
               </>
             )
           }
