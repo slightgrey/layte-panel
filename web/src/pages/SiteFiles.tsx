@@ -5,6 +5,7 @@ import { downloadURL, useFileActions, useFileContent, useFiles } from "@/api/fil
 import { useSite } from "@/api/sites";
 import type { FileEntry } from "@/api/types";
 import { languageFor } from "@/components/codeLanguages";
+import { SFTPCard } from "@/components/SFTPCard";
 import { SiteHeader } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -200,6 +201,7 @@ export function SiteFilesPage() {
         onClose={() => setRenaming(null)}
         onSubmit={(name) => actions.rename.mutateAsync({ path: join(dir, renaming!.name), to: join(dir, name) })}
       />
+      {site.data && (site.data.managed || site.data.adopted) && site.data.system_user && <SFTPCard site={site.data} />}
     </div>
   );
 }
