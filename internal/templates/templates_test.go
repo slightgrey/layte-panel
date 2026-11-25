@@ -9,6 +9,7 @@ import (
 
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
+	"github.com/slightgrey/layte-panel/internal/redirects"
 	"github.com/slightgrey/layte-panel/internal/system"
 )
 
@@ -25,6 +26,8 @@ func TestGolden(t *testing.T) {
 	// An adopted site Layte took over: its files stay in their own web root.
 	adopted := cached
 	adopted.WebRoot = "/var/www/example"
+	redirected := sslSite
+	redirected.Redirects = []redirects.Redirect{{From: "/hire-vince", To: "/hire/", Code: 301}, {From: "/old", To: "https://example.org/new?a=1&b=2", Code: 302}}
 	tuned := site
 	tuned.PHP = phpini.Settings{MemoryLimit: "512M", UploadMax: "1G", MaxExecutionTime: 600, MaxInputVars: 5000}
 	tests := []struct {
@@ -39,6 +42,7 @@ func TestGolden(t *testing.T) {
 		{"nginx-site-cache.golden", func(Site) ([]byte, error) { return Vhost(cached) }},
 		{"nginx-site-adopted.golden", func(Site) ([]byte, error) { return Vhost(adopted) }},
 		{"fpm-pool-adopted.golden", func(Site) ([]byte, error) { return Pool(adopted) }},
+		{"nginx-site-redirects.golden", func(Site) ([]byte, error) { return Vhost(redirected) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {

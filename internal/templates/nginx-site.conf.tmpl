@@ -74,6 +74,14 @@ server {
         deny all;
     }
 
+{{- if .Redirects}}
+
+    # Redirects (set in Layte Panel).
+{{- range .Redirects}}{{$r := .}}{{range .Paths}}
+    location = {{.}} { return {{$r.Code}} {{$r.To}}; }
+{{- end}}{{end}}
+{{- end}}
+
     location / {
         try_files $uri $uri/ /index.php?$args;
     }

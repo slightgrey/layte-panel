@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { AdoptPreview, TakeoverPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, PageCache, PHPSettings, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
+import type { AdoptPreview, Redirect, TakeoverPreview, CreateSiteRequest, DeleteSiteRequest, DiskUsage, JobStarted, PageCache, PHPSettings, Site, SitesResponse, ScanResponse, Vhost, WPDebugState } from "./types";
 
 /** POST /sites: starts a creation job. */
 export function useCreateSite() {
@@ -22,6 +22,13 @@ export function useSwitchPHP(id: number) {
 export function useSetPHPSettings(id: number) {
   return useMutation({
     mutationFn: (settings: PHPSettings) => api<JobStarted>("PUT", `/sites/${id}/php-settings`, settings),
+  });
+}
+
+/** PUT /sites/{id}/redirects: starts a job that replaces the site's redirects. */
+export function useSetRedirects(id: number) {
+  return useMutation({
+    mutationFn: (redirects: Redirect[]) => api<JobStarted>("PUT", `/sites/${id}/redirects`, { redirects }),
   });
 }
 
