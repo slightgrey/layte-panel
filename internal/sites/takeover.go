@@ -3,6 +3,7 @@ package sites
 import (
 	"context"
 	"errors"
+	"path"
 	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
@@ -58,7 +59,10 @@ func (s *Service) TakeoverPreview(ctx context.Context, actor agent.Actor, site s
 // hand-written configs). If that fails, the site keeps its own certificate.
 // A site with HTTPS but no certbot certificate gets the Layte certificate
 // first. vhostHash comes from the preview the admin confirmed.
-func (s *Service) Takeover(ctx context.Context, actor agent.Actor, site store.Site, vhostHash, email string) (string, error) {
+//
+// deleteOldCert: once HTTPS uses the Layte certificate, delete the site's
+// old certbot certificate (see deleteOldCert).
+func (s *Service) Takeover(ctx context.Context, actor agent.Actor, site store.Site, vhostHash, email string, deleteOldCert bool) (string, error) {
 	if err := takeoverable(site); err != nil {
 		return "", err
 	}
@@ -144,12 +148,31 @@ func (s *Service) Takeover(ctx context.Context, actor agent.Actor, site store.Si
 		if err := s.Store.UpdateSite(bg, next); err != nil {
 			return err
 		}
-		j.Log("HTTPS now uses %s, which Layte renews. Your old certificate %s is no longer used; you can delete it with certbot.",
-			templates.CertName(site.Domain), params.OwnCert)
+		j.Log("HTTPS now uses %s, which Layte renews.", templates.CertName(site.Domain))
+		if deleteOldCert {
+			s.deleteOldCert(ctx, j, actor, site, params.OwnCert)
+		} else {
+			j.Log("Your old certificate %s is no longer used; certbot still renews it until you delete it.", path.Base(params.OwnCert))
+		}
 		return nil
 	})
 	if errors.Is(err, jobs.ErrSiteBusy) {
 		return "", conflict("site_busy", "another job is running for %s", site.Domain)
 	}
 	return jobID, err
+}
+
+// deleteOldCert deletes the site's previous certbot certificate (live folder
+// dir) once its Layte certificate replaced it. Best effort: the agent keeps
+// the certificate if nginx still uses it or it isn't for this site, and the
+// job only logs why.
+func (s *Service) deleteOldCert(ctx context.Context, j *jobs.Job, actor agent.Actor, site store.Site, dir string) {
+	name := path.Base(dir)
+	j.Step("Delete the old certificate " + name)
+	err := s.longCall(ctx, time.Minute, "ssl.delete_unused", actor, actions.SSLDeleteParams{Domain: site.Domain, CertName: name}, nil)
+	if err != nil {
+		j.Log("Warning: kept %s (%v).", name, err)
+		return
+	}
+	j.Log("Deleted %s; certbot no longer renews it.", name)
 }

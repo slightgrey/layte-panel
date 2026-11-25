@@ -29,6 +29,7 @@ export function SiteSSLCard({ site }: { site: Site }) {
   const busy = site.status !== "active";
   // A taken-over adopted site still on its own certificate can switch to a Layte one.
   const canSwitch = site.ssl && site.adopted && site.nginx_managed && !!cert && !cert.managed;
+  const [deleteOld, setDeleteOld] = useState(true);
 
   return (
     <Card>
@@ -60,7 +61,7 @@ export function SiteSSLCard({ site }: { site: Site }) {
             className="flex flex-col gap-3"
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
-              issue.mutate(email.trim(), { onSuccess: showJob });
+              issue.mutate({ email: email.trim() }, { onSuccess: showJob });
             }}
           >
             <p className="text-sm text-muted-foreground">
@@ -87,12 +88,12 @@ export function SiteSSLCard({ site }: { site: Site }) {
             className="flex flex-col gap-3 border-t pt-4"
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
-              issue.mutate(email.trim(), { onSuccess: showJob });
+              issue.mutate({ email: email.trim(), delete_old_cert: deleteOld }, { onSuccess: showJob });
             }}
           >
             <p className="text-sm text-muted-foreground">
               This site still uses its own certificate <code className="font-mono">{cert.name}</code>. Switch to a Layte
-              certificate so Layte Panel renews it; the old one is left alone.
+              certificate so Layte Panel renews it.
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-64 flex-1">
@@ -104,6 +105,13 @@ export function SiteSSLCard({ site }: { site: Site }) {
                 <ShieldCheck /> Switch to a Layte certificate
               </Button>
             </div>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-1" checked={deleteOld} onChange={(e) => setDeleteOld(e.target.checked)} />
+              <span>
+                Then delete the old certificate <code className="font-mono">{cert.name}</code>, so certbot stops renewing it.
+                It's kept if nginx still uses it anywhere.
+              </span>
+            </label>
             <FormError message={issue.error?.message} />
           </form>
         )}

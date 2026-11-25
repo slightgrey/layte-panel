@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -91,9 +92,10 @@ func httpsAdoptedShop(t *testing.T, c *client, deps actions.Deps) (string, map[s
     ssl_certificate_key /etc/letsencrypt/live/shop.example.org/privkey.pem;
     location ~ /\. { deny all; }`, 1)
 	deps.FS.WriteFileAtomic(vhost, []byte(https), 0o644)
-	deps.FS.MkdirAll("/etc/letsencrypt/live/shop.example.org", 0o755)
-	for _, f := range []string{"fullchain.pem", "privkey.pem"} {
-		deps.FS.WriteFileAtomic("/etc/letsencrypt/live/shop.example.org/"+f, []byte("x"), 0o600)
+	// The site's own certificate (the fake certbot writes a real one).
+	if _, err := deps.Runner.Run(context.Background(), "/usr/bin/certbot", "certonly", "--cert-name", "shop.example.org",
+		"--domains", "shop.example.org,www.shop.example.org"); err != nil {
+		t.Fatal(err)
 	}
 	c.do("POST", "/api/v1/sites/scan", nil)
 	shop := siteIDByDomain(t, c, "shop.example.org")
@@ -122,13 +124,17 @@ func TestTakeoverSwitchesToLayteCertificate(t *testing.T) {
 	if st, _ := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]string{"vhost_hash": tp["vhost_hash"].(string)}); st != 400 {
 		t.Errorf("HTTPS takeover without an email: %d", st)
 	}
-	_, body := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]string{"vhost_hash": tp["vhost_hash"].(string), "email": "admin@example.org"})
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]any{"vhost_hash": tp["vhost_hash"].(string), "email": "admin@example.org", "delete_old_cert": true})
 	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
 		t.Fatalf("takeover job: %v", job)
 	}
 	_, site := c.do("GET", "/api/v1/sites/"+shop, nil)
 	if site["nginx_managed"] != true || site["cert_path"] != shopLayteCert {
 		t.Errorf("site after takeover: %v", site)
+	}
+	// The old certificate was deleted (nothing uses it any more).
+	if ok, _ := deps.FS.Exists("/etc/letsencrypt/live/shop.example.org"); ok {
+		t.Error("old certificate not deleted")
 	}
 	if v, _ := deps.FS.ReadFile(shopVhostPath); !strings.Contains(string(v), "ssl_certificate     "+shopLayteCert+";") {
 		t.Errorf("vhost doesn't use the Layte certificate:\n%s", v)
@@ -144,8 +150,9 @@ func TestTakeoverSwitchesToLayteCertificate(t *testing.T) {
 func TestTakeoverKeepsOwnCertificate(t *testing.T) {
 	_, c, deps := siteEnv(t)
 	shop, tp := httpsAdoptedShop(t, c, deps)
+	certbot, _ := deps.FS.ReadFile("/usr/bin/certbot")
 	deps.FS.Remove("/usr/bin/certbot") // issuing fails
-	_, body := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]string{"vhost_hash": tp["vhost_hash"].(string), "email": "admin@example.org"})
+	_, body := c.do("POST", "/api/v1/sites/"+shop+"/takeover", map[string]any{"vhost_hash": tp["vhost_hash"].(string), "email": "admin@example.org", "delete_old_cert": true})
 	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
 		t.Fatalf("takeover job: %v", job)
 	}
@@ -160,5 +167,25 @@ func TestTakeoverKeepsOwnCertificate(t *testing.T) {
 	if v, _ := deps.FS.ReadFile(shopVhostPath); !strings.Contains(string(v), "ssl_certificate     "+shopOwnCert+";") ||
 		!strings.Contains(string(v), "client_max_body_size 128m;") {
 		t.Errorf("vhost lost the site's own certificate:\n%s", v)
+	}
+	// Still in use: never deleted, even though it was asked for.
+	if ok, _ := deps.FS.Exists("/etc/letsencrypt/live/shop.example.org"); !ok {
+		t.Error("the certificate in use was deleted")
+	}
+
+	// Retry on the SSL tab: switch to a Layte certificate and delete the old one.
+	deps.FS.WriteFileAtomic("/usr/bin/certbot", certbot, 0o755)
+	st, body := c.do("POST", "/api/v1/sites/"+shop+"/ssl", map[string]any{"email": "admin@example.org", "delete_old_cert": true})
+	if st != 202 {
+		t.Fatalf("switch: %d %v", st, body)
+	}
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("switch job: %v", job)
+	}
+	if _, site := c.do("GET", "/api/v1/sites/"+shop, nil); site["cert_path"] != shopLayteCert {
+		t.Errorf("after switching: %v", site["cert_path"])
+	}
+	if ok, _ := deps.FS.Exists("/etc/letsencrypt/live/shop.example.org"); ok {
+		t.Error("old certificate not deleted after switching")
 	}
 }

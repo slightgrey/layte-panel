@@ -65,19 +65,20 @@ func (s *server) handleListSSL(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"certificates": out, "email": email})
 }
 
-// POST /api/v1/sites/{id}/ssl {email} — issue a certificate and enable HTTPS.
+// POST /api/v1/sites/{id}/ssl {email, delete_old_cert} — issue a certificate and enable HTTPS.
 func (s *server) handleIssueSSL(w http.ResponseWriter, r *http.Request) {
 	site, ok := s.loadSite(w, r)
 	if !ok {
 		return
 	}
 	var req struct {
-		Email string `json:"email"`
+		Email         string `json:"email"`
+		DeleteOldCert bool   `json:"delete_old_cert"` // adopted sites switching from their own certificate
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	jobID, err := s.sites.IssueSSL(r.Context(), actorOf(r), site, req.Email)
+	jobID, err := s.sites.IssueSSL(r.Context(), actorOf(r), site, req.Email, req.DeleteOldCert)
 	if err != nil {
 		s.writeSiteError(w, "issue ssl", err)
 		return

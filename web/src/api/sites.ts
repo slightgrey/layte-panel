@@ -144,7 +144,7 @@ export function useTakeoverPreview(id: number) {
 /** POST /sites/{id}/takeover: let Layte manage the adopted site's nginx config (job). */
 export function useTakeover(id: number) {
   return useMutation({
-    mutationFn: (v: { vhost_hash: string; email: string }) => api<JobStarted>("POST", `/sites/${id}/takeover`, v),
+    mutationFn: (v: { vhost_hash: string; email: string; delete_old_cert?: boolean }) => api<JobStarted>("POST", `/sites/${id}/takeover`, v),
   });
 }
 

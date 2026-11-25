@@ -99,6 +99,11 @@ func fakeCertbot(root system.FS, c system.Cmd) (system.Result, error) {
 			return system.Result{}, err
 		}
 		return system.Result{Stdout: []byte("Congratulations, all renewals succeeded.\n")}, writeFakeCert(root, name, cert.DNSNames, 90*24*time.Hour)
+	case "delete":
+		name := arg("--cert-name")
+		root.Remove(letsencryptRenewal + "/" + name + ".conf")
+		root.RemoveAll("/etc/letsencrypt/archive/" + name)
+		return system.Result{Stdout: []byte("Deleted all files relating to certificate " + name + ".\n")}, root.RemoveAll(letsencryptLive + "/" + name)
 	case "revoke":
 		root.Remove(letsencryptRenewal + "/" + arg("--cert-name") + ".conf")
 		return system.Result{}, root.RemoveAll(letsencryptLive + "/" + arg("--cert-name"))
@@ -125,4 +130,25 @@ func seedFakeCerts(fs system.FS) error {
 		return err
 	}
 	return writeFakeRenewalConf(fs, "blog.example.com")
+}
+
+// fakeNginxDump mimics `nginx -T`: the config files nginx loads, each after
+// a "# configuration file" line.
+func fakeNginxDump(root system.FS) (system.Result, error) {
+	var b strings.Builder
+	files, _ := root.Glob(nginxDir + "/nginx.conf")
+	for _, pattern := range []string{nginxDir + "/sites-enabled/*", nginxDir + "/conf.d/*.conf", "/etc/nginx/layte-redirects/*.conf"} {
+		m, _ := root.Glob(pattern)
+		files = append(files, m...)
+	}
+	for _, f := range files {
+		content, err := root.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		b.WriteString("# configuration file " + f + ":\n")
+		b.Write(content)
+		b.WriteString("\n")
+	}
+	return system.Result{Stdout: []byte(b.String())}, nil
 }

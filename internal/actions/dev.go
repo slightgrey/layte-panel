@@ -142,6 +142,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{}, nil
 		case c.Bin == nginxBin && len(args) == 1 && args[0] == "-t":
 			return system.Result{Stderr: []byte("nginx: configuration file /etc/nginx/nginx.conf test is successful\n")}, nil
+		case c.Bin == nginxBin && len(args) == 1 && args[0] == "-T":
+			return fakeNginxDump(root)
 		case strings.HasPrefix(path.Base(c.Bin), "php-fpm") && len(args) == 1 && args[0] == "-t":
 			return system.Result{Stderr: []byte("NOTICE: configuration file test is successful\n")}, nil
 		case c.Bin == useraddBin && len(args) > 0:
