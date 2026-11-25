@@ -308,6 +308,9 @@ func (d Deps) siteNginxTakeover(ctx context.Context, _ agent.Actor, p TakeoverPa
 	undo = append(undo, func() {
 		system.RemoveConfig(bg, d.FS, d.Runner, system.RemoveSpec{Path: newPool, Test: fpmTest(v), Reload: fpmReload(v)})
 	})
+	if err := d.waitFPMSocket(ctx, t.newVhost.Socket()); err != nil {
+		return fail(err)
+	}
 	step(fmt.Sprintf("Started the Layte PHP %s pool %s", v, newPool))
 
 	// 2. The admin's vhost out, Layte's in (one nginx -t and reload).

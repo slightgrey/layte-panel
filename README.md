@@ -29,6 +29,7 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
 - **Safe by design:**
   - The web process has no privileges; a root helper runs only a fixed list of validated actions.
   - Every config change is tested (`nginx -t`) and rolled back on failure.
+  - PHP-FPM reloads let running requests finish (up to 10 s) instead of cutting visitors off: Layte adds `pool.d/00-layte-graceful.conf` unless your `php-fpm.conf` sets `process_control_timeout` itself.
   - Configs it didn't create are never touched, unless you explicitly hand one over (it is kept as `.layte-orig`).
   - 2FA is mandatory.
   - See [docs/security.md](docs/security.md).

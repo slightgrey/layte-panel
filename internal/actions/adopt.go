@@ -132,7 +132,7 @@ func (d Deps) findPools(socket string) []poolFile {
 			continue
 		}
 		p, sections := parsePool(f, version, string(b))
-		if p.Listen == socket {
+		if p.Listen != "" && p.Listen == socket { // files without listen (e.g. [global] only) are no pools
 			if sections != 1 {
 				p.Name = "" // marks "more than one pool in this file"
 			}
