@@ -1,6 +1,5 @@
 import { Database, Download, Link2, Plus, Trash2, Unlink, Upload } from "lucide-react";
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
 import {
   useCreateDatabase,
   useDatabases,
@@ -23,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBytes } from "@/lib/format";
 import { FormError } from "./AuthShell";
+import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 
 export function SiteDatabasePage() {
   return <SiteShell title="Database">{(site) => <DatabaseTab site={site} />}</SiteShell>;
@@ -138,7 +138,7 @@ function LinkDatabase({ site, all }: { site: Site; all: DatabaseRow[] }) {
 
 function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; onSecrets: (s: Record<string, string>) => void }) {
   const exp = useExportDatabase();
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`export-${db.name}`, `Exporting ${db.name}`);
   const canDump = db.managed && (site.managed || site.adopted) && site.status === "active";
   const unlink = useUnlinkDatabase();
   return (
@@ -203,9 +203,11 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
                 variant="outline"
                 disabled={exp.isPending}
                 title="Dump the database to a .sql file in the site's tmp/ folder"
-                onClick={() => exp.mutate(db.name, { onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }) })}
+                onClick={() => exp.mutate(db.name, { onSuccess: job.start })}
               >
-                <Download /> Export (.sql)
+                <JobButtonLabel state={job.state}>
+                  <Download /> Export (.sql)
+                </JobButtonLabel>
               </Button>
             )}
           </div>
@@ -322,7 +324,7 @@ function DumpFiles({ site, db }: { site: Site; db: DatabaseRow }) {
 
 function ImportDialog({ db, path, onClose }: { db: DatabaseRow; path: string; onClose: () => void }) {
   const imp = useImportDatabase();
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`import-${db.name}`, `Importing into ${db.name}`);
   const [confirm, setConfirm] = useState("");
   return (
     <Dialog open onClose={onClose} title={`Import into ${db.name}`}>
@@ -335,7 +337,7 @@ function ImportDialog({ db, path, onClose }: { db: DatabaseRow; path: string; on
             {
               onSuccess: (r) => {
                 onClose();
-                setParams({ job: r.job_id }, { replace: true });
+                job.start(r);
               },
             },
           );

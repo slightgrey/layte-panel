@@ -15,6 +15,7 @@ import {
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useLogout, useMe } from "@/api/auth";
 import { formatVersion, useHealth } from "@/api/health";
+import { JobFeedbackProvider } from "@/components/JobFeedback";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -80,7 +81,9 @@ export function Layout() {
         </nav>
 
         <main className="flex-1 pb-6 md:px-2">
-          <Outlet />
+          <JobFeedbackProvider>
+            <Outlet />
+          </JobFeedbackProvider>
         </main>
       </div>
     </div>

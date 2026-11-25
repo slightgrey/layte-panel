@@ -23,6 +23,7 @@ export default function CodeEditor({
   onChange,
   onSave,
   onCursor,
+  autoFocus = true,
 }: {
   value: string;
   filename: string;
@@ -30,6 +31,8 @@ export default function CodeEditor({
   onChange: (text: string) => void;
   onSave: () => void;
   onCursor?: (line: number, col: number) => void;
+  /** Put the cursor in the editor when it opens (off for read-only views on a page). */
+  autoFocus?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -67,7 +70,7 @@ export default function CodeEditor({
       }),
     });
     view.current = v;
-    v.focus();
+    if (autoFocus) v.focus();
     let cancelled = false;
     languageFor(filename)
       ?.load()

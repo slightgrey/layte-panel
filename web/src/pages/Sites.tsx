@@ -109,7 +109,7 @@ function SitesTable({ sites }: { sites: Site[] }) {
             </TableCell>
             <TableCell>
               <div className="flex flex-wrap justify-end gap-1.5">
-                <SiteBadges site={s} />
+                <SiteBadges site={s} inTable />
                 {!s.managed && !s.adopted && (
                   <Badge title="Found on the server. Layte Panel won't change it.">
                     <Lock className="size-3" /> imported

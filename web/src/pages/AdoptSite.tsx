@@ -1,6 +1,5 @@
 import { ShieldCheck, UserPlus } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
 import { useAdoptPreview, useAdoptSite } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
@@ -11,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { FormError } from "./AuthShell";
+import { useJobFeedback } from "@/components/JobFeedback";
 
 /** "Adopt" button + dialog: shows exactly what changes, then starts the job. */
 export function AdoptSite({ site }: { site: Site }) {
@@ -28,7 +28,7 @@ export function AdoptSite({ site }: { site: Site }) {
 function AdoptDialog({ site, onClose }: { site: Site; onClose: () => void }) {
   const preview = useAdoptPreview(site.id, true);
   const adopt = useAdoptSite(site.id);
-  const [, setParams] = useSearchParams();
+  const job = useJobFeedback(`adopt-${site.id}`, `Adopting ${site.domain}`);
   const [username, setUsername] = useState("");
   const [understood, setUnderstood] = useState(false);
   useEffect(() => {
@@ -55,7 +55,7 @@ function AdoptDialog({ site, onClose }: { site: Site; onClose: () => void }) {
                 {
                   onSuccess: (r) => {
                     onClose();
-                    setParams({ job: r.job_id }, { replace: true });
+                    job.start(r);
                   },
                 },
               );

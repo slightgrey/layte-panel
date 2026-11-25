@@ -27,6 +27,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/jobs"
+	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/sites"
 	"github.com/slightgrey/layte-panel/internal/store"
 	"github.com/slightgrey/layte-panel/internal/system"
@@ -197,6 +198,42 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 		testWPLogin(t, e, site)
 	})
 
+	// The object cache with the page cache on (as on a real blog): the page
+	// cache answers "/" without PHP, so Layte's checks must bypass it.
+	t.Run("page cache", func(t *testing.T) {
+		jobID, err := e.svc.SetPageCache(ctx, e.actor, site, pagecache.Settings{Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.wait(t, jobID)
+		// nginx's reload finishes shortly after systemctl returns: retry.
+		var resp *http.Response
+		for i := 0; i < 25; i++ {
+			req, _ := http.NewRequest("GET", "http://127.0.0.1/", nil)
+			req.Host = domain
+			if resp, err = http.DefaultClient.Do(req); err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.Header.Get("X-Layte-Cache") == "HIT" {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		if h := resp.Header.Get("X-Layte-Cache"); h != "HIT" {
+			var lines []string
+			for _, f := range []string{"/etc/nginx/sites-available/layte-" + domain + ".conf", "/etc/nginx/conf.d/layte-" + domain + ".conf"} {
+				b, _ := os.ReadFile(f)
+				for _, l := range strings.Split(string(b), "\n") {
+					if strings.Contains(l, "fastcgi_cache") || strings.Contains(l, "X-Layte") || strings.Contains(l, "skip_cache") {
+						lines = append(lines, f+": "+strings.TrimSpace(l))
+					}
+				}
+			}
+			t.Errorf("page cache not serving: X-Layte-Cache %q (%s, final URL %s, headers %v)\n%s", h, resp.Status, resp.Request.URL, resp.Header, strings.Join(lines, "\n"))
+		}
+	})
+	site, _ = e.st.SiteByID(ctx, siteID)
 	t.Run("object cache", func(t *testing.T) {
 		testObjectCache(t, e, site)
 	})

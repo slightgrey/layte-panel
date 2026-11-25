@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, lazy, type ReactNode, Suspense, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { databasesKey, useDatabases } from "@/api/databases";
 import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
+import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 import { JobProgress } from "@/components/JobProgress";
 import { ObjectCacheCard } from "@/components/ObjectCacheCard";
 import { PageCacheCard } from "@/components/PageCacheCard";
@@ -21,6 +22,9 @@ import { formatBytes } from "@/lib/format";
 import { AdoptSite } from "./AdoptSite";
 import { TakeoverSite } from "./TakeoverSite";
 import { FormError } from "./AuthShell";
+
+// The file editor (CodeMirror), loaded only when a config is shown.
+const CodeEditor = lazy(() => import("@/components/CodeEditor"));
 
 export function SiteDetailPage() {
   const id = Number(useParams().id);
@@ -80,12 +84,6 @@ export function SiteDetailPage() {
           versions, change PHP settings and use the page cache.
         </Notice>
       )}
-      {s.adopted && s.nginx_managed && (
-        <Notice>
-          Adopted: this site runs as <code className="font-mono">{s.system_user}</code>. Layte Panel manages its nginx config
-          and PHP-FPM pool; its files stay in <code className="font-mono">{s.root_path}</code>.
-        </Notice>
-      )}
 
       <OverviewCard site={s} />
       {layteConfigs(s) && s.wordpress && <PageCacheCard site={s} />}
@@ -99,8 +97,8 @@ export function SiteDetailPage() {
 function PHPSwitch({ site }: { site: Site }) {
   const php = usePHPVersions();
   const sw = useSwitchPHP(site.id);
-  const [, setParams] = useSearchParams();
   const [version, setVersion] = useState(site.php_version);
+  const job = useJobFeedback(`php-switch-${site.id}`, `Switching to PHP ${version}`);
   const others = php.data?.versions ?? [site.php_version];
 
   return (
@@ -115,10 +113,10 @@ function PHPSwitch({ site }: { site: Site }) {
       <Button
         size="sm"
         variant="outline"
-        disabled={version === site.php_version || sw.isPending}
-        onClick={() => sw.mutate(version, { onSuccess: (r) => setParams({ job: r.job_id }, { replace: true }) })}
+        disabled={version === site.php_version || sw.isPending || job.working}
+        onClick={() => sw.mutate(version, { onSuccess: job.start })}
       >
-        Switch
+        <JobButtonLabel state={job.state}>Switch</JobButtonLabel>
       </Button>
       <PHPSettingsButton site={site} />
       {sw.error && <span className="text-xs text-destructive">{sw.error.message}</span>}
@@ -316,9 +314,16 @@ function VhostCard({ site }: { site: Site }) {
         ) : vhost.error ? (
           <p className="text-sm text-muted-foreground">Unavailable: {vhost.error.message}</p>
         ) : (
-          <pre className="max-h-[32rem] overflow-auto rounded-[12px] bg-background p-4 font-mono text-xs leading-relaxed">
-            {vhost.data.content}
-          </pre>
+          // The file editor, read-only, with nginx highlighting. As tall as the
+          // file (about 20px a line), up to 32rem; then it scrolls.
+          <div
+            className="overflow-hidden rounded-[12px] shadow-inset"
+            style={{ height: `min(32rem, ${vhost.data.content.split("\n").length * 20 + 16}px)` }}
+          >
+            <Suspense fallback={<Spinner />}>
+              <CodeEditor value={vhost.data.content} filename="nginx.conf" readOnly autoFocus={false} onChange={() => {}} onSave={() => {}} />
+            </Suspense>
+          </div>
         )}
       </CardContent>
     </Card>
