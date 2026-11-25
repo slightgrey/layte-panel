@@ -130,8 +130,9 @@ func TestUpdatesPendingCached(t *testing.T) {
 	u.pending(ctx, agent.Actor{}, agent.NoParams{}) // cached
 	now = now.Add(updatesTTL + time.Second)
 	u.pending(ctx, agent.Actor{}, agent.NoParams{}) // expired → runs again
-	if n := len(d.Runner.(*system.FakeRunner).Calls); n != 2 {
-		t.Errorf("apt ran %d times, want 2", n)
+	// Each run: apt list, plus apt's plan (which updates are phased).
+	if n := len(d.Runner.(*system.FakeRunner).Calls); n != 4 {
+		t.Errorf("apt ran %d times, want 4", n)
 	}
 }
 

@@ -49,13 +49,18 @@ type PlannedPkg struct {
 
 // UpgradePlan is what an upgrade would do (from apt-get --simulate).
 type UpgradePlan struct {
-	Upgrades     []PlannedPkg `json:"upgrades"`
-	NewPackages  []PlannedPkg `json:"new_packages"` // dependencies a kept-back install pulls in
-	Removals     []string     `json:"removals"`     // must be empty to proceed
-	KeptBack     []string     `json:"kept_back"`
-	Restarts     []string     `json:"restarts"` // services that will likely restart
-	RebootLikely bool         `json:"reboot_likely"`
-	Hash         string       `json:"hash"` // identifies this exact plan
+	Upgrades    []PlannedPkg `json:"upgrades"`
+	NewPackages []PlannedPkg `json:"new_packages"` // dependencies a kept-back install pulls in
+	Removals    []string     `json:"removals"`     // must be empty to proceed
+	KeptBack    []string     `json:"kept_back"`
+	// Phased: Ubuntu releases these updates to a growing share of servers
+	// over a few days, and this server's turn hasn't come yet, so a normal
+	// upgrade skips them. Installing them by name ("install now anyway")
+	// still works.
+	Phased       []string `json:"phased"`
+	Restarts     []string `json:"restarts"` // services that will likely restart
+	RebootLikely bool     `json:"reboot_likely"`
+	Hash         string   `json:"hash"` // identifies this exact plan
 }
 
 // UpgradeParams: no packages = upgrade everything upgradable; packages =
@@ -135,20 +140,22 @@ func parseInst(line string) (PlannedPkg, bool) {
 
 // parseSimulation reads `apt-get --simulate` output.
 func parseSimulation(out string) UpgradePlan {
-	plan := UpgradePlan{Upgrades: []PlannedPkg{}, NewPackages: []PlannedPkg{}, Removals: []string{}, KeptBack: []string{}, Restarts: []string{}}
-	inKept := false
+	plan := UpgradePlan{Upgrades: []PlannedPkg{}, NewPackages: []PlannedPkg{}, Removals: []string{}, KeptBack: []string{}, Phased: []string{}, Restarts: []string{}}
+	var section *[]string // the list being read: kept back or phased
 	var sig []string
 	for _, line := range strings.Split(out, "\n") {
-		if inKept {
+		if section != nil {
 			if strings.HasPrefix(line, " ") {
-				plan.KeptBack = append(plan.KeptBack, strings.Fields(line)...)
+				*section = append(*section, strings.Fields(line)...)
 				continue
 			}
-			inKept = false
+			section = nil
 		}
 		switch {
 		case strings.HasPrefix(line, "The following packages have been kept back"):
-			inKept = true
+			section = &plan.KeptBack
+		case strings.HasPrefix(line, "The following upgrades have been deferred due to phasing"):
+			section = &plan.Phased
 		case strings.HasPrefix(line, "Inst "):
 			p, ok := parseInst(line)
 			if !ok {
@@ -229,7 +236,10 @@ func (u *updates) simulate(ctx context.Context, p UpgradeParams) (UpgradePlan, e
 	case len(p.Packages) > 0:
 		args = append([]string{"--simulate", "-o", "Debug::NoLocking=1", "install", "--only-upgrade"}, p.Packages...)
 	}
-	res, err := u.deps.Runner.RunCmd(ctx, system.Cmd{Bin: aptGetBin, Args: args, Env: []string{"DEBIAN_FRONTEND=noninteractive"}})
+	// Outside the agent's sandbox, like the real install: in the sandbox's
+	// own mount namespace apt thinks it's in a container and ignores
+	// phasing, so the preview would list updates the install then skips.
+	res, err := u.deps.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: aptGetBin, Args: args, Env: []string{"DEBIAN_FRONTEND=noninteractive"}}))
 	if err != nil {
 		msg := failure(res, err, 6)
 		if !p.Fix && (strings.Contains(msg, "--fix-broken") || strings.Contains(msg, "Unmet dependencies") || strings.Contains(msg, "dpkg was interrupted")) {

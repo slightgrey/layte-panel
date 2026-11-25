@@ -67,11 +67,16 @@ export interface Package {
   version: string;
   from: string;
   security: boolean;
+  /** Ubuntu's phased rollout hasn't reached this server yet. */
+  phased?: boolean;
 }
 
 export interface Updates {
+  /** Ready to install (phased ones not counted). */
   total: number;
   security: number;
+  /** Deferred by Ubuntu's phased rollout. */
+  phased: number;
   packages: Package[];
   checked_at: string;
 }
@@ -449,6 +454,8 @@ export interface UpgradePlan {
   new_packages: PlannedPkg[];
   removals: string[];
   kept_back: string[];
+  /** Ubuntu releases these gradually; this server's turn hasn't come (installing by name still works). */
+  phased: string[];
   restarts: string[];
   reboot_likely: boolean;
   hash: string;

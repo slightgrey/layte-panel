@@ -48,6 +48,7 @@ export function UpdatesPage() {
         <>
           <PendingCard plan={plan.data} busy={Boolean(jobId)} onStarted={setJobId} />
           {plan.data.kept_back.length > 0 && <KeptBackCard packages={plan.data.kept_back} busy={Boolean(jobId)} onStarted={setJobId} />}
+          {(plan.data.phased ?? []).length > 0 && <KeptBackCard phased packages={plan.data.phased} busy={Boolean(jobId)} onStarted={setJobId} />}
         </>
       )}
 
@@ -159,7 +160,8 @@ function PendingCard({ plan, busy, onStarted }: { plan: UpgradePlan; busy: boole
         {n === 0 ? (
           <p className="text-sm text-muted-foreground">
             Everything that can be upgraded safely is up to date.{" "}
-            {plan.kept_back.length > 0 && "Some packages are kept back; see below."}
+            {plan.kept_back.length > 0 && "Some packages are kept back; see below."}{" "}
+            {(plan.phased ?? []).length > 0 && "Some updates are still being rolled out by Ubuntu; see below."}
           </p>
         ) : (
           <>
@@ -184,13 +186,16 @@ function PendingCard({ plan, busy, onStarted }: { plan: UpgradePlan; busy: boole
   );
 }
 
-function KeptBackCard({ packages, busy, onStarted }: { packages: string[]; busy: boolean; onStarted: (id: string) => void }) {
+/** Updates a normal upgrade skips: kept back (they need new packages), or phased (Ubuntu's gradual rollout). */
+function KeptBackCard({ packages, phased = false, busy, onStarted }: { packages: string[]; phased?: boolean; busy: boolean; onStarted: (id: string) => void }) {
   const [look, setLook] = useState(false);
   const plan = useUpdatesPlan(packages, look);
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Kept back · {packages.length}</CardTitle>
+        <CardTitle>
+          {phased ? "Phased" : "Kept back"} · {packages.length}
+        </CardTitle>
         {!look && (
           <Button variant="outline" size="sm" disabled={busy} onClick={() => setLook(true)}>
             <PackageCheck /> Check what installing them needs
@@ -198,24 +203,44 @@ function KeptBackCard({ packages, busy, onStarted }: { packages: string[]; busy:
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          apt holds these back because their new version needs a package that isn't installed yet, so a normal upgrade skips
-          them: <span className="font-mono text-xs">{packages.join(", ")}</span>.
-        </p>
+        {phased ? (
+          <p className="text-sm text-muted-foreground">
+            Ubuntu releases these updates to a growing share of servers over a few days, so a problem can be caught before it
+            reaches everyone. This server's turn hasn't come yet, so a normal upgrade skips them; they install by themselves
+            once it does: <span className="font-mono text-xs">{packages.join(", ")}</span>. You can also install them now.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            apt holds these back because their new version needs a package that isn't installed yet, so a normal upgrade skips
+            them: <span className="font-mono text-xs">{packages.join(", ")}</span>.
+          </p>
+        )}
         {look &&
           (plan.isPending ? (
             <Spinner />
           ) : plan.error ? (
             <Notice tone="warning">{plan.error.message}</Notice>
           ) : (
-            <KeptBackPlan plan={plan.data} packages={packages} busy={busy} onStarted={onStarted} />
+            <KeptBackPlan plan={plan.data} packages={packages} phased={phased} busy={busy} onStarted={onStarted} />
           ))}
       </CardContent>
     </Card>
   );
 }
 
-function KeptBackPlan({ plan, packages, busy, onStarted }: { plan: UpgradePlan; packages: string[]; busy: boolean; onStarted: (id: string) => void }) {
+function KeptBackPlan({
+  plan,
+  packages,
+  phased,
+  busy,
+  onStarted,
+}: {
+  plan: UpgradePlan;
+  packages: string[];
+  phased: boolean;
+  busy: boolean;
+  onStarted: (id: string) => void;
+}) {
   const [confirm, setConfirm] = useState(false);
   if (plan.removals.length > 0) {
     return (
@@ -237,12 +262,12 @@ function KeptBackPlan({ plan, packages, busy, onStarted }: { plan: UpgradePlan; 
       <PackageTable pkgs={[...plan.upgrades, ...plan.new_packages]} />
       <div>
         <Button disabled={busy} onClick={() => setConfirm(true)}>
-          <Download /> Install kept-back packages
+          <Download /> {phased ? "Install now anyway" : "Install kept-back packages"}
         </Button>
       </div>
       {confirm && (
         <ConfirmDialog
-          title="Install the kept-back packages?"
+          title={phased ? "Install the phased updates now?" : "Install the kept-back packages?"}
           plan={plan}
           packages={packages}
           onClose={() => setConfirm(false)}
