@@ -30,6 +30,15 @@ Browser ── HTTPS ──▶ nginx (TLS, optional IP allowlist) ──▶ layt
 - **Imported sites are read-only:** sites found on the server can be viewed and their files downloaded, but nothing is changed.
 - **Unprivileged site work:** site files are handled by a helper process (`layte fsop`) running **as the site's own Linux user**, jailed to the site folder with `os.Root`. WP-CLI and cron jobs also run as the site user, never as root.
 
+## SFTP logins
+Per-site SFTP (see [sftp.md](sftp.md)) uses Layte's own sshd drop-in, `/etc/ssh/sshd_config.d/zz-layte-sftp.conf`, which applies only to members of the `layte-sftp` group (site users Layte created or adopted; never sudo users or system accounts):
+- chrooted to `/srv/layte-sftp/<user>`, which contains only the site folder (a bind mount);
+- `internal-sftp` only: no shell, no TCP/agent/X11 forwarding, no tunnels, no terminal;
+- keys come from a root-owned file, `/etc/ssh/layte-sftp/<user>`, so a site can't add its own;
+- password login only for members of `layte-sftp-password`, with a generated password that's shown once and never stored.
+
+The main `sshd_config` and every other login are untouched. Every change is checked with `sshd -t`, and sshd is reloaded (never restarted), so open sessions stay up.
+
 ## Logins
 - **Passwords:** hashed with argon2id (OWASP parameters).
 - **2FA:** TOTP is mandatory. Codes can't be reused.
@@ -49,7 +58,7 @@ Every change made through the agent (who, what, arguments with secrets redacted,
 
 ## Recommended hardening
 - **Restrict the panel:** use `--allow-ip` (or edit `allow` lines in `layte-panel.conf`) so only your IPs can reach it, or skip the domain and use an SSH tunnel.
-- **SSH:** use key-only logins (`PasswordAuthentication no`) and consider fail2ban.
+- **SSH:** use key-only logins (`PasswordAuthentication no`) and block brute-force attempts. On a small server, **sshguard** (`apt install sshguard`) is a good fit: it uses a few MB of memory and blocks IPs after repeated failures, longer for repeat offenders. Also `ufw limit OpenSSH` rate-limits new SSH connections (Layte's firewall page counts this as SSH still open). Don't put a dynamic home IP on its allowlist; key logins never count as failures.
 - **Firewall:** keep ufw on. The Security page won't let you remove the rules for SSH, 80 or 443.
 - **Sites behind Cloudflare's proxy:** turn on **Behind Cloudflare** on the Security page, so nginx, PHP and WordPress see real visitor IPs (logs and login lockouts depend on them). It writes `/etc/nginx/conf.d/layte-cloudflare-realip.conf`, which trusts the `CF-Connecting-IP` header only on requests from Cloudflare's address ranges, so direct visitors can't fake an IP. The list ships with each release; after an upgrade, the page offers to update it.
 - **Keep the panel off the CDN:** point the panel's domain straight at the server (Cloudflare "DNS only"), not through a proxy.

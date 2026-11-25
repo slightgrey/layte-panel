@@ -52,7 +52,7 @@ func TestTakeoverAdopted(t *testing.T) {
 	}
 	site, _ = e.st.SiteByID(ctx, id)
 	email := os.Getenv("LAYTE_IT_EMAIL") // needed for sites with HTTPS
-	jobID, err := e.svc.Takeover(ctx, e.actor, site, p.VhostHash, email)
+	jobID, err := e.svc.Takeover(ctx, e.actor, site, p.VhostHash, email, false)
 	if err != nil {
 		t.Fatal(err)
 	}

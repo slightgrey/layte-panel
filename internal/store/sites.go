@@ -40,19 +40,21 @@ type Site struct {
 	PageCache pagecache.Settings `json:"page_cache"`
 	// Redirects are the site's redirects (sites whose vhost Layte renders).
 	Redirects []redirects.Redirect `json:"redirects"`
-	CreatedAt time.Time            `json:"created_at"`
-	UpdatedAt time.Time            `json:"updated_at"`
+	// SFTP is the site's SFTP login (created and adopted sites).
+	SFTP      SFTP      `json:"sftp"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 const siteCols = `id, domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl,
-	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, redirects_json, created_at, updated_at`
+	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, redirects_json, sftp_json, created_at, updated_at`
 
 func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
-	var aliases, php, cache, redirs string
+	var aliases, php, cache, redirs, sftp string
 	var created, updated int64
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.SystemUser, &s.RootPath, &s.PHPVersion, &s.Managed, &s.Source,
-		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &redirs, &created, &updated)
+		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &redirs, &sftp, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Site{}, ErrNotFound
 	}
@@ -66,6 +68,10 @@ func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	json.Unmarshal([]byte(cache), &s.PageCache)
 	if json.Unmarshal([]byte(redirs), &s.Redirects) != nil || s.Redirects == nil {
 		s.Redirects = []redirects.Redirect{}
+	}
+	json.Unmarshal([]byte(sftp), &s.SFTP)
+	if s.SFTP.Keys == nil {
+		s.SFTP.Keys = []SFTPKey{}
 	}
 	s.CreatedAt, s.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return s, nil
@@ -81,6 +87,20 @@ func phpSettingsJSON(p phpini.Settings) string { return toJSON(p) }
 func toJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+// SFTP is a site's SFTP login state. Passwords are never stored: Password
+// only says whether password logins are allowed.
+type SFTP struct {
+	Enabled  bool      `json:"enabled"`
+	Password bool      `json:"password"`
+	Keys     []SFTPKey `json:"keys"`
+}
+
+// SFTPKey is one authorized public key.
+type SFTPKey struct {
+	Key         string `json:"key"`         // "type base64 [comment]"
+	Fingerprint string `json:"fingerprint"` // SHA256:…
 }
 
 func redirectsJSON(r []redirects.Redirect) string {
@@ -118,9 +138,9 @@ func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 // UpdateSite saves every mutable column of x (matched by id).
 func (s *Store) UpdateSite(ctx context.Context, x Site) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, managed=?,
-		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, php_settings_json=?, page_cache_json=?, nginx_managed=?, redirects_json=?, updated_at=? WHERE id=?`,
+		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, php_settings_json=?, page_cache_json=?, nginx_managed=?, redirects_json=?, sftp_json=?, updated_at=? WHERE id=?`,
 		aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), x.NginxManaged, redirectsJSON(x.Redirects), time.Now().Unix(), x.ID)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), x.NginxManaged, redirectsJSON(x.Redirects), toJSON(x.SFTP), time.Now().Unix(), x.ID)
 	if err != nil {
 		return fmt.Errorf("update site %s: %w", x.Domain, err)
 	}

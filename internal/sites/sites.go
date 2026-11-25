@@ -321,6 +321,12 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 			s.Store.SetSiteStatus(context.WithoutCancel(ctx), site.ID, "failed")
 			return err
 		}
+		if site.SFTP.Enabled {
+			j.Step("Turn off SFTP")
+			if err := s.longCall(ctx, time.Minute, "sftp.disable", actor, sftpParams(site), nil); err != nil {
+				return fail(err)
+			}
+		}
 		j.Step("Remove nginx config")
 		if err := call("nginx.vhost_remove", actions.DomainParams{Domain: site.Domain}); err != nil {
 			return fail(err)

@@ -60,5 +60,13 @@ A site with HTTPS that doesn't use a certbot certificate gets the Layte certific
 through your current config; there, a rule such as `location ~ /\. { deny all; }` without an exception for
 `/.well-known/` makes it fail (nothing is changed).
 
+### Blocked by sshguard
+sshguard blocks IPs after failed SSH logins (longer for repeat offenders, permanently after many). If your own IP got blocked (for example after several wrong passwords from a new network):
+1. Log in from another network, or use your provider's web console.
+2. Remove your IP from `/var/lib/sshguard/enemies` (the permanent list), if it's there.
+3. `sudo systemctl restart sshguard` (this also clears the temporary blocks).
+
+Successful key logins never count as failures, so key users aren't affected. Don't put a dynamic IP on `/etc/sshguard/whitelist`.
+
 ### Everything else
 Run `layte version` and include its output, plus the relevant journal lines, in a GitHub issue.

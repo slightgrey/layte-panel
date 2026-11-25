@@ -172,8 +172,16 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return fakeUFWCmd(root, c)
 		case c.Bin == unattendedUpgradeBin:
 			return fakeUnattendedUpgrade()
-		case c.Bin == usermodBin, c.Bin == gpasswdBin:
+		case c.Bin == gpasswdBin, c.Bin == groupaddBin, c.Bin == "/usr/bin/id":
+			return fakeGroups(root, c)
+		case c.Bin == usermodBin, c.Bin == chpasswdBin:
 			return system.Result{}, nil
+		case c.Bin == sshdBin && len(args) > 0 && args[0] == "-t":
+			return system.Result{}, nil
+		case c.Bin == sshdBin && len(args) > 0 && args[0] == "-T":
+			return system.Result{Stdout: []byte("port 22\npasswordauthentication yes\n")}, nil
+		case c.Bin == mountpointBin:
+			return system.Result{}, &system.ExitError{Bin: c.Bin, ExitCode: 1} // nothing is mounted in dev
 		case strings.HasPrefix(c.Bin, "/usr/bin/php") && len(args) > 0 && strings.HasSuffix(args[0], ".phar"):
 			return fakeWP(root, c)
 		case c.Bin == "/usr/bin/certbot" && len(args) > 0 && args[0] != "--version":
@@ -245,4 +253,49 @@ func fakeAptGet(cmds fs.FS, args []string) (system.Result, error) {
 	}
 	time.Sleep(time.Second) // pretend to download and install
 	return system.Result{Stdout: []byte("Setting up nginx (1.24.0-2ubuntu7.1) ...\n(dev mode: nothing was really installed)\n")}, nil
+}
+
+// fakeGroups mimics groupadd, gpasswd --add/--delete and id -nG with one
+// file per group (its members) under /var/lib/layte-dev/groups.
+func fakeGroups(root system.FS, c system.Cmd) (system.Result, error) {
+	const dir = "/var/lib/layte-dev/groups"
+	root.MkdirAll(dir, 0o755)
+	members := func(g string) []string {
+		b, _ := root.ReadFile(dir + "/" + g)
+		return strings.Fields(string(b))
+	}
+	save := func(g string, m []string) error {
+		return root.WriteFileAtomic(dir+"/"+g, []byte(strings.Join(m, "\n")), 0o644)
+	}
+	a := c.Args
+	switch {
+	case c.Bin == groupaddBin && len(a) > 0:
+		g := a[len(a)-1]
+		if ok, _ := root.Exists(dir + "/" + g); !ok {
+			return system.Result{}, save(g, nil)
+		}
+		return system.Result{}, nil
+	case c.Bin == gpasswdBin && len(a) == 3 && a[0] == "--add":
+		m := members(a[2])
+		if !slices.Contains(m, a[1]) {
+			m = append(m, a[1])
+		}
+		return system.Result{}, save(a[2], m)
+	case c.Bin == gpasswdBin && len(a) == 3 && a[0] == "--delete":
+		m := members(a[2])
+		if !slices.Contains(m, a[1]) {
+			return system.Result{Stderr: []byte("gpasswd: user is not a member\n")}, &system.ExitError{Bin: c.Bin, ExitCode: 3}
+		}
+		return system.Result{}, save(a[2], slices.DeleteFunc(m, func(u string) bool { return u == a[1] }))
+	case c.Bin == "/usr/bin/id" && len(a) == 2 && a[0] == "-nG":
+		groups := []string{a[1]}
+		files, _ := root.Glob(dir + "/*")
+		for _, f := range files {
+			if slices.Contains(members(path.Base(f)), a[1]) {
+				groups = append(groups, path.Base(f))
+			}
+		}
+		return system.Result{Stdout: []byte(strings.Join(groups, " ") + "\n")}, nil
+	}
+	return system.Result{}, nil // other gpasswd uses (e.g. nginx into a site group)
 }
