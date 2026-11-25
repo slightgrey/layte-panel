@@ -14,7 +14,10 @@ import { progressFrame } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { SiteBadges } from "@/pages/SiteBadges";
 
-const tabs: { label: string; path: string; icon: LucideIcon; show?: (site: Site) => boolean }[] = [
+/** Sites Layte created or adopted also get an SFTP login on the Files tab. */
+export const filesLabel = (site: Site) => (site.managed || site.adopted ? "Files & SFTP" : "Files");
+
+const tabs: { label: string; path: string; icon: LucideIcon; show?: (site: Site) => boolean; labelFor?: (site: Site) => string }[] = [
   { label: "Overview", path: "", icon: LayoutGrid },
   { label: "SSL", path: "ssl", icon: ShieldCheck },
   { label: "Database", path: "database", icon: Database },
@@ -22,14 +25,14 @@ const tabs: { label: string; path: string; icon: LucideIcon; show?: (site: Site)
   { label: "Redirects", path: "redirects", icon: Signpost, show: layteConfigs },
   { label: "WP Debug", path: "wp-debug", icon: Bug, show: (site) => site.wordpress },
   { label: "Logs", path: "logs", icon: ScrollText },
-  { label: "Files", path: "files", icon: FolderOpen },
+  { label: "Files", path: "files", icon: FolderOpen, labelFor: filesLabel },
 ];
 
 /** Per-site tabs, so you never need the global sidebar to get around one site. */
 export function SiteNav({ site }: { site: Site }) {
   return (
     <nav aria-label="Site" className="flex w-full gap-1 overflow-x-auto rounded-[16px] p-1.5 shadow-inset sm:w-fit">
-      {tabs.filter((t) => !t.show || t.show(site)).map(({ label, path, icon: Icon }) => (
+      {tabs.filter((t) => !t.show || t.show(site)).map(({ label, path, icon: Icon, labelFor }) => (
         <NavLink
           key={label}
           to={path ? `/sites/${site.id}/${path}` : `/sites/${site.id}`}
@@ -42,7 +45,7 @@ export function SiteNav({ site }: { site: Site }) {
           }
         >
           <Icon className="size-4" />
-          {label}
+          {labelFor ? labelFor(site) : label}
         </NavLink>
       ))}
     </nav>

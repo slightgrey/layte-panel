@@ -6,7 +6,7 @@ import { useSite } from "@/api/sites";
 import type { FileEntry } from "@/api/types";
 import { languageFor } from "@/components/codeLanguages";
 import { SFTPCard } from "@/components/SFTPCard";
-import { SiteHeader } from "@/components/SiteShell";
+import { filesLabel, SiteHeader } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +47,7 @@ export function SiteFilesPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       {site.data && <SiteHeader site={site.data} />}
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold tracking-tight">Files</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{site.data ? filesLabel(site.data) : "Files"}</h2>
         {readOnly && files.data && <Lock className="size-4 text-muted-foreground" aria-label="read-only" />}
         <span className="truncate font-mono text-xs text-muted-foreground">{files.data?.root}</span>
       </div>
