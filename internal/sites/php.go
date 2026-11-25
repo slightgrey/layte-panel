@@ -3,6 +3,7 @@ package sites
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -54,6 +55,12 @@ func (s *Service) SwitchPHP(ctx context.Context, actor agent.Actor, site store.S
 		}()
 		call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
 
+		if site.ObjectCache.Enabled {
+			j.Step("Install Redis for PHP " + version + " (object cache)")
+			if err := s.longCall(ctx, 10*time.Minute, "object_cache.prepare", actor, actions.ObjectCachePrepareParams{PHPVersion: version}, nil); err != nil {
+				return err
+			}
+		}
 		j.Step("Start PHP " + version + " pool")
 		if err := call("php.pool_write", cfg(version)); err != nil {
 			return err

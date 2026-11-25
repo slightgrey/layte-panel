@@ -80,6 +80,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("system.processes", true, 15*time.Second, d.systemProcesses),
 		agent.Def("system.disk_breakdown", true, 3*time.Minute, d.diskBreakdown),
 		agent.Def("wp.debug_get", true, 30*time.Second, d.wpDebugGet),
+		agent.Def("object_cache.status", true, 15*time.Second, d.objectCacheStatus),
 
 		// Mutating (audited).
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
@@ -108,6 +109,10 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("sftp.set", false, time.Minute, d.sftpSet),
 		agent.Def("sftp.disable", false, time.Minute, d.sftpDisable),
 		agent.Def("sftp.password", false, 30*time.Second, d.sftpPassword),
+		agent.Def("object_cache.enable", false, 10*time.Minute, d.objectCacheEnable),
+		agent.Def("object_cache.disable", false, 2*time.Minute, d.objectCacheDisable),
+		agent.Def("object_cache.flush", false, 30*time.Second, d.objectCacheFlush),
+		agent.Def("object_cache.prepare", false, 10*time.Minute, d.objectCachePrepare),
 		agent.Def("cron.write", false, 15*time.Second, d.cronWrite),
 		agent.Def("fs.write", false, 30*time.Second, d.fsWrite).WithAuditSkip(auditFirstChunk),
 		agent.Def("ufw.allow", false, 20*time.Second, d.ufwAllow),

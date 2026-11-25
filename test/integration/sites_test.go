@@ -197,6 +197,11 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 		testWPLogin(t, e, site)
 	})
 
+	t.Run("object cache", func(t *testing.T) {
+		testObjectCache(t, e, site)
+	})
+	site, _ = e.st.SiteByID(ctx, siteID)
+
 	if len(versions) > 1 {
 		t.Run("switch PHP", func(t *testing.T) {
 			testSwitchPHP(t, e, site, versions[0])
@@ -212,6 +217,9 @@ func TestWordPressSiteLifecycle(t *testing.T) {
 	nginxTestOK(t)
 	if _, err := os.Stat("/etc/cron.d/layte-layte-it_test"); !os.IsNotExist(err) {
 		t.Error("cron file still exists")
+	}
+	if o, _ := exec.Command("systemctl", "is-active", "layte-redis@layteittest.service").Output(); strings.TrimSpace(string(o)) == "active" {
+		t.Error("the site's Redis still runs after deleting the site")
 	}
 	if _, err := os.Stat("/home/layteittest"); !os.IsNotExist(err) {
 		t.Error("home directory still exists")
