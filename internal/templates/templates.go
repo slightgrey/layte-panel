@@ -10,6 +10,7 @@ import (
 
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
+	"github.com/slightgrey/layte-panel/internal/redirects"
 )
 
 //go:embed *.tmpl
@@ -28,6 +29,8 @@ type Site struct {
 	WebUser    string // nginx's worker user, owns the FPM socket ("" = www-data)
 	PHP        phpini.Settings
 	Cache      pagecache.Settings // page cache (nginx FastCGI cache)
+	// Redirects are exact-path redirects (validated by redirects.Clean).
+	Redirects []redirects.Redirect
 	// OwnCert is a certbot live folder to use instead of the Layte
 	// certificate's: an adopted site keeps its own certificate until it has
 	// a Layte one. "" = CertDir(Domain).

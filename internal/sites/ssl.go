@@ -20,6 +20,9 @@ import (
 func (s *Service) siteConfig(site store.Site, ssl bool) actions.SiteConfigParams {
 	c := actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion,
 		SSL: ssl, PHP: site.PHPSettings, Cache: site.PageCache}
+	if len(site.Redirects) > 0 {
+		c.Redirects = site.Redirects // kept on every vhost write
+	}
 	if site.Adopted {
 		c.WebRoot = site.RootPath // its files stay where they were
 		c.OwnCert = ownCert(site)

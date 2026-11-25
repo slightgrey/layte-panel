@@ -100,6 +100,8 @@ export interface Site {
   php_settings: PHPSettings;
   /** Page cache (nginx FastCGI cache; WordPress sites Layte created). */
   page_cache: PageCache;
+  /** Redirects in the site's nginx config (sites whose config Layte manages). */
+  redirects: Redirect[];
   created_at: string;
   updated_at: string;
 }
@@ -111,6 +113,13 @@ export interface PHPSettings {
   upload_max?: string;
   max_execution_time?: number;
   max_input_vars?: number;
+}
+
+/** One redirect: an exact path (with or without trailing slash) to a path or http(s) URL. */
+export interface Redirect {
+  from: string;
+  to: string;
+  code: 301 | 302;
 }
 
 /** PUT /sites/{id}/page-cache */

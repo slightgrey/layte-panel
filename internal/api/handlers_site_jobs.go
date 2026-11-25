@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
+	"github.com/slightgrey/layte-panel/internal/redirects"
 	"net/http"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -80,6 +81,27 @@ func (s *server) handleSetPHPSettings(w http.ResponseWriter, r *http.Request) {
 	jobID, err := s.sites.SetPHPSettings(r.Context(), actorOf(r), site, req)
 	if err != nil {
 		s.writeSiteError(w, "php settings", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
+// PUT /api/v1/sites/{id}/redirects {redirects: [{from, to, code}]} — 202 {job_id}.
+// The list replaces the site's redirects; an empty list removes them all.
+func (s *server) handleSetRedirects(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Redirects []redirects.Redirect `json:"redirects"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	jobID, err := s.sites.SetRedirects(r.Context(), actorOf(r), site, req.Redirects)
+	if err != nil {
+		s.writeSiteError(w, "redirects", err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})

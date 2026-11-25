@@ -92,6 +92,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("DELETE /api/v1/sites/{id}", authed(s.handleDeleteSite))
 	mux.Handle("POST /api/v1/sites/{id}/php", authed(s.handleSwitchPHP))
 	mux.Handle("PUT /api/v1/sites/{id}/php-settings", authed(s.handleSetPHPSettings))
+	mux.Handle("PUT /api/v1/sites/{id}/redirects", authed(s.handleSetRedirects))
 	mux.Handle("PUT /api/v1/sites/{id}/page-cache", authed(s.handleSetPageCache))
 	mux.Handle("POST /api/v1/sites/{id}/page-cache/purge", authed(s.handlePurgeCache))
 	mux.Handle("GET /api/v1/sites/{id}/adopt", authed(s.handleAdoptPreview))

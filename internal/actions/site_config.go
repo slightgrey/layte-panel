@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
+	"github.com/slightgrey/layte-panel/internal/redirects"
 	"path"
 	"regexp"
 	"strings"
@@ -30,6 +31,8 @@ type SiteConfigParams struct {
 	// WebRoot: an adopted site whose nginx config Layte took over (its files
 	// stay there). The agent checks it against the server's config.
 	WebRoot string `json:"web_root,omitempty"`
+	// Redirects in the vhost (normalised; see package redirects).
+	Redirects []redirects.Redirect `json:"redirects,omitempty"`
 	// OwnCert: a taken-over adopted site that still uses its own certbot
 	// certificate (live folder), until it gets a Layte one.
 	OwnCert string `json:"own_cert,omitempty"`
@@ -89,6 +92,9 @@ func (p SiteConfigParams) Validate() error {
 	if err := p.Cache.Validate(); err != nil {
 		return err
 	}
+	if err := redirects.IsClean(p.Redirects); err != nil {
+		return err
+	}
 	if p.PHP != p.PHP.Normalize() {
 		return fmt.Errorf("php settings must be in normalised form")
 	}
@@ -96,7 +102,7 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert, Redirects: p.Redirects}
 }
 
 // checkWebRoot: config writes for an adopted site need its vhost taken over.
