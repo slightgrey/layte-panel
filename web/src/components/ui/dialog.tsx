@@ -43,10 +43,11 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`w-full ${wide ? "max-w-5xl" : "max-w-lg"} rounded-[1.25rem] bg-card p-6 shadow-raised`}
+        // Never taller than the window: the title stays put and the content scrolls.
+        className={`flex max-h-[calc(100dvh-2rem)] w-full flex-col ${wide ? "max-w-5xl" : "max-w-lg"} rounded-[1.25rem] bg-card shadow-raised`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
           <h2 className="text-base font-semibold">{title}</h2>
           {!locked && (
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="-mt-1 -mr-2">
@@ -54,7 +55,7 @@ export function Dialog({
             </Button>
           )}
         </div>
-        {children}
+        <div className="min-h-0 overflow-y-auto px-6 pb-6">{children}</div>
       </div>
     </div>
   );
