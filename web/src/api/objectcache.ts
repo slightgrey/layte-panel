@@ -7,6 +7,10 @@ export interface ObjectCacheState {
   enabled: boolean;
   installed_plugin?: boolean;
   running?: boolean;
+  /** Disabled in WordPress (Settings → Object Cache). */
+  paused?: boolean;
+  /** Whose wp-content/object-cache.php: Layte's, the old plugin's, missing, or someone else's. */
+  drop_in?: "layte" | "redis-cache" | "missing" | "other";
   keys?: number;
   used_bytes?: number;
   limit_bytes?: number;
@@ -33,4 +37,9 @@ export function useSetObjectCache(siteId: number) {
 /** POST /sites/{id}/object-cache/flush */
 export function useFlushObjectCache(siteId: number) {
   return useMutation({ mutationFn: () => api<void>("POST", `/sites/${siteId}/object-cache/flush`) });
+}
+
+/** POST /sites/{id}/object-cache/resume: on again after it was disabled in WordPress. */
+export function useResumeObjectCache(siteId: number) {
+  return useMutation({ mutationFn: () => api<void>("POST", `/sites/${siteId}/object-cache/resume`) });
 }

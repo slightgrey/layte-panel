@@ -36,7 +36,7 @@ Each WordPress site with the object cache on gets **its own Redis**, run by syst
 - it saves nothing to disk and has a memory cap (32 MB, least recently used keys are evicted);
 - Redis's shared default instance (`127.0.0.1:6379`, no password) isn't used: when Layte installs Redis, it stops and disables it.
 
-WordPress uses it through the Redis Object Cache plugin; Layte only sets the socket path and a key prefix in `wp-config.php`. Turning it on is undone if the site answers differently afterwards.
+WordPress uses it through Layte's own object cache, no third-party plugin: a small `wp-content/object-cache.php` drop-in that loads the cache code from `wp-content/mu-plugins/layte-object-cache/`, plus a settings page (Settings → Object Cache) to flush it or disable it for a while. `wp-config.php` gets the socket path and a key prefix (`LAYTE_REDIS_SOCKET`, `LAYTE_REDIS_PREFIX`). If Redis can't be reached, or the cache is disabled in WordPress, the site keeps working with WordPress's normal per-request cache, and transients stay in the database. Turning it on is undone if the site answers differently afterwards.
 
 ## SFTP logins
 Per-site SFTP (see [sftp.md](sftp.md)) uses Layte's own sshd drop-in, `/etc/ssh/sshd_config.d/zz-layte-sftp.conf`, which applies only to members of the `layte-sftp` group (site users Layte created or adopted; never sudo users or system accounts):

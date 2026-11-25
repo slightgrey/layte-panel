@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/slightgrey/layte-panel/internal/system"
+	"github.com/slightgrey/layte-panel/internal/wpobjectcache"
 )
 
 func TestObjectCache(t *testing.T) {
@@ -36,12 +37,38 @@ func TestObjectCache(t *testing.T) {
 	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
 		t.Fatalf("enable job: %v", job)
 	}
-	if b, _ := deps.FS.ReadFile(dropIn); !strings.Contains(string(b), "Redis Object Cache Drop-In") {
+	if b, _ := deps.FS.ReadFile(dropIn); string(b) != wpobjectcache.DropIn {
 		t.Errorf("drop-in: %q", b)
 	}
 	_, st := c.do("GET", path, nil)
-	if st["enabled"] != true || st["installed_plugin"] != true || st["running"] != true || st["keys"] != float64(42) || st["limit_bytes"] != float64(32<<20) {
+	if st["enabled"] != true || st["drop_in"] != "layte" || st["paused"] != false || st["running"] != true || st["keys"] != float64(42) || st["limit_bytes"] != float64(32<<20) {
 		t.Errorf("state: %v", st)
+	}
+
+	// Disabled in WordPress: shown as paused; Resume turns it back on.
+	paused := "/home/" + user + "/oc.test/public/" + wpobjectcache.PausedRel
+	deps.FS.WriteFileAtomic(paused, []byte("paused\n"), 0o644)
+	if _, st := c.do("GET", path, nil); st["paused"] != true {
+		t.Errorf("pause not shown: %v", st)
+	}
+	if code, _ := c.do("POST", path+"/resume", nil); code != 204 {
+		t.Errorf("resume: %d", code)
+	}
+	if _, st := c.do("GET", path, nil); st["paused"] != false {
+		t.Errorf("still paused: %v", st)
+	}
+
+	// Turning it on while it's on repairs it (e.g. a deleted drop-in).
+	deps.FS.Remove(dropIn)
+	code, body = c.do("PUT", path, map[string]any{"enabled": true})
+	if code != 202 {
+		t.Fatalf("repair: %d %v", code, body)
+	}
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("repair job: %v", job)
+	}
+	if _, st := c.do("GET", path, nil); st["drop_in"] != "layte" {
+		t.Errorf("not repaired: %v", st)
 	}
 	if st, _ := c.do("POST", path+"/flush", nil); st != 204 {
 		t.Errorf("flush: %d", st)
@@ -56,7 +83,7 @@ func TestObjectCache(t *testing.T) {
 		t.Errorf("no php8.2-redis install in:\n%s", calls)
 	}
 
-	// Off: drop-in gone, plugin deleted (Layte installed it).
+	// Off: Layte's files gone.
 	_, body = c.do("PUT", path, map[string]any{"enabled": false})
 	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
 		t.Fatalf("disable job: %v", job)

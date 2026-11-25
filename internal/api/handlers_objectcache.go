@@ -48,3 +48,17 @@ func (s *server) handleFlushObjectCache(w http.ResponseWriter, r *http.Request) 
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// POST /api/v1/sites/{id}/object-cache/resume — on again after it was
+// disabled in WordPress.
+func (s *server) handleResumeObjectCache(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	if err := s.sites.ResumeObjectCache(r.Context(), actorOf(r), site); err != nil {
+		s.writeSiteError(w, "object cache resume", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

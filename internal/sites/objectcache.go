@@ -32,14 +32,16 @@ func (s *Service) ObjectCache(ctx context.Context, actor agent.Actor, site store
 }
 
 // SetObjectCache starts a job that turns the site's Redis object cache on
-// (installing Redis if needed) or off.
+// (installing Redis if needed) or off. Turning it on while it's on updates
+// or repairs it (and moves sites off the Redis Object Cache plugin that
+// earlier versions used).
 func (s *Service) SetObjectCache(ctx context.Context, actor agent.Actor, site store.Site, enabled bool) (string, error) {
 	p, err := wpParams(site, "the object cache")
 	if err != nil {
 		return "", err
 	}
-	if enabled == site.ObjectCache.Enabled {
-		return "", badRequest("nothing changed")
+	if !enabled && !site.ObjectCache.Enabled {
+		return "", badRequest("the object cache is already off")
 	}
 	params := actions.ObjectCacheParams{WPLoginParams: p, RemovePlugin: site.ObjectCache.InstalledPlugin}
 	jobID, err := s.Jobs.Start("site.object_cache", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
@@ -60,7 +62,7 @@ func (s *Service) SetObjectCache(ctx context.Context, actor agent.Actor, site st
 		for _, step := range res.Steps {
 			j.Log("%s", step)
 		}
-		site.ObjectCache = store.ObjectCache{Enabled: true, InstalledPlugin: res.InstalledPlugin}
+		site.ObjectCache = store.ObjectCache{Enabled: true} // Layte's own cache: no plugin to remember
 		if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
 			return err
 		}
@@ -83,4 +85,17 @@ func (s *Service) FlushObjectCache(ctx context.Context, actor agent.Actor, site 
 		return badRequest("the object cache is off")
 	}
 	return s.longCall(ctx, 30*time.Second, "object_cache.flush", actor, actions.ObjectCacheParams{WPLoginParams: p}, nil)
+}
+
+// ResumeObjectCache turns the cache back on after it was disabled in
+// WordPress (Settings → Object Cache). Redis is emptied first.
+func (s *Service) ResumeObjectCache(ctx context.Context, actor agent.Actor, site store.Site) error {
+	p, err := wpParams(site, "the object cache")
+	if err != nil {
+		return err
+	}
+	if !site.ObjectCache.Enabled {
+		return badRequest("the object cache is off")
+	}
+	return s.longCall(ctx, 30*time.Second, "object_cache.resume", actor, actions.ObjectCacheParams{WPLoginParams: p}, nil)
 }
