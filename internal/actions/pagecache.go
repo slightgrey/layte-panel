@@ -10,6 +10,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/fileops"
 	"github.com/slightgrey/layte-panel/internal/pagecache"
+	"github.com/slightgrey/layte-panel/internal/system"
 	"github.com/slightgrey/layte-panel/internal/validate"
 )
 
@@ -26,11 +27,16 @@ type CacheParams struct {
 	Remove bool `json:"remove,omitempty"`
 	// cache.plugin: install (true) or remove (false) the must-use plugin.
 	Install bool `json:"install,omitempty"`
+	// WebRoot: an adopted site (WordPress lives right in it).
+	WebRoot string `json:"web_root,omitempty"`
 }
 
 func (p CacheParams) Validate() error {
 	if err := validDomain(p.Domain); err != nil {
 		return err
+	}
+	if p.WebRoot != "" {
+		return FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Op: "stat", Path: "."}.validate(readOps)
 	}
 	return validate.SiteUsername(p.Username)
 }
@@ -69,11 +75,15 @@ func (d Deps) purgeCacheDir(domain string, removeDir bool) (int, error) {
 // cachePlugin installs or removes the must-use plugin, as the site user. A
 // file of the same name that Layte didn't write is never touched.
 func (d Deps) cachePlugin(ctx context.Context, _ agent.Actor, p CacheParams) (any, error) {
-	root, as, _, err := d.jail(ctx, FSParams{Domain: p.Domain, Username: p.Username})
+	root, as, _, err := d.jail(ctx, FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot})
 	if err != nil {
 		return nil, err
 	}
-	rel := "public/" + pagecache.PluginRel
+	wp := "public"
+	if p.WebRoot != "" {
+		wp = "." // the jail is the web root itself
+	}
+	rel := path.Join(wp, pagecache.PluginRel)
 	file := func(req fileops.Request) (fileops.Response, error) {
 		req.Root = root
 		res, err := d.FileOps.Run(ctx, as, req)
@@ -98,7 +108,7 @@ func (d Deps) cachePlugin(ctx context.Context, _ agent.Actor, p CacheParams) (an
 	if ours && string(cur.Data) == pagecache.Plugin {
 		return map[string]bool{"installed": true}, nil
 	}
-	if st, err := file(fileops.Request{Op: "stat", Path: "public/wp-content"}); err != nil || st.Entry == nil || st.Entry.Type != "dir" {
+	if st, err := file(fileops.Request{Op: "stat", Path: path.Join(wp, "wp-content")}); err != nil || st.Entry == nil || st.Entry.Type != "dir" {
 		return nil, agent.Errorf(agent.CodeNotFound, "%s has no wp-content folder; is WordPress installed?", p.Domain)
 	}
 	file(fileops.Request{Op: "mkdir", Path: path.Dir(rel)}) // may already exist
@@ -134,9 +144,16 @@ func (d Deps) purgeMarked(log *slog.Logger) []string {
 			continue
 		}
 		markers, _ := d.FS.Glob("/home/*/" + domain + "/tmp/" + pagecache.MarkerName)
+		if user := d.adoptedPoolUser(domain); user != "" {
+			// An adopted site (taken over): its tmp/ is in the user's home.
+			markers = append(markers, "/home/"+user+"/tmp/"+pagecache.MarkerName)
+		}
 		asked := false
 		for _, m := range markers {
-			home := path.Dir(path.Dir(path.Dir(m))) // /home/<user>
+			home := path.Dir(path.Dir(m)) // /home/<user>
+			if path.Dir(home) != "/home" {
+				home = path.Dir(home) // /home/<user>/<domain>/tmp/<marker>
+			}
 			if ok, _ := d.FS.Exists(home + "/" + siteUserMarker); !ok {
 				continue // not a Layte site user
 			}
@@ -157,4 +174,25 @@ func (d Deps) purgeMarked(log *slog.Logger) []string {
 		}
 	}
 	return purged
+}
+
+// adoptedPoolUser is the user of the site's Layte pool when the site is an
+// adopted one Layte took over (its web root isn't under /home/<user>/<domain>),
+// or "" otherwise.
+func (d Deps) adoptedPoolUser(domain string) string {
+	files, _ := d.FS.Glob("/etc/php/*/fpm/pool.d/layte-" + domain + ".conf")
+	for _, f := range files {
+		b, err := d.FS.ReadFile(f)
+		if err != nil || !system.IsManaged(b) {
+			continue
+		}
+		p, _ := parsePool(f, "", string(b))
+		if validate.SiteUsername(p.User) != nil {
+			continue
+		}
+		if ok, _ := d.FS.Exists("/home/" + p.User + "/" + domain); !ok {
+			return p.User
+		}
+	}
+	return ""
 }

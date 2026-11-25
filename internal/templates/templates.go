@@ -28,6 +28,9 @@ type Site struct {
 	WebUser    string // nginx's worker user, owns the FPM socket ("" = www-data)
 	PHP        phpini.Settings
 	Cache      pagecache.Settings // page cache (nginx FastCGI cache)
+	// WebRoot is an adopted site's own web root (its files stay where they
+	// were). "" for sites Layte created: Dir()/public.
+	WebRoot string
 }
 
 // CacheDir is the site's page cache folder; CacheZone its nginx zone name.
@@ -49,6 +52,31 @@ func (s Site) Home() string { return "/home/" + s.User }
 
 // Dir is the site's directory: public/, logs/, tmp/ live under it.
 func (s Site) Dir() string { return s.Home() + "/" + s.Domain }
+
+// Public is the folder nginx serves.
+func (s Site) Public() string {
+	if s.WebRoot != "" {
+		return s.WebRoot
+	}
+	return s.Dir() + "/public"
+}
+
+// DataDir holds the site's logs/ and tmp/: Dir() for sites Layte created,
+// the user's home for adopted ones (outside the web root, never served).
+func (s Site) DataDir() string {
+	if s.WebRoot != "" {
+		return s.Home()
+	}
+	return s.Dir()
+}
+
+// BaseDirs is PHP's open_basedir: the folders the site's PHP may open.
+func (s Site) BaseDirs() string {
+	if s.WebRoot != "" {
+		return s.WebRoot + "/:" + s.Home() + "/"
+	}
+	return s.Dir() + "/"
+}
 
 // Socket is the PHP-FPM socket. It includes the PHP version so that while
 // switching versions the old and new pools never fight over one socket.

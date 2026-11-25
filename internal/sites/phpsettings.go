@@ -16,11 +16,8 @@ import (
 // execution time changes, its nginx vhost too (client_max_body_size,
 // fastcgi_read_timeout). If a step fails, the finished steps are undone.
 func (s *Service) SetPHPSettings(ctx context.Context, actor agent.Actor, site store.Site, in phpini.Settings) (string, error) {
-	if !site.Managed {
-		return "", conflict("site_unmanaged", "PHP settings can only be changed on sites Layte Panel created")
-	}
-	if site.Status != "active" {
-		return "", conflict("site_busy", "%s is %s", site.Domain, site.Status)
+	if err := s.requireManagedActive(site); err != nil {
+		return "", err
 	}
 	next := in.Normalize()
 	if err := next.Validate(); err != nil {

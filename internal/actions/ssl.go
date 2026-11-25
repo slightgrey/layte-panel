@@ -116,6 +116,9 @@ type SSLIssueParams struct {
 	Aliases  []string `json:"aliases,omitempty"`
 	Username string   `json:"username"`
 	Email    string   `json:"email"`
+	// WebRoot: an adopted site (before or after its nginx takeover). certbot
+	// drops its challenge file there; the agent checks it's really the site's.
+	WebRoot string `json:"web_root,omitempty"`
 }
 
 func (p SSLIssueParams) Validate() error {
@@ -127,6 +130,11 @@ func (p SSLIssueParams) Validate() error {
 	}
 	if err := validate.SiteUsername(p.Username); err != nil {
 		return err
+	}
+	if p.WebRoot != "" {
+		if err := (FSParams{Domain: p.Domain, Username: p.Username, WebRoot: p.WebRoot, Op: "stat", Path: "."}).validate(readOps); err != nil {
+			return err
+		}
 	}
 	return validate.Email(p.Email)
 }
@@ -145,11 +153,23 @@ func (d Deps) certbotBin() (string, error) {
 // certbot only drops a challenge file into the site's public/ folder, which
 // the existing HTTP vhost serves. certbot never edits nginx configs here;
 // Layte adds the HTTPS block to its own vhost afterwards.
+//
+// Adopted sites (WebRoot set) may still have the admin's vhost: the Layte
+// certificate is issued before Layte takes the vhost over, so the switch to
+// Layte's config can serve HTTPS right away.
 func (d Deps) sslIssue(ctx context.Context, _ agent.Actor, p SSLIssueParams) (any, error) {
-	vhostPath, _ := d.vhostFiles(p.Domain)
-	vhost, err := d.FS.ReadFile(vhostPath)
-	if err != nil || !system.IsManaged(vhost) {
-		return nil, agent.Errorf(agent.CodeInvalidParams, "%s has no Layte-managed nginx config", p.Domain)
+	webroot := templates.Site{Domain: p.Domain, User: p.Username}.Dir() + "/public"
+	if p.WebRoot != "" {
+		if err := d.verifyAdopted(ctx, p.Domain, p.Username, p.WebRoot); err != nil {
+			return nil, err
+		}
+		webroot = p.WebRoot
+	} else {
+		vhostPath, _ := d.vhostFiles(p.Domain)
+		vhost, err := d.FS.ReadFile(vhostPath)
+		if err != nil || !system.IsManaged(vhost) {
+			return nil, agent.Errorf(agent.CodeInvalidParams, "%s has no Layte-managed nginx config", p.Domain)
+		}
 	}
 	certbot, err := d.certbotBin()
 	if err != nil {
@@ -158,7 +178,6 @@ func (d Deps) sslIssue(ctx context.Context, _ agent.Actor, p SSLIssueParams) (an
 	if err := d.ensureDeployHook(); err != nil {
 		return nil, err
 	}
-	webroot := templates.Site{Domain: p.Domain, User: p.Username}.Dir() + "/public"
 	args := []string{"certonly", "--webroot", "--webroot-path", webroot,
 		"--cert-name", templates.CertName(p.Domain),
 		"--email", p.Email, "--agree-tos", "--no-eff-email", "--non-interactive", "--keep-until-expiring",

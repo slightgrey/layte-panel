@@ -22,14 +22,17 @@ type Site struct {
 	Managed    bool     `json:"managed"`
 	Source     string   `json:"source"`  // created | imported
 	Adopted    bool     `json:"adopted"` // imported, then adopted: runs as SystemUser with a Layte pool
-	WordPress  bool     `json:"wordpress"`
-	SSL        bool     `json:"ssl"`
-	DBName     string   `json:"db_name"`
-	DBUser     string   `json:"db_user"`
-	Status     string   `json:"status"`
-	NginxConf  string   `json:"nginx_conf"`
-	FPMPool    string   `json:"fpm_pool"`
-	CertPath   string   `json:"cert_path"`
+	// NginxManaged: an adopted site whose vhost and pool Layte took over
+	// (rendered from its templates, keeping the site's own web root).
+	NginxManaged bool   `json:"nginx_managed"`
+	WordPress    bool   `json:"wordpress"`
+	SSL          bool   `json:"ssl"`
+	DBName       string `json:"db_name"`
+	DBUser       string `json:"db_user"`
+	Status       string `json:"status"`
+	NginxConf    string `json:"nginx_conf"`
+	FPMPool      string `json:"fpm_pool"`
+	CertPath     string `json:"cert_path"`
 	// PHPSettings are the site's PHP settings (managed sites; zero = defaults).
 	PHPSettings phpini.Settings `json:"php_settings"`
 	// PageCache is the site's page cache (managed WordPress sites).
@@ -39,14 +42,14 @@ type Site struct {
 }
 
 const siteCols = `id, domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl,
-	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, created_at, updated_at`
+	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, created_at, updated_at`
 
 func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
 	var aliases, php, cache string
 	var created, updated int64
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.SystemUser, &s.RootPath, &s.PHPVersion, &s.Managed, &s.Source,
-		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &created, &updated)
+		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Site{}, ErrNotFound
 	}
@@ -61,6 +64,11 @@ func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	s.CreatedAt, s.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return s, nil
 }
+
+// LayteConfigs reports whether Layte renders the site's nginx vhost and PHP
+// pool from its templates: sites it created, and adopted sites it took over.
+// PHP switching, PHP settings, the page cache and Layte certificates need it.
+func (s Site) LayteConfigs() bool { return s.Managed || (s.Adopted && s.NginxManaged) }
 
 func phpSettingsJSON(p phpini.Settings) string { return toJSON(p) }
 
@@ -97,9 +105,9 @@ func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 // UpdateSite saves every mutable column of x (matched by id).
 func (s *Store) UpdateSite(ctx context.Context, x Site) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, managed=?,
-		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, php_settings_json=?, page_cache_json=?, updated_at=? WHERE id=?`,
+		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, php_settings_json=?, page_cache_json=?, nginx_managed=?, updated_at=? WHERE id=?`,
 		aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), time.Now().Unix(), x.ID)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), x.NginxManaged, time.Now().Unix(), x.ID)
 	if err != nil {
 		return fmt.Errorf("update site %s: %w", x.Domain, err)
 	}

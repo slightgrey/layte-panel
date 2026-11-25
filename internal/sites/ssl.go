@@ -18,12 +18,21 @@ import (
 // siteConfig is what the agent needs to render a managed site's vhost and
 // pool. Every rewrite goes through here, so none of them drops a setting.
 func (s *Service) siteConfig(site store.Site, ssl bool) actions.SiteConfigParams {
-	return actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion,
+	c := actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion,
 		SSL: ssl, PHP: site.PHPSettings, Cache: site.PageCache}
+	if site.Adopted {
+		c.WebRoot = site.RootPath // its files stay where they were
+	}
+	return c
 }
 
+// requireManagedActive: Layte renders the site's nginx config (created, or
+// adopted and taken over), and no job is running.
 func (s *Service) requireManagedActive(site store.Site) error {
-	if !site.Managed {
+	if !site.LayteConfigs() {
+		if site.Adopted {
+			return conflict("site_unmanaged", "%s's nginx config is still yours; let Layte Panel manage it first", site.Domain)
+		}
 		return conflict("site_unmanaged", "%s was imported from the server; Layte Panel doesn't change imported sites", site.Domain)
 	}
 	if site.Status != "active" {
@@ -50,7 +59,7 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 
 		j.Step("Request certificate from Let's Encrypt")
 		j.Log("Domains: %v. Let's Encrypt checks each one over HTTP, so DNS must point here.", append([]string{site.Domain}, site.Aliases...))
-		if err := s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, actions.SSLIssueParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, Email: email}, nil); err != nil {
+		if err := s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, s.sslIssueParams(site, email), nil); err != nil {
 			return err
 		}
 
@@ -63,7 +72,9 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 			return err
 		}
 
-		if site.WordPress {
+		if site.WordPress && site.Adopted {
+			j.Log("Change the WordPress address to https://%s under Settings → General if it isn't already.", site.Domain)
+		} else if site.WordPress {
 			j.Step("Switch WordPress to https://")
 			if err := call("wp.set_url", actions.WPURLParams{Domain: site.Domain, Username: site.SystemUser, PHPVersion: site.PHPVersion, URL: "https://" + site.Domain}); err != nil {
 				j.Log("Warning: couldn't update the WordPress URL (%v). Change it under Settings → General.", err)
@@ -85,7 +96,7 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 func (s *Service) RenewSSL(ctx context.Context, actor agent.Actor, site store.Site, dryRun bool) (string, error) {
 	params := actions.SSLRenewParams{Domain: site.Domain, DryRun: dryRun}
 	certName := templates.CertName(site.Domain)
-	if site.Adopted {
+	if site.Adopted && !site.NginxManaged {
 		// The adopted site's own certbot certificate, as its vhost names it.
 		dir, file := path.Split(site.CertPath)
 		if site.Status != "active" {
@@ -145,7 +156,9 @@ func (s *Service) RemoveSSL(ctx context.Context, actor agent.Actor, site store.S
 		if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
 			return err
 		}
-		if site.WordPress {
+		if site.WordPress && site.Adopted {
+			j.Log("Change the WordPress address to http://%s under Settings → General.", site.Domain)
+		} else if site.WordPress {
 			j.Step("Switch WordPress to http://")
 			if err := call("wp.set_url", actions.WPURLParams{Domain: site.Domain, Username: site.SystemUser, PHPVersion: site.PHPVersion, URL: "http://" + site.Domain}); err != nil {
 				j.Log("Warning: couldn't update the WordPress URL (%v).", err)
@@ -161,4 +174,13 @@ func (s *Service) RemoveSSL(ctx context.Context, actor agent.Actor, site store.S
 		return "", conflict("site_busy", "another job is running for %s", site.Domain)
 	}
 	return jobID, err
+}
+
+// sslIssueParams: adopted sites get their challenge files in their own web root.
+func (s *Service) sslIssueParams(site store.Site, email string) actions.SSLIssueParams {
+	p := actions.SSLIssueParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, Email: email}
+	if site.Adopted {
+		p.WebRoot = site.RootPath
+	}
+	return p
 }

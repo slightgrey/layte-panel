@@ -39,7 +39,7 @@ func (s *server) handleListSSL(w http.ResponseWriter, r *http.Request) {
 	// cert name → site: Layte certs by name, imported sites by their cert path.
 	byName := map[string]store.Site{}
 	for _, site := range sites {
-		if site.Managed {
+		if site.LayteConfigs() {
 			byName[templates.CertName(site.Domain)] = site
 		} else if site.CertPath != "" {
 			byName[path.Base(path.Dir(site.CertPath))] = site

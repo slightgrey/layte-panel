@@ -86,6 +86,8 @@ export interface Site {
   managed: boolean;
   source: "created" | "imported";
   adopted: boolean; // imported, then adopted: runs as system_user with a Layte pool
+  /** Adopted, and Layte manages its nginx config and pool (files stay in root_path). */
+  nginx_managed: boolean;
   wordpress: boolean;
   ssl: boolean;
   db_name: string;
@@ -142,6 +144,25 @@ export interface AdoptPreview {
   pool_hash: string;
   log_files?: string[];
   username: string; // suggested new user
+}
+
+/** GET /sites/{id}/takeover: what letting Layte manage an adopted site's nginx config changes. */
+export interface TakeoverPreview {
+  domain: string;
+  web_root: string;
+  php_version: string;
+  ssl: boolean;
+  vhost_file: string; // the admin's file, as nginx loads it
+  kept_as: string; // where it goes ("" = only the sites-enabled link is removed)
+  new_vhost_file: string;
+  pool_file: string;
+  new_pool_file: string;
+  vhost_diff: string[]; // "+ line" / "- line" / "  line"
+  pool_diff: string[];
+  vhost_hash: string;
+  blockers?: string[];
+  warnings?: string[]; // custom nginx rules that won't be kept
+  email: string; // Let's Encrypt email on file
 }
 
 export interface DiskUsage {

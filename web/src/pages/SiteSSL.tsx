@@ -1,6 +1,7 @@
 import { FlaskConical, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
+import { layteConfigs } from "@/api/sites";
 import { useCertificates, useIssueSSL, useRemoveSSL, useRenewSSL } from "@/api/ssl";
 import type { Site } from "@/api/types";
 import { CertBadge } from "@/components/CertBadge";
@@ -46,13 +47,13 @@ export function SiteSSLCard({ site }: { site: Site }) {
                 "HTTPS is enabled."
               )}
             </p>
-            {site.managed && (
+            {layteConfigs(site) && (
               <Button variant="outline" size="sm" disabled={busy || remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: showJob })}>
                 <ShieldOff /> Remove HTTPS
               </Button>
             )}
           </div>
-        ) : site.managed ? (
+        ) : layteConfigs(site) ? (
           <form
             className="flex flex-col gap-3"
             onSubmit={(e: FormEvent) => {
@@ -112,7 +113,7 @@ function CertificateDetails({ site }: { site: Site }) {
           <CardTitle>Certificate</CardTitle>
           {!cert.managed && (
             <span className="text-xs text-muted-foreground">
-              not issued by Layte Panel{site.adopted ? " · renewable" : " · read-only"}
+              not issued by Layte Panel{site.adopted && !site.nginx_managed ? " · renewable" : " · read-only"}
             </span>
           )}
         </CardHeader>
@@ -146,7 +147,7 @@ function CertificateDetails({ site }: { site: Site }) {
           </dl>
         </CardContent>
       </Card>
-      {site.ssl && ((cert.managed && site.managed) || (site.adopted && cert.auto_renew)) && <RenewCard site={site} />}
+      {site.ssl && ((cert.managed && layteConfigs(site)) || (site.adopted && !site.nginx_managed && cert.auto_renew)) && <RenewCard site={site} />}
     </>
   );
 }

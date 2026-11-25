@@ -12,7 +12,7 @@ import (
 	"github.com/slightgrey/layte-panel/internal/validate"
 )
 
-// SwitchPHP starts a job that moves a managed site to another PHP version
+// SwitchPHP starts a job that moves a site whose configs Layte renders to another PHP version
 // without downtime:
 //
 //  1. start a pool on the new version (its own socket, so both run side by side)
@@ -22,11 +22,8 @@ import (
 // If step 1 or 2 fails, the finished steps are undone and the site keeps
 // running on the old version.
 func (s *Service) SwitchPHP(ctx context.Context, actor agent.Actor, site store.Site, version string) (string, error) {
-	if !site.Managed {
-		return "", conflict("site_unmanaged", "%s was imported from the server; Layte Panel doesn't change imported sites", site.Domain)
-	}
-	if site.Status != "active" {
-		return "", conflict("site_busy", "%s is %s", site.Domain, site.Status)
+	if err := s.requireManagedActive(site); err != nil {
+		return "", err
 	}
 	var installed []string
 	if err := s.Agent.Call(ctx, "php.versions", actor, nil, &installed); err != nil {

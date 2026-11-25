@@ -12,12 +12,13 @@ import (
 	"github.com/slightgrey/layte-panel/internal/store"
 )
 
-// requireCacheable: the page cache is for WordPress sites Layte created
-// (its skip rules know WordPress; Layte owns their nginx config).
+// requireCacheable: the page cache is for WordPress sites whose nginx config
+// Layte renders (its skip rules know WordPress): created, or adopted and
+// taken over.
 func requireCacheable(site store.Site) error {
 	switch {
-	case !site.Managed:
-		return conflict("site_unmanaged", "the page cache is only available on sites Layte Panel created")
+	case !site.LayteConfigs():
+		return conflict("site_unmanaged", "the page cache needs Layte Panel to manage the site's nginx config")
 	case !site.WordPress:
 		return badRequest("the page cache is only available on WordPress sites")
 	case site.Status != "active":
@@ -49,7 +50,7 @@ func (s *Service) SetPageCache(ctx context.Context, actor agent.Actor, site stor
 		p.Cache = c
 		return p
 	}
-	cache := actions.CacheParams{Domain: site.Domain, Username: site.SystemUser}
+	cache := cacheParams(site)
 
 	jobID, err := s.Jobs.Start("site.page_cache", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) (err error) {
 		var undo undoStack
@@ -117,5 +118,14 @@ func (s *Service) PurgeCache(ctx context.Context, actor agent.Actor, site store.
 	if !site.PageCache.Enabled {
 		return badRequest("the page cache is off")
 	}
-	return s.longCall(ctx, time.Minute, "cache.purge", actor, actions.CacheParams{Domain: site.Domain, Username: site.SystemUser}, nil)
+	return s.longCall(ctx, time.Minute, "cache.purge", actor, cacheParams(site), nil)
+}
+
+// cacheParams: adopted sites have WordPress right in their web root.
+func cacheParams(site store.Site) actions.CacheParams {
+	p := actions.CacheParams{Domain: site.Domain, Username: site.SystemUser}
+	if site.Adopted {
+		p.WebRoot = site.RootPath
+	}
+	return p
 }

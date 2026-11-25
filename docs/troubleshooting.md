@@ -36,5 +36,23 @@ Every domain and alias must already resolve to this server, and port 80 must be 
 ### A certificate shows "expiring"
 certbot renews 30 days before expiry, so under 21 days means renewal is failing. Run `sudo certbot renew --dry-run` to see why.
 
+### Give an adopted site's nginx config back to yourself
+After **Let Layte manage nginx**, your original config is kept: as `<file>.layte-orig` (in `conf.d/`, or in
+`sites-available/` if it was a file in `sites-enabled/`), or untouched in `sites-available/` if only its
+`sites-enabled/` link was removed. To go back by hand:
+
+1. Remove Layte's vhost: `/etc/nginx/conf.d/layte-<domain>.conf`, or
+   `/etc/nginx/sites-enabled/layte-<domain>.conf` and `/etc/nginx/sites-available/layte-<domain>.conf`.
+2. Put yours back (rename the `.layte-orig` file, or recreate the `sites-enabled/` link).
+3. `nginx -t && systemctl reload nginx`.
+
+The site's PHP pool is then Layte's standard pool (`/etc/php/<v>/fpm/pool.d/layte-<domain>.conf`); point your config's
+`fastcgi_pass` at its socket, or restore the pool from before the adoption (`<pool>.layte-orig`).
+
+### Letting Layte manage nginx fails at the certificate step
+For sites with HTTPS, Layte first gets its own certificate (HTTP-01, files in the site's web root, served by your
+current config). Nothing is changed when this fails. Common causes: your config denies `/.well-known/` (e.g. a
+`location ~ /\.` rule without an exception), or a CDN/proxy doesn't pass `/.well-known/acme-challenge/` through.
+
 ### Everything else
 Run `layte version` and include its output, plus the relevant journal lines, in a GitHub issue.
