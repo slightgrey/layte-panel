@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/nginx"
@@ -262,10 +263,23 @@ func TestNginxWorkers(t *testing.T) {
 	if len(w) != 2 || !slices.Contains(w, 5001) || !slices.Contains(w, 5002) {
 		t.Errorf("workers = %v", w)
 	}
+	// Still serving: not done (a short deadline via the context).
+	d.FS.WriteFileAtomic("/proc/5002/cmdline", []byte("nginx: worker process"), 0o644)
+	short, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	if d.waitNginxReloaded(short, w) {
+		t.Error("done while an old worker still serves")
+	}
+	// Shutting down isn't drained: it still finishes open requests.
+	d.FS.WriteFileAtomic("/proc/5002/cmdline", []byte("nginx: worker process is shutting down"), 0o644)
+	if d.waitNginxDrained(ctx, w, 300*time.Millisecond) {
+		t.Error("drained while old workers still run")
+	}
+	// Exited, or shutting down (only finishing open connections): done.
 	d.FS.RemoveAll("/proc/5001")
-	d.FS.RemoveAll("/proc/5002")
+	d.FS.WriteFileAtomic("/proc/5002/cmdline", []byte("nginx: worker process is shutting down"), 0o644)
 	if !d.waitNginxReloaded(ctx, w) {
-		t.Error("old workers are gone, but still waiting")
+		t.Error("old workers are gone or shutting down, but still waiting")
 	}
 }
 

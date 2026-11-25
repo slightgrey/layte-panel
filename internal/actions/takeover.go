@@ -344,7 +344,13 @@ func (d Deps) siteNginxTakeover(ctx context.Context, _ agent.Actor, p TakeoverPa
 	}
 	step(fmt.Sprintf("%s still answers %d", p.Domain, after))
 
-	// 4. The adopted pool is unused now; removing it is best effort.
+	// 4. The adopted pool is unused now; removing it is best effort. Old nginx
+	// workers may still be running requests on it: give them time to finish
+	// (other long-lived connections, e.g. live streams, can keep a worker
+	// for much longer, so don't wait forever).
+	if !d.waitNginxDrained(ctx, workers, 30*time.Second) {
+		step("Old nginx workers still had open connections after 30 seconds; removing the old pool anyway")
+	}
 	err = system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: t.pool.Path, Test: fpmTest(v), Reload: fpmReload(v)})
 	if err != nil {
 		step(fmt.Sprintf("Warning: couldn't remove the old pool %s (%v); it is unused", t.pool.Path, err))
@@ -446,15 +452,33 @@ func (d Deps) nginxWorkers() []int {
 }
 
 // waitNginxReloaded waits until the worker processes that ran before a
-// reload have exited. `systemctl reload nginx` returns as soon as nginx got
-// the signal; until then old workers still serve the old config, so a
-// check right after the reload could test the old config.
+// reload no longer take new connections. `systemctl reload nginx` returns as
+// soon as nginx got the signal; until the master has started new workers,
+// old ones still serve the old config, so a check right after the reload
+// could test the old config.
+//
+// An old worker is done when it has exited or is "shutting down": nginx
+// tells old workers to stop only after the new ones run, and from then on
+// they just finish their open connections. Those may stay open for minutes
+// (live streams, keep-alive behind a CDN), so waiting for them to exit
+// would time out.
 func (d Deps) waitNginxReloaded(ctx context.Context, before []int) bool {
-	deadline := time.Now().Add(15 * time.Second)
+	return d.waitNginxWorkers(ctx, before, false, 15*time.Second)
+}
+
+// waitNginxDrained waits (at most timeout) until the old workers have
+// exited, i.e. finished every request they had in progress.
+func (d Deps) waitNginxDrained(ctx context.Context, before []int, timeout time.Duration) bool {
+	return d.waitNginxWorkers(ctx, before, true, timeout)
+}
+
+func (d Deps) waitNginxWorkers(ctx context.Context, before []int, untilExit bool, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
 	for {
 		alive := false
 		for _, pid := range before {
-			if ok, _ := d.FS.Exists("/proc/" + strconv.Itoa(pid)); ok {
+			cmd, err := d.FS.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+			if err == nil && (untilExit || !strings.Contains(string(cmd), "shutting down")) {
 				alive = true
 				break
 			}
