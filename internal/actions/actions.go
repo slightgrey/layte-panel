@@ -113,6 +113,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("object_cache.disable", false, 2*time.Minute, d.objectCacheDisable),
 		agent.Def("object_cache.flush", false, 30*time.Second, d.objectCacheFlush),
 		agent.Def("object_cache.prepare", false, 10*time.Minute, d.objectCachePrepare),
+		agent.Def("object_cache.resume", false, 30*time.Second, d.objectCacheResume),
 		agent.Def("cron.write", false, 15*time.Second, d.cronWrite),
 		agent.Def("fs.write", false, 30*time.Second, d.fsWrite).WithAuditSkip(auditFirstChunk),
 		agent.Def("ufw.allow", false, 20*time.Second, d.ufwAllow),

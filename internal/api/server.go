@@ -101,6 +101,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/sites/{id}/object-cache", authed(s.handleObjectCache))
 	mux.Handle("PUT /api/v1/sites/{id}/object-cache", authed(s.handleSetObjectCache))
 	mux.Handle("POST /api/v1/sites/{id}/object-cache/flush", authed(s.handleFlushObjectCache))
+	mux.Handle("POST /api/v1/sites/{id}/object-cache/resume", authed(s.handleResumeObjectCache))
 	mux.Handle("GET /api/v1/sites/{id}/adopt", authed(s.handleAdoptPreview))
 	mux.Handle("POST /api/v1/sites/{id}/adopt", authed(s.handleAdopt))
 	mux.Handle("GET /api/v1/sites/{id}/takeover", authed(s.handleTakeoverPreview))
