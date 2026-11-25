@@ -1,0 +1,6 @@
+2026-11-25T16:01:10+00:00 vincelayte sshguard[158978]: Attack from "198.51.100.25" on service SSH with danger 10.
+2026-11-25T16:01:11+00:00 vincelayte sshguard[158978]: Attack from "198.51.100.25" on service SSH with danger 10.
+2026-11-25T16:01:12+00:00 vincelayte sshguard[158978]: Attack from "198.51.100.25" on service SSH with danger 10.
+2026-11-25T16:01:12+00:00 vincelayte sshguard[158978]: Blocking "198.51.100.25/32" for 120 secs (3 attacks in 2 secs, after 1 abuses over 2 secs.)
+2026-11-25T16:03:26+00:00 vincelayte sshguard[158978]: Attack from "192.0.2.236" on service SSH with danger 2.
+2026-11-25T16:05:40+00:00 vincelayte sshguard[158978]: Blocking "192.0.2.236/32" for 180 secs (3 attacks in 30 secs, after 2 abuses over 150 secs.)

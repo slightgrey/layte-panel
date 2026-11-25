@@ -1,0 +1,8 @@
+table ip sshguard {
+	set attackers {
+		type ipv4_addr
+		flags interval
+		elements = { 203.0.113.14, 198.51.100.25,
+			     192.0.2.236, 203.0.113.0/24 }
+	}
+}

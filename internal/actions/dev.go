@@ -138,6 +138,14 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		case c.Bin == systemctl && len(args) > 0 && args[0] == "show":
 			b, err := fs.ReadFile(cmds, "systemctl-show.txt")
 			return system.Result{Stdout: b}, err
+		case c.Bin == systemctl && slices.Equal(args, []string{"is-active", "sshguard"}):
+			return system.Result{Stdout: []byte("active\n")}, nil
+		case c.Bin == nftBin && slices.Equal(args, []string{"list", "set", "ip", "sshguard", "attackers"}):
+			b, err := fs.ReadFile(cmds, "nft-sshguard-ip.txt")
+			return system.Result{Stdout: b}, err
+		case c.Bin == journalctlBin && slices.Contains(args, "sshguard"):
+			b, err := fs.ReadFile(cmds, "journalctl-sshguard.txt")
+			return system.Result{Stdout: b}, err
 		case c.Bin == systemctl: // reload/restart
 			return system.Result{}, nil
 		case c.Bin == nginxBin && len(args) == 1 && args[0] == "-t":

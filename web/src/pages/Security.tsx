@@ -11,7 +11,7 @@ import {
   useSetCloudflare,
   useSetFirewall,
 } from "@/api/security";
-import type { SecurityResponse } from "@/api/types";
+import type { SSHGuardStatus, SecurityResponse } from "@/api/types";
 import { JobProgress } from "@/components/JobProgress";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,7 @@ export function SecurityPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Security</h1>
-        <p className="text-sm text-muted-foreground">Firewall, security updates, failed SSH logins and Cloudflare.</p>
+        <p className="text-sm text-muted-foreground">Firewall, security updates, SSH logins and brute-force blocking, and Cloudflare.</p>
       </div>
       {ov.reboot_required && (
         <Notice tone="warning" icon={RotateCw}>
@@ -45,6 +45,7 @@ export function SecurityPage() {
         <UpdatesCard data={sec.data} />
         <FailedLoginsCard data={sec.data} />
       </div>
+      <SSHGuardCard status={ov.sshguard} />
       <FirewallCard data={sec.data} />
       <CloudflareCard data={sec.data} />
     </div>
@@ -184,10 +185,86 @@ function FailedLoginsCard({ data }: { data: SecurityResponse }) {
           </Table>
         )}
         <p className="mt-3 text-xs text-muted-foreground">
-          From /var/log/auth.log. Key-only SSH (PasswordAuthentication no) makes these attempts harmless; fail2ban can block repeat offenders.
+          From /var/log/auth.log. Key-only SSH (PasswordAuthentication no) makes these attempts harmless; sshguard blocks repeat offenders (below).
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+/** sshguard: what it's blocking (read-only; its settings stay the admin's). */
+function SSHGuardCard({ status: g }: { status?: SSHGuardStatus }) {
+  if (!g) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Brute-force blocking (sshguard)</CardTitle>
+        {!g.installed ? (
+          <Badge variant="warning">not installed</Badge>
+        ) : g.running ? (
+          <Badge variant="success">running</Badge>
+        ) : (
+          <Badge variant="danger">stopped</Badge>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {!g.installed ? (
+          <p className="text-sm text-muted-foreground">
+            sshguard blocks IPs that keep failing to log in over SSH, longer each time they come back. It uses a few MB of
+            memory, which suits small servers. Install it on the server with <code className="font-mono">sudo apt install sshguard</code>.
+          </p>
+        ) : (
+          <>
+            {!g.running && (
+              <Notice tone="warning">
+                sshguard is installed but not running, so nothing is being blocked. Start it with{" "}
+                <code className="font-mono">sudo systemctl enable --now sshguard</code>.
+              </Notice>
+            )}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat label="Blocked now" value={g.blocked_now} />
+              <Stat label="Blocked for good" value={g.permanent} />
+              <Stat label="Attacks, 24 h" value={g.attacks_24h} />
+              <Stat label="Blocks, 24 h" value={g.blocks_24h} />
+            </div>
+            {g.recent.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Latest blocks</TableHead>
+                    <TableHead>When</TableHead>
+                    <TableHead className="text-right">For</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {g.recent.map((b) => (
+                    <TableRow key={b.time + b.address}>
+                      <TableCell className="font-mono text-xs">{b.address}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{new Date(b.time).toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-xs">{b.for}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Blocks start short and grow for repeat attackers; persistent ones go on the permanent list
+              (/var/lib/sshguard/enemies). Successful key logins never count. If you lock yourself out, see the Troubleshooting
+              docs.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[12px] bg-background px-3 py-2 shadow-inset">
+      <div className="text-lg font-semibold tabular-nums">{value.toLocaleString()}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+    </div>
   );
 }
 
