@@ -38,6 +38,9 @@ type Site struct {
 	// WebRoot is an adopted site's own web root (its files stay where they
 	// were). "" for sites Layte created: Dir()/public.
 	WebRoot string
+	// HTTP2On: nginx 1.25.1+ turns HTTP/2 on with "http2 on;" and warns
+	// about the older "listen … http2" form (which 1.24 and older need).
+	HTTP2On bool
 }
 
 // CacheDir is the site's page cache folder; CacheZone its nginx zone name.

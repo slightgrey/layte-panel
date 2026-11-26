@@ -84,6 +84,17 @@ as root in the VM against the real agent. It:
 4. Checks that the user, the database and the configs are gone, that `nginx -t` passes, and that
    no foreign nginx or PHP config changed (checksums before and after).
 
+Other tests in the same binary cover the page cache, Redis object cache, one-click WP-Admin login,
+SFTP on a created site (`TestSFTPCreatedSite`) and the read-only dashboard, updates and security
+actions (`TestReadOnlyActions`, which logs their JSON for a quick look).
+
+### Other systems
+To check another release, launch a VM for it (`multipass launch 26.04 --name layte-resolute`,
+`multipass launch debian …` for Debian 13; `multipass find` lists them), run `deploy/install.sh --binary … --with-stack`
+in it, then the integration binary with `-test.run 'TestWordPressSiteLifecycle|TestSFTPCreatedSite|TestReadOnlyActions'`.
+Don't install `redis-server` by hand first: Layte only stops the distribution's own Redis instance
+when Layte installed it, and the object cache test checks that nothing listens on TCP.
+
 ## How site jobs work
 Creating a site, deleting it and switching its PHP version are **jobs** ([internal/sites](../internal/sites)).
 - Each job is a sequence of small agent actions (`site.user_create`, `php.pool_write`, `nginx.vhost_write`, …).

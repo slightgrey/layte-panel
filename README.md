@@ -46,7 +46,7 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
 *Demo data. The screenshots are generated with `cd web && npm run screenshots`.*
 
 ## Install
-On a fresh or existing **Ubuntu 24.04** server:
+On a fresh or existing **Ubuntu 24.04 / 26.04** or **Debian 13** server:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/slightgrey/layte-panel/main/deploy/install.sh | sudo bash
 ```
@@ -56,7 +56,7 @@ See [docs/install.md](docs/install.md) for options: the panel domain, IP allowli
 [Install](docs/install.md) · [Upgrade & backup](docs/upgrade.md) · [Security](docs/security.md) · [Troubleshooting](docs/troubleshooting.md) · [API](docs/api.md) · [Development](docs/development.md)
 
 ## Status
-Early releases (0.x). Built and tested against Ubuntu 24.04 with nginx, PHP-FPM, and MySQL 8 or MariaDB.
+Early releases (0.x). Tested on Ubuntu 24.04 and 26.04 and Debian 13 (amd64) with nginx, PHP-FPM, and MySQL or MariaDB. Ubuntu 22.04 works but isn't recommended; see [supported systems](docs/install.md#supported-systems).
 
 **Not included yet:** email hosting, DNS hosting, multiple servers, Docker apps.
 

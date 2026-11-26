@@ -28,6 +28,8 @@ func TestGolden(t *testing.T) {
 	adopted.WebRoot = "/var/www/example"
 	redirected := sslSite
 	redirected.Redirects = []redirects.Redirect{{From: "/hire-vince", To: "/hire/", Code: 301}, {From: "/old", To: "https://example.org/new?a=1&b=2", Code: 302}}
+	http2On := sslSite // nginx 1.25.1+
+	http2On.HTTP2On = true
 	tuned := site
 	tuned.PHP = phpini.Settings{MemoryLimit: "512M", UploadMax: "1G", MaxExecutionTime: 600, MaxInputVars: 5000}
 	tests := []struct {
@@ -36,6 +38,7 @@ func TestGolden(t *testing.T) {
 	}{
 		{"nginx-site.golden", Vhost},
 		{"nginx-site-ssl.golden", func(Site) ([]byte, error) { return Vhost(sslSite) }},
+		{"nginx-site-ssl-http2on.golden", func(Site) ([]byte, error) { return Vhost(http2On) }},
 		{"fpm-pool.golden", Pool},
 		{"fpm-pool-php-settings.golden", func(Site) ([]byte, error) { return Pool(tuned) }},
 		{"nginx-site-php-settings.golden", func(Site) ([]byte, error) { return Vhost(tuned) }},

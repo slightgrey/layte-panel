@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
@@ -94,4 +95,33 @@ func firstMatch(re *regexp.Regexp, s string) string {
 		}
 	}
 	return ""
+}
+
+// nginxHTTP2On reports whether the installed nginx (1.25.1+) wants
+// "http2 on;" instead of "listen … http2". If nginx can't be asked, the
+// older form is used: newer nginx still accepts it, with a warning.
+func (d Deps) nginxHTTP2On(ctx context.Context) bool {
+	res, err := d.Runner.Run(ctx, nginxBin, "-v")
+	if err != nil {
+		return false
+	}
+	return versionAtLeast(firstMatch(reNginx, string(res.Stdout)+"\n"+string(res.Stderr)), 1, 25, 1)
+}
+
+// versionAtLeast compares a dotted version ("1.24.0") with major.minor.patch.
+func versionAtLeast(v string, want ...int) bool {
+	parts := strings.Split(v, ".")
+	for i, w := range want {
+		n := 0
+		if i < len(parts) {
+			var err error
+			if n, err = strconv.Atoi(parts[i]); err != nil {
+				return false
+			}
+		}
+		if n != w {
+			return n > w
+		}
+	}
+	return true
 }

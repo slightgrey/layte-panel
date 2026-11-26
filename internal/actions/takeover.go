@@ -181,7 +181,7 @@ func (d Deps) takeoverTarget(ctx context.Context, p TakeoverParams) (takeover, e
 		t.blockers = append(t.blockers, t.pool.Path+" already has the name of a Layte pool")
 	}
 	t.newVhost = templates.Site{Domain: p.Domain, Aliases: t.site.Aliases, User: p.Username, PHPVersion: t.pool.Version,
-		SSL: t.site.SSL, WebRoot: p.WebRoot, WebUser: d.webUser(), OwnCert: OwnCertOf(t.site.CertPath)}
+		SSL: t.site.SSL, WebRoot: p.WebRoot, WebUser: d.webUser(), OwnCert: OwnCertOf(t.site.CertPath), HTTP2On: d.nginxHTTP2On(ctx)}
 	t.warnings = customDirectives(ds)
 	return t, nil
 }
