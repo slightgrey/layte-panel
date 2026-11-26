@@ -1,10 +1,23 @@
 # Installing Layte Panel
 
 ## Requirements
-- **Ubuntu 24.04 LTS** (amd64 or arm64). Debian 12 should work but gets less testing.
+- A supported Linux (see the table below). amd64 is tested; arm64 builds are published but not yet tested on real hardware.
 - At least **1 vCPU and 1 GB RAM**. The panel itself uses about 15 MB.
 - Root access (sudo).
 - A domain name for the panel, such as `panel.example.com`, whose DNS points to the server. You can also skip this and reach the panel through an SSH tunnel.
+
+### Supported systems
+Each one below passed a full install (`--with-stack`) and the integration tests: a WordPress site created, one-click WP-Admin login, page cache, Redis object cache, SFTP, the dashboard, updates and security pages, then site deletion.
+
+| System | Status | Default stack (`--with-stack`) |
+|---|---|---|
+| **Ubuntu 24.04 LTS** | Supported (main target; also runs in production) | PHP 8.3, MySQL 8.0, nginx 1.24 |
+| **Ubuntu 26.04 LTS** | Supported | PHP 8.5, MySQL 8.4, nginx 1.28 |
+| **Debian 13** (trixie) | Supported | PHP 8.4, MariaDB 11.8, nginx 1.26 |
+| Ubuntu 22.04 LTS | Works, not recommended: its PHP 8.1 no longer gets security fixes from PHP | PHP 8.1, MySQL 8.0, nginx 1.18 |
+| Debian 12 | Should work, not tested | PHP 8.2, MariaDB 10.11, nginx 1.22 |
+
+The installer warns about anything not marked as supported. The stack is the distribution's own packages; to run other PHP versions next to the default one, add them yourself (for example from [ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php) on Ubuntu). Layte finds every installed PHP-FPM version.
 
 Layte Panel works on servers that already host sites. It never changes nginx, PHP or Certbot configs it didn't create; existing sites show up as **imported** and stay read-only.
 
@@ -13,7 +26,7 @@ Layte Panel works on servers that already host sites. It never changes nginx, PH
 curl -fsSL https://raw.githubusercontent.com/slightgrey/layte-panel/main/deploy/install.sh | sudo bash
 ```
 The installer asks a few questions:
-- Whether to install the web stack (nginx, PHP 8.3-FPM, MySQL 8, certbot, ufw, unattended-upgrades). It skips this question if nginx and PHP are already installed.
+- Whether to install the web stack: nginx, the system's PHP-FPM, MySQL (Ubuntu) or MariaDB (Debian), certbot, cron, ufw and unattended-upgrades. It skips this question if nginx and PHP are already installed.
 - Which domain to use for the panel.
 - An email address for Let's Encrypt.
 - The name of the first admin user.
@@ -30,7 +43,7 @@ sudo bash install.sh --with-stack --panel-domain panel.example.com --email you@e
 | Option | |
 |---|---|
 | `--version vX.Y.Z` | Install a specific release (default: latest) |
-| `--with-stack` / `--no-stack` | Install nginx, PHP 8.3-FPM, MySQL, certbot, ufw and unattended-upgrades, or don't (and don't ask) |
+| `--with-stack` / `--no-stack` | Install nginx, PHP-FPM, MySQL/MariaDB, certbot, cron, ufw and unattended-upgrades, or don't (and don't ask) |
 | `--panel-domain NAME` | Serve the panel at `https://NAME`, with a Let's Encrypt certificate |
 | `--email ADDR` | Let's Encrypt account email |
 | `--allow-ip IP/CIDR` | Only these addresses can reach the panel (repeatable). Strongly recommended. |

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Layte Panel installer — Ubuntu 24.04 (Debian 12 best effort), amd64/arm64.
+# Layte Panel installer — Ubuntu 24.04/26.04 and Debian 13 (tested), amd64/arm64.
 #
 #   curl -fsSL https://raw.githubusercontent.com/slightgrey/layte-panel/main/deploy/install.sh | sudo bash
 #
@@ -66,10 +66,12 @@ command -v systemctl >/dev/null || die "systemd is required"
 os_field() { sed -n "s/^$1=//p" /etc/os-release | tr -d '"'; }
 OS_ID="$(os_field ID)"
 OS_VERSION_ID="$(os_field VERSION_ID)"
+# Tested: Ubuntu 24.04 and 26.04, Debian 13 (see docs/install.md).
 case "${OS_ID}-${OS_VERSION_ID}" in
-  ubuntu-24.04) ;;
-  debian-12) warn "Debian 12 is supported on a best-effort basis" ;;
-  *) warn "untested OS: $(os_field PRETTY_NAME). Layte Panel targets Ubuntu 24.04." ;;
+  ubuntu-24.04|ubuntu-26.04|debian-13) ;;
+  ubuntu-22.04) warn "Ubuntu 22.04 works, but its PHP 8.1 no longer gets security fixes; prefer Ubuntu 24.04 or newer" ;;
+  debian-12) warn "Debian 12 should work but isn't tested; Debian 13 is" ;;
+  *) warn "untested OS: $(os_field PRETTY_NAME). Layte Panel is tested on Ubuntu 24.04/26.04 and Debian 13." ;;
 esac
 case "$(uname -m)" in
   x86_64)  ARCH=amd64 ;;
@@ -91,18 +93,29 @@ if [ "$STACK" = ask ]; then
   if command -v nginx >/dev/null && ls /etc/php/*/fpm >/dev/null 2>&1; then
     STACK=no
   else
-    a="$(ask "Install the web stack (nginx, PHP 8.3-FPM, MySQL, certbot, ufw)?" "Y")"
+    a="$(ask "Install the web stack (nginx, PHP-FPM, MySQL/MariaDB, certbot, ufw)?" "Y")"
     case "$a" in [Yy]*) STACK=yes ;; *) STACK=no ;; esac
   fi
 fi
 if [ "$STACK" = yes ]; then
-  say "Installing nginx, PHP 8.3-FPM, MySQL, certbot, ufw, unattended-upgrades"
+  # The distribution's own default PHP (Ubuntu 24.04: 8.3, 26.04: 8.5;
+  # Debian 13: 8.4) and database (MySQL on Ubuntu, MariaDB on Debian).
+  # More PHP versions can be added later (e.g. from the ondrej/php PPA).
+  say "Installing nginx, PHP-FPM, MySQL/MariaDB, certbot, cron, ufw, unattended-upgrades"
   apt-get update -q
   apt-get install -y -q nginx \
-    php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl php8.3-bcmath \
-    mysql-server certbot ufw unattended-upgrades curl ca-certificates
-  systemctl enable --now nginx php8.3-fpm mysql >/dev/null
+    php-fpm php-cli php-mysql php-curl php-gd php-mbstring php-xml php-zip php-intl php-bcmath \
+    default-mysql-server certbot ufw unattended-upgrades curl ca-certificates
+  # cron runs the sites' cron jobs (Debian's cloud images don't ship it).
+  # Without its recommends: on Debian those pull in a mail server (exim4).
+  apt-get install -y -q --no-install-recommends cron
+  PHP_FPM_UNIT="$(systemctl list-unit-files 'php*-fpm.service' --no-legend 2>/dev/null | awk '{print $1}' | sort -V | tail -n1)"
+  DB_UNIT=mysql
+  systemctl list-unit-files mariadb.service --no-legend 2>/dev/null | grep -q mariadb && DB_UNIT=mariadb
+  systemctl enable --now nginx "$PHP_FPM_UNIT" "$DB_UNIT" cron >/dev/null
+  say "Installed $(php -r 'echo "PHP ", PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION;' 2>/dev/null) and ${DB_UNIT}"
 fi
+[ -x /usr/sbin/cron ] || warn "cron isn't installed, so sites' cron jobs won't run (apt-get install cron)"
 
 # ---------------------------------------------------------------- binary
 if [ -n "$LOCAL_BINARY" ]; then

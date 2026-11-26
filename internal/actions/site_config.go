@@ -246,7 +246,9 @@ func (d Deps) nginxVhostWrite(ctx context.Context, _ agent.Actor, p SiteConfigPa
 			return nil, err
 		}
 	}
-	content, err := templates.Vhost(p.site())
+	vsite := p.site()
+	vsite.HTTP2On = d.nginxHTTP2On(ctx)
+	content, err := templates.Vhost(vsite)
 	if err != nil {
 		return nil, err
 	}
