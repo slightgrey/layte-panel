@@ -6,6 +6,8 @@ export interface User {
   id: number;
   username: string;
   role: Role;
+  /** Shown instead of the username when set (Account page). */
+  display_name?: string;
   /** Site accounts: their main site and how many subdomains they may add. */
   site_id?: number;
   max_subdomains?: number;
@@ -21,6 +23,27 @@ export interface LoginResponse {
   /** No 2FA yet (site accounts): set it up in the browser. */
   totp_setup?: boolean;
   csrf_token: string;
+}
+
+export interface AccountSession {
+  id: string;
+  current: boolean;
+  ip: string;
+  user_agent: string;
+  remember: boolean;
+  created_at: string;
+  last_seen_at: string;
+}
+
+/** GET /account: the logged-in user's own settings. */
+export interface AccountResponse {
+  username: string;
+  role: Role;
+  display_name: string;
+  email: string;
+  totp_set_up: boolean;
+  created_at: string;
+  sessions: AccountSession[];
 }
 
 export interface TOTPSetupResponse {

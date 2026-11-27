@@ -33,6 +33,7 @@ describe("Layout", () => {
   it("shows every section to admins", () => {
     renderAs({ user: { id: 1, username: "admin", role: "admin" }, csrf_token: "t" });
     expect(navLabels()).toEqual(expect.arrayContaining(["Dashboard", "Sites", "Security", "Updates", "Users", "API keys"]));
+    expect(screen.getByRole("link", { name: "Account settings" })).toHaveAttribute("href", "/account");
   });
 
   it("shows only Sites to a site account, and keeps it off admin pages", async () => {

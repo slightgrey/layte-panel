@@ -63,6 +63,14 @@ func (e *testEnv) siteUser(t *testing.T, username string, siteID int64) *client 
 var siteAccountRoutes = map[string]string{
 	"GET /api/v1/auth/me": "requireAuth",
 
+	"GET /api/v1/account":                  "account",
+	"PATCH /api/v1/account":                "account",
+	"POST /api/v1/account/password":        "limitedAccount",
+	"POST /api/v1/account/2fa":             "limitedAccount",
+	"POST /api/v1/account/2fa/confirm":     "limitedAccount",
+	"DELETE /api/v1/account/sessions":      "account",
+	"DELETE /api/v1/account/sessions/{id}": "account",
+
 	"GET /api/v1/sites":                           "readAccount",
 	"GET /api/v1/sites/{id}":                      "readSite",
 	"GET /api/v1/sites/{id}/disk":                 "readSite",

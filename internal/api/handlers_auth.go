@@ -15,13 +15,15 @@ type userJSON struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	Role     string `json:"role"` // admin | site
+	// DisplayName is shown instead of the username when set (Account page).
+	DisplayName string `json:"display_name,omitempty"`
 	// Site accounts: the main site, and how many subdomains they may add.
 	SiteID        int64 `json:"site_id,omitempty"`
 	MaxSubdomains int   `json:"max_subdomains,omitempty"`
 }
 
 func toUserJSON(u store.User) userJSON {
-	j := userJSON{ID: u.ID, Username: u.Username, Role: u.Role}
+	j := userJSON{ID: u.ID, Username: u.Username, Role: u.Role, DisplayName: u.DisplayName}
 	if !u.IsAdmin() {
 		j.SiteID, j.MaxSubdomains = u.SiteID, u.MaxSubdomains
 	}

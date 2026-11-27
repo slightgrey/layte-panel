@@ -161,6 +161,16 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/jobs/{id}", account(s.handleGetJob))
 	mux.Handle("GET /api/v1/jobs/{id}/events", account(s.handleJobEvents))
 	mux.Handle("GET /api/v1/jobs/{id}/secret", account(s.handleJobSecret))
+	// The Account page: your own profile, password, 2FA and sessions (any role).
+	limitedAccount := func(h http.HandlerFunc) http.Handler { return s.rateLimited(s.requireAuth(h)) }
+	mux.Handle("GET /api/v1/account", account(s.handleAccount))
+	mux.Handle("PATCH /api/v1/account", account(s.handleUpdateAccount))
+	mux.Handle("POST /api/v1/account/password", limitedAccount(s.handleChangePassword))
+	mux.Handle("POST /api/v1/account/2fa", limitedAccount(s.handleStart2FAChange))
+	mux.Handle("POST /api/v1/account/2fa/confirm", limitedAccount(s.handleConfirm2FAChange))
+	mux.Handle("DELETE /api/v1/account/sessions", account(s.handleSignOutOthers))
+	mux.Handle("DELETE /api/v1/account/sessions/{id}", account(s.handleSignOutSession))
+
 	mux.Handle("GET /api/v1/users", authed(s.handleListUsers))
 	mux.Handle("POST /api/v1/users", authed(s.handleCreateUser))
 	mux.Handle("PATCH /api/v1/users/{id}", authed(s.handleUpdateUser))
