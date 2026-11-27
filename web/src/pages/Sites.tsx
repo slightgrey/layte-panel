@@ -1,6 +1,7 @@
 import { Lock, Plus, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { useMe } from "@/api/auth";
 import { useScanSites, useSites } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
@@ -17,18 +18,23 @@ export function SitesPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const autoScanned = useRef(false);
+  const user = useMe().data?.user;
+  const isAdmin = user?.role === "admin";
+  // Site accounts add subdomain sites of their main site, up to their limit.
+  const used = (sites.data?.sites ?? []).filter((s) => s.parent_site_id && s.parent_site_id === user?.site_id).length;
+  const limit = user?.max_subdomains ?? 0;
 
   // First visit with an empty list: look for existing sites automatically.
   useEffect(() => {
-    if (sites.data && sites.data.sites.length === 0 && !autoScanned.current) {
+    if (isAdmin && sites.data && sites.data.sites.length === 0 && !autoScanned.current) {
       autoScanned.current = true;
       scan.mutate();
     }
-  }, [sites.data, scan]);
+  }, [isAdmin, sites.data, scan]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = sites.data?.sites ?? [];
+    const list = nestSubdomains(sites.data?.sites ?? []);
     return q ? list.filter((s) => s.domain.includes(q) || s.aliases.some((a) => a.includes(q))) : list;
   }, [sites.data, query]);
 
@@ -37,16 +43,26 @@ export function SitesPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sites</h1>
-          <p className="text-sm text-muted-foreground">Sites managed by Layte Panel and sites found in your nginx config.</p>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin
+              ? "Sites managed by Layte Panel and sites found in your nginx config."
+              : `Your site and its subdomains: ${used} of ${limit} subdomain${limit === 1 ? "" : "s"} used.`}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => scan.mutate()} disabled={scan.isPending}>
-            <RefreshCw className={scan.isPending ? "animate-spin" : ""} /> Scan server
+        {isAdmin ? (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => scan.mutate()} disabled={scan.isPending}>
+              <RefreshCw className={scan.isPending ? "animate-spin" : ""} /> Scan server
+            </Button>
+            <Button onClick={() => navigate("/sites/new")}>
+              <Plus /> New site
+            </Button>
+          </div>
+        ) : (
+          <Button onClick={() => navigate("/sites/new")} disabled={!sites.data || used >= limit} title={used >= limit ? "Your account has reached its subdomain limit" : undefined}>
+            <Plus /> Add subdomain
           </Button>
-          <Button onClick={() => navigate("/sites/new")}>
-            <Plus /> New site
-          </Button>
-        </div>
+        )}
       </div>
 
       {scan.data && (
@@ -83,6 +99,13 @@ export function SitesPage() {
   );
 }
 
+/** Each main site followed by its subdomain sites. */
+function nestSubdomains(sites: Site[]): Site[] {
+  const ids = new Set(sites.map((s) => s.id));
+  const isChild = (s: Site) => Boolean(s.parent_site_id && ids.has(s.parent_site_id));
+  return sites.filter((s) => !isChild(s)).flatMap((main) => [main, ...sites.filter((s) => s.parent_site_id === main.id)]);
+}
+
 function SitesTable({ sites }: { sites: Site[] }) {
   return (
     <Table>
@@ -98,7 +121,8 @@ function SitesTable({ sites }: { sites: Site[] }) {
         {sites.map((s) => (
           <TableRow key={s.id}>
             <TableCell>
-              <Link to={`/sites/${s.id}`} className="font-medium hover:underline">
+              <Link to={`/sites/${s.id}`} className={s.parent_site_id ? "pl-4 font-medium hover:underline" : "font-medium hover:underline"}>
+                {s.parent_site_id ? <span className="mr-1 text-muted-foreground">↳</span> : null}
                 {s.domain}
               </Link>
               {s.aliases.length > 0 && <div className="text-xs text-muted-foreground">+ {s.aliases.join(", ")}</div>}

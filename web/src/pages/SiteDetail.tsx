@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, lazy, type ReactNode, Suspense, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useIsAdmin } from "@/api/auth";
@@ -34,6 +34,7 @@ export function SiteDetailPage() {
   const [params] = useSearchParams();
   const jobId = params.get("job");
   const isAdmin = useIsAdmin();
+  const navigate = useNavigate();
   // NewSite passes the login it created along with the site (shown once).
   const createdLogin = (useLocation().state as { login?: { username: string; password: string } } | null)?.login;
 
@@ -70,19 +71,35 @@ export function SiteDetailPage() {
     );
   }
   const s = site.data;
-  const canDelete = s.managed && s.status !== "creating" && s.status !== "deleting";
+  // Site accounts may delete their subdomain sites, never their main site.
+  const canDelete = s.managed && s.status !== "creating" && s.status !== "deleting" && (isAdmin || Boolean(s.parent_site_id));
+  const canAddSubdomain = isAdmin && s.managed && !s.parent_site_id && s.status === "active";
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <SiteHeader site={s} actions={canDelete && <DeleteSite site={s} />} />
+      <SiteHeader
+        site={s}
+        actions={
+          (canDelete || canAddSubdomain) && (
+            <div className="flex gap-2">
+              {canAddSubdomain && (
+                <Button variant="outline" size="sm" onClick={() => navigate(`/sites/new?parent=${s.id}`)}>
+                  <Plus /> Add subdomain
+                </Button>
+              )}
+              {canDelete && <DeleteSite site={s} />}
+            </div>
+          )
+        }
+      />
       <SiteJobCard site={s} />
 
-      {!s.managed && !s.adopted && (
+      {isAdmin && !s.managed && !s.adopted && (
         <Notice action={s.status === "active" && s.root_path && <AdoptSite site={s} />}>
           This site was found in your nginx config. Layte Panel shows it <strong>read-only</strong> and never changes files
           it didn't create. Adopt it to manage it here: it gets its own Linux user, and its nginx config stays yours.
         </Notice>
       )}
-      {s.adopted && !s.nginx_managed && (
+      {isAdmin && s.adopted && !s.nginx_managed && (
         <Notice action={s.status === "active" && <TakeoverSite site={s} />}>
           Adopted: this site runs as <code className="font-mono">{s.system_user}</code> with a Layte-managed PHP-FPM pool. Its
           nginx config is still yours and is never rewritten by Layte Panel. Let Layte Panel manage it to switch PHP
@@ -90,11 +107,11 @@ export function SiteDetailPage() {
         </Notice>
       )}
 
-      <OverviewCard site={s} />
+      <OverviewCard site={s} isAdmin={isAdmin} />
       {isAdmin && (s.managed || s.adopted) && !s.parent_site_id && <PanelLoginCard site={s} created={createdLogin} />}
       {layteConfigs(s) && s.wordpress && <PageCacheCard site={s} />}
       {s.wordpress && (s.managed || s.adopted) && s.system_user && <ObjectCacheCard site={s} />}
-      <VhostCard site={s} />
+      {isAdmin && <VhostCard site={s} />}
     </div>
   );
 }
@@ -195,7 +212,11 @@ function DeleteSite({ site }: { site: Site }) {
             </p>
             <Checkbox
               label="Delete all site files"
-              description={`Removes the Linux user ${site.system_user} and /home/${site.system_user}. This can't be undone.`}
+              description={
+                site.parent_site_id
+                  ? `Removes /home/${site.system_user}/${site.domain}. The main site and its files stay. This can't be undone.`
+                  : `Removes the Linux user ${site.system_user} and /home/${site.system_user}. This can't be undone.`
+              }
               checked={removeFiles}
               onChange={(e) => setRemoveFiles(e.target.checked)}
             />
@@ -265,7 +286,8 @@ function DiskSize({ site }: { site: Site }) {
   );
 }
 
-function OverviewCard({ site: s }: { site: Site }) {
+function OverviewCard({ site: s, isAdmin }: { site: Site; isAdmin: boolean }) {
+  const parent = useSite(s.parent_site_id ?? 0, Boolean(s.parent_site_id));
   return (
     <Card>
       <CardHeader>
@@ -273,7 +295,16 @@ function OverviewCard({ site: s }: { site: Site }) {
       </CardHeader>
       <CardContent>
         <dl className="divide-y">
-          <Row label="Aliases">{s.aliases.length ? s.aliases.join(", ") : "–"}</Row>
+          {s.parent_site_id ? (
+            <Row label="Subdomain of">
+              <Link to={`/sites/${s.parent_site_id}`} className="text-primary hover:underline">
+                {parent.data?.domain ?? "main site"}
+              </Link>{" "}
+              <span className="text-muted-foreground">(same Linux user and SFTP login)</span>
+            </Row>
+          ) : (
+            <Row label="Aliases">{s.aliases.length ? s.aliases.join(", ") : "–"}</Row>
+          )}
           <Row label="PHP version">
             {layteConfigs(s) && s.status === "active" ? <PHPSwitch site={s} /> : s.php_version || "none (static)"}
           </Row>
@@ -289,10 +320,12 @@ function OverviewCard({ site: s }: { site: Site }) {
               <span className={mono}>{s.db_name}</span> (user <span className={mono}>{s.db_user}</span>)
             </Row>
           )}
-          <Row label="nginx config">
-            <span className={mono}>{s.nginx_conf || "–"}</span>
-          </Row>
-          {s.fpm_pool && (
+          {isAdmin && (
+            <Row label="nginx config">
+              <span className={mono}>{s.nginx_conf || "–"}</span>
+            </Row>
+          )}
+          {isAdmin && s.fpm_pool && (
             <Row label="PHP-FPM pool">
               <span className={mono}>{s.fpm_pool}</span>
             </Row>

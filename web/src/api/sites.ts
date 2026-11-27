@@ -65,11 +65,11 @@ export function useSites() {
 }
 
 /** GET /sites/{id} */
-export function useSite(id: number) {
+export function useSite(id: number, enabled = true) {
   return useQuery({
     queryKey: siteKey(id),
     queryFn: () => api<Site>("GET", `/sites/${id}`),
-    enabled: id > 0,
+    enabled: enabled && id > 0,
   });
 }
 

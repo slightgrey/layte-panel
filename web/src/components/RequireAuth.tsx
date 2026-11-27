@@ -23,3 +23,10 @@ export function RequireAuth() {
   }
   return <Outlet />;
 }
+
+/** Admin-only pages; a site account goes to its sites instead. */
+export function RequireAdmin() {
+  const me = useMe();
+  if (me.data && me.data.user.role !== "admin") return <Navigate to="/sites" replace />;
+  return <Outlet />;
+}

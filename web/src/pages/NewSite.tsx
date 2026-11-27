@@ -1,7 +1,8 @@
 import { ArrowLeft } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { useCreateSite, usePHPVersions } from "@/api/sites";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { useMe } from "@/api/auth";
+import { useCreateSite, usePHPVersions, useSite } from "@/api/sites";
 import { useCreateUser } from "@/api/users";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,10 +19,20 @@ function defaultUsername(domain: string) {
   return u.slice(0, 24);
 }
 
+const labelRe = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i;
+
 export function NewSitePage() {
   const navigate = useNavigate();
   const php = usePHPVersions();
   const create = useCreateSite();
+  const user = useMe().data?.user;
+  const isAdmin = user?.role === "admin";
+  // A subdomain site of a main site: always for site accounts, ?parent=<id> for admins.
+  const [params] = useSearchParams();
+  const parentId = isAdmin ? Number(params.get("parent")) || 0 : (user?.site_id ?? 0);
+  const parent = useSite(parentId, parentId > 0);
+  const sub = parentId > 0;
+  const [label, setLabel] = useState("");
 
   const [domain, setDomain] = useState("");
   const [aliases, setAliases] = useState("");
@@ -43,23 +54,25 @@ export function NewSitePage() {
     if (v?.length && !phpVersion) setPhpVersion(v[v.length - 1]!);
   }, [php.data, phpVersion]);
 
-  const domainOk = domain === "" || domainRe.test(domain.trim());
+  const fullDomain = sub ? (label.trim() && parent.data ? `${label.trim().toLowerCase()}.${parent.data.domain}` : "") : domain.trim();
+  const domainOk = sub ? label === "" || labelRe.test(label.trim()) : domain === "" || domainRe.test(domain.trim());
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     create.mutate(
       {
-        domain: domain.trim(),
-        aliases: aliases.split(/[\s,]+/).filter(Boolean),
-        username: username.trim() || undefined,
+        domain: fullDomain,
+        aliases: sub ? [] : aliases.split(/[\s,]+/).filter(Boolean),
+        username: sub ? undefined : username.trim() || undefined,
         php_version: phpVersion,
         create_db: createDb || wordpress,
-        wordpress: wordpress ? { title: title.trim() || domain.trim(), admin_user: adminUser.trim(), admin_email: adminEmail.trim() } : undefined,
+        wordpress: wordpress ? { title: title.trim() || fullDomain, admin_user: adminUser.trim(), admin_email: adminEmail.trim() } : undefined,
+        parent_site_id: sub ? parentId : undefined,
       },
       {
         onSuccess: (res) => {
           const go = (login?: { username: string; password: string }) => navigate(`/sites/${res.site_id}?job=${res.job_id}`, { state: login ? { login } : undefined });
-          if (!withLogin) return go();
+          if (!withLogin || sub) return go();
           // The site row exists as soon as the job starts, so its login can be made right away.
           const user = loginUser.trim() || defaultUsername(domain.trim());
           createUser.mutate(
@@ -77,9 +90,11 @@ export function NewSitePage() {
         <Link to="/sites" className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> Sites
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight">New site</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{sub ? "Add subdomain" : "New site"}</h1>
         <p className="text-sm text-muted-foreground">
-          Creates a Linux user, a PHP-FPM pool and an nginx config, plus a database and WordPress if you want them.
+          {sub
+            ? `A separate site on a subdomain of ${parent.data?.domain ?? "your site"}, with its own folder, PHP and nginx config, plus a database and WordPress if you want them. Point the subdomain's DNS to this server.`
+            : "Creates a Linux user, a PHP-FPM pool and an nginx config, plus a database and WordPress if you want them."}
         </p>
       </div>
 
@@ -89,12 +104,23 @@ export function NewSitePage() {
             <CardTitle>Site</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <Field label="Domain" htmlFor="domain" hint={!domainOk ? <span className="text-destructive">Enter a domain like example.com</span> : undefined}>
-              <Input id="domain" required autoFocus placeholder="example.com" spellCheck={false} value={domain} onChange={(e) => setDomain(e.target.value)} />
-            </Field>
-            <Field label="Aliases" htmlFor="aliases" hint="Optional. Other names for the same site, separated by spaces.">
-              <Input id="aliases" placeholder={domain ? `www.${domain.replace(/^www\./, "")}` : "www.example.com"} spellCheck={false} value={aliases} onChange={(e) => setAliases(e.target.value)} />
-            </Field>
+            {sub ? (
+              <Field label="Subdomain" htmlFor="label" hint={!domainOk ? <span className="text-destructive">Letters, digits and dashes only, like blog</span> : undefined}>
+                <div className="flex items-center gap-2">
+                  <Input id="label" required autoFocus placeholder="blog" spellCheck={false} className="max-w-48" value={label} onChange={(e) => setLabel(e.target.value)} />
+                  <span className="font-mono text-sm text-muted-foreground">.{parent.data?.domain ?? "…"}</span>
+                </div>
+              </Field>
+            ) : (
+              <>
+                <Field label="Domain" htmlFor="domain" hint={!domainOk ? <span className="text-destructive">Enter a domain like example.com</span> : undefined}>
+                  <Input id="domain" required autoFocus placeholder="example.com" spellCheck={false} value={domain} onChange={(e) => setDomain(e.target.value)} />
+                </Field>
+                <Field label="Aliases" htmlFor="aliases" hint="Optional. Other names for the same site, separated by spaces.">
+                  <Input id="aliases" placeholder={domain ? `www.${domain.replace(/^www\./, "")}` : "www.example.com"} spellCheck={false} value={aliases} onChange={(e) => setAliases(e.target.value)} />
+                </Field>
+              </>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="PHP version" htmlFor="php">
                 <Select id="php" required value={phpVersion} onChange={(e) => setPhpVersion(e.target.value)} disabled={!php.data}>
@@ -105,9 +131,11 @@ export function NewSitePage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Linux user" htmlFor="username" hint="Optional. Runs PHP and owns the files.">
-                <Input id="username" placeholder={domain ? defaultUsername(domain) : "derived from the domain"} spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} />
-              </Field>
+              {!sub && (
+                <Field label="Linux user" htmlFor="username" hint="Optional. Runs PHP and owns the files.">
+                  <Input id="username" placeholder={domain ? defaultUsername(domain) : "derived from the domain"} spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} />
+                </Field>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -146,6 +174,7 @@ export function NewSitePage() {
           </CardContent>
         </Card>
 
+        {!sub && isAdmin && (
         <Card>
           <CardHeader>
             <CardTitle>Panel login</CardTitle>
@@ -169,14 +198,15 @@ export function NewSitePage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         <FormError message={create.error?.message} />
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => navigate("/sites")}>
+          <Button type="button" variant="outline" onClick={() => navigate(sub && isAdmin ? `/sites/${parentId}` : "/sites")}>
             Cancel
           </Button>
-          <Button type="submit" disabled={create.isPending || createUser.isPending || !domainOk || !phpVersion}>
-            {create.isPending ? "Starting…" : "Create site"}
+          <Button type="submit" disabled={create.isPending || createUser.isPending || !domainOk || !phpVersion || (sub && !fullDomain)}>
+            {create.isPending ? "Starting…" : sub ? "Add subdomain" : "Create site"}
           </Button>
         </div>
       </form>

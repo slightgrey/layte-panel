@@ -48,6 +48,7 @@ Per-site SFTP (see [sftp.md](sftp.md)) uses Layte's own sshd drop-in, `/etc/ssh/
 The main `sshd_config` and every other login are untouched. Every change is checked with `sshd -t`, and sshd is reloaded (never restarted), so open sessions stay up.
 
 ## Logins
+- **Roles:** admins see everything. Site logins (see [site-accounts.md](site-accounts.md)) only reach their own site and its subdomains. Every API route is admin-only unless it is explicitly opened to site logins, and a test checks that list. Other sites' ids answer 404.
 - **Passwords:** hashed with argon2id (OWASP parameters).
 - **2FA:** TOTP is mandatory. Codes can't be reused.
 - **Brute force:** 5 failed attempts lock the account for 15 minutes, and each IP is rate-limited on the login endpoints.

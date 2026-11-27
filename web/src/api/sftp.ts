@@ -6,8 +6,13 @@ export interface SFTPState {
   enabled: boolean;
   password: boolean;
   keys: { key: string; fingerprint: string }[];
+  /** The site holding the login: a subdomain site shares its main site's. */
+  site_id: number;
+  domain: string;
   username: string;
   folder: string; // what the login sees, e.g. /example.com
+  /** Every folder the login sees: the main site's, then its subdomain sites'. */
+  folders: string[];
   warnings?: string[];
 }
 

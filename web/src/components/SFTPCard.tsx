@@ -81,6 +81,12 @@ export function SFTPCard({ site }: { site: Site }) {
           A login for FileZilla, VS Code, rsync or <code>sftp</code> that only reaches this site's folder and works as the
           site's user, so files keep the right owner. SFTP only: no shell, no tunnels.
         </p>
+        {s.site_id !== site.id && (
+          <Notice>
+            {site.domain} shares the SFTP login of its main site, <strong>{s.domain}</strong>: one login sees both folders.
+            Changes here apply to that login.
+          </Notice>
+        )}
 
         {s.enabled && <Details s={s} host={window.location.hostname} />}
         {!!s.warnings?.length && (
@@ -176,7 +182,7 @@ function Details({ s, host }: { s: SFTPState; host: string }) {
       <Row label="Port">22</Row>
       <Row label="Protocol">SFTP</Row>
       <Row label="Username">{s.username}</Row>
-      <Row label="Folder">{s.folder}</Row>
+      <Row label={s.folders.length > 1 ? "Folders" : "Folder"}>{s.folders.join(", ")}</Row>
       <div className="flex flex-wrap items-center gap-2 py-1.5 text-sm">
         <code className="min-w-0 flex-1 break-all font-mono text-xs">{cmd}</code>
         <CopyButton text={cmd} />
