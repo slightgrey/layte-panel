@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMe } from "@/api/auth";
 import { useCreateSite, usePHPVersions, useSite } from "@/api/sites";
+import { useCertificates } from "@/api/ssl";
 import { useCreateUser } from "@/api/users";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,13 @@ export function NewSitePage() {
   const [title, setTitle] = useState("");
   const [adminUser, setAdminUser] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [withSSL, setWithSSL] = useState(false);
+  const [sslEmail, setSslEmail] = useState("");
+  const certs = useCertificates();
+  // The admin's Let's Encrypt address, as the SSL tab remembers it.
+  useEffect(() => {
+    if (certs.data?.email && !sslEmail) setSslEmail(certs.data.email);
+  }, [certs.data, sslEmail]);
   const [withLogin, setWithLogin] = useState(false);
   const [loginUser, setLoginUser] = useState("");
   const [loginLimit, setLoginLimit] = useState("5");
@@ -68,6 +76,7 @@ export function NewSitePage() {
         create_db: createDb || wordpress,
         wordpress: wordpress ? { title: title.trim() || fullDomain, admin_user: adminUser.trim(), admin_email: adminEmail.trim() } : undefined,
         parent_site_id: sub ? parentId : undefined,
+        ssl: withSSL ? { email: sslEmail.trim() } : undefined,
       },
       {
         onSuccess: (res) => {
@@ -171,6 +180,27 @@ export function NewSitePage() {
               disabled={wordpress}
               onChange={(e) => setCreateDb(e.target.checked)}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>HTTPS</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Checkbox
+              label="Issue a free SSL certificate (Let's Encrypt)"
+              description="Right after the site is created, and WordPress switches to https://. The domain's DNS must already point to this server; if it doesn't yet, the site still works over HTTP and you can add SSL later on its SSL tab."
+              checked={withSSL}
+              onChange={(e) => setWithSSL(e.target.checked)}
+            />
+            {withSSL && (
+              <div className="border-l-2 pl-4">
+                <Field label="Email for expiry notices" htmlFor="ssl_email" hint="Let's Encrypt writes here if a certificate is about to expire.">
+                  <Input id="ssl_email" type="email" required className="max-w-sm" value={sslEmail} onChange={(e) => setSslEmail(e.target.value)} />
+                </Field>
+              </div>
+            )}
           </CardContent>
         </Card>
 

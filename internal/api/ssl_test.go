@@ -173,3 +173,34 @@ func siteIDByDomain(t *testing.T, c *client, domain string) string {
 	t.Fatalf("no site %s", domain)
 	return ""
 }
+
+// "Issue SSL" on the New site form: the create job ends on HTTPS.
+func TestCreateSiteWithSSL(t *testing.T) {
+	env, c, deps := siteEnv(t)
+	if st, body := c.do("POST", "/api/v1/sites", map[string]any{"domain": "tls.test", "php_version": "8.3", "ssl": map[string]string{"email": "nope"}}); st != 400 {
+		t.Errorf("bad SSL email: %d %v", st, body)
+	}
+	_, body := c.do("POST", "/api/v1/sites", map[string]any{"domain": "tls.test", "aliases": []string{"www.tls.test"}, "php_version": "8.3",
+		"wordpress": map[string]string{"title": "TLS", "admin_user": "owner", "admin_email": "o@example.com"},
+		"ssl":       map[string]string{"email": "admin@example.com"}})
+	jobID := body["job_id"].(string)
+	job := waitJob(t, c, jobID)
+	if job["status"] != "succeeded" || job["result"].(map[string]any)["url"] != "https://tls.test" {
+		t.Fatalf("job: %v", job)
+	}
+	site, _ := env.st.SiteByID(t.Context(), int64(body["site_id"].(float64)))
+	if !site.SSL {
+		t.Error("site not marked SSL")
+	}
+	vhost, _ := deps.FS.ReadFile("/etc/nginx/sites-available/layte-tls.test.conf")
+	if !strings.Contains(string(vhost), "listen 443 ssl") {
+		t.Errorf("vhost not on HTTPS:\n%s", vhost)
+	}
+	_, sec := c.do("GET", "/api/v1/jobs/"+jobID+"/secret", nil)
+	if u := sec["secrets"].(map[string]any)["wp_admin_url"]; u != "https://tls.test/wp-admin/" {
+		t.Errorf("wp_admin_url = %v", u)
+	}
+	if _, list := c.do("GET", "/api/v1/ssl", nil); list["email"] != "admin@example.com" {
+		t.Errorf("email not remembered: %v", list["email"])
+	}
+}

@@ -82,33 +82,8 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 		}
 	}
 	jobID, err := s.Jobs.Start("site.ssl_issue", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
-		call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
-
-		j.Step("Request certificate from Let's Encrypt")
-		j.Log("Domains: %v. Let's Encrypt checks each one over HTTP, so DNS must point here.", append([]string{site.Domain}, site.Aliases...))
-		if err := s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, s.sslIssueParams(site, email), nil); err != nil {
+		if err := s.enableHTTPS(ctx, j, actor, &site, email); err != nil {
 			return err
-		}
-
-		j.Step("Enable HTTPS in nginx")
-		if site.Adopted {
-			site.CertPath = layteCertPath(site.Domain) // replaces the site's own certificate
-		}
-		if err := call("nginx.vhost_write", s.siteConfig(site, true)); err != nil {
-			return err // WriteConfig already restored the previous vhost
-		}
-		site.SSL = true
-		if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
-			return err
-		}
-
-		if site.WordPress && site.Adopted {
-			j.Log("Change the WordPress address to https://%s under Settings → General if it isn't already.", site.Domain)
-		} else if site.WordPress {
-			j.Step("Switch WordPress to https://")
-			if err := call("wp.set_url", actions.WPURLParams{Domain: site.Domain, Username: site.SystemUser, PHPVersion: site.PHPVersion, URL: "https://" + site.Domain}); err != nil {
-				j.Log("Warning: couldn't update the WordPress URL (%v). Change it under Settings → General.", err)
-			}
 		}
 		if deleteOldCert && oldCert != "" {
 			s.deleteOldCert(ctx, j, actor, site, oldCert)
@@ -120,6 +95,42 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 		return "", conflict("site_busy", "another job is running for %s", site.Domain)
 	}
 	return jobID, err
+}
+
+// enableHTTPS gets a Let's Encrypt certificate for the site's domains,
+// switches its vhost to HTTPS and (WordPress sites Layte runs) the
+// WordPress address to https://. It runs inside a job: the SSL tab's, or
+// site creation's when "Issue SSL" was ticked.
+func (s *Service) enableHTTPS(ctx context.Context, j *jobs.Job, actor agent.Actor, site *store.Site, email string) error {
+	call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
+
+	j.Step("Request certificate from Let's Encrypt")
+	j.Log("Domains: %v. Let's Encrypt checks each one over HTTP, so DNS must point here.", append([]string{site.Domain}, site.Aliases...))
+	if err := s.longCall(ctx, 3*time.Minute, "ssl.issue", actor, s.sslIssueParams(*site, email), nil); err != nil {
+		return err
+	}
+
+	j.Step("Enable HTTPS in nginx")
+	if site.Adopted {
+		site.CertPath = layteCertPath(site.Domain) // replaces the site's own certificate
+	}
+	if err := call("nginx.vhost_write", s.siteConfig(*site, true)); err != nil {
+		return err // WriteConfig already restored the previous vhost
+	}
+	site.SSL = true
+	if err := s.Store.UpdateSite(context.WithoutCancel(ctx), *site); err != nil {
+		return err
+	}
+
+	if site.WordPress && site.Adopted {
+		j.Log("Change the WordPress address to https://%s under Settings → General if it isn't already.", site.Domain)
+	} else if site.WordPress {
+		j.Step("Switch WordPress to https://")
+		if err := call("wp.set_url", actions.WPURLParams{Domain: site.Domain, Username: site.SystemUser, PHPVersion: site.PHPVersion, URL: "https://" + site.Domain}); err != nil {
+			j.Log("Warning: couldn't update the WordPress URL (%v). Change it under Settings → General.", err)
+		}
+	}
+	return nil
 }
 
 // RenewSSL starts a job that renews the site's certificate now (forced), or
