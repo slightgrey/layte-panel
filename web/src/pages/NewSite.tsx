@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMe } from "@/api/auth";
 import { useCreateSite, usePHPVersions, useSite } from "@/api/sites";
 import { useCertificates } from "@/api/ssl";
+import type { SetupLink } from "@/api/types";
 import { useCreateUser } from "@/api/users";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,13 +81,13 @@ export function NewSitePage() {
       },
       {
         onSuccess: (res) => {
-          const go = (login?: { username: string; password: string }) => navigate(`/sites/${res.site_id}?job=${res.job_id}`, { state: login ? { login } : undefined });
+          const go = (login?: SetupLink) => navigate(`/sites/${res.site_id}?job=${res.job_id}`, { state: login ? { login } : undefined });
           if (!withLogin || sub) return go();
           // The site row exists as soon as the job starts, so its login can be made right away.
           const user = loginUser.trim() || defaultUsername(domain.trim());
           createUser.mutate(
             { username: user, site_id: res.site_id, max_subdomains: Number(loginLimit) },
-            { onSuccess: (r) => go({ username: r.user.username, password: r.password }), onError: () => go() },
+            { onSuccess: (r) => go({ username: r.user.username, setup_url: r.setup_url, expires_at: r.expires_at }), onError: () => go() },
           );
         },
       },
@@ -212,7 +213,7 @@ export function NewSitePage() {
           <CardContent className="flex flex-col gap-4">
             <Checkbox
               label="Create a login for this site"
-              description="For whoever runs the site: it sees only this site and its subdomains, with files and SFTP limited to its own folder. The password is generated and shown once."
+              description="For whoever runs the site: it sees only this site and its subdomains, with files and SFTP limited to its own folder. You get a one-time setup link to send them; they choose their own password."
               checked={withLogin}
               onChange={(e) => setWithLogin(e.target.checked)}
             />

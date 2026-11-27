@@ -7,9 +7,12 @@ As an admin, use either of these:
 - **New site → Panel login → Create a login for this site**, while creating the site; or
 - **site → Overview → Panel login → Create login**, for an existing site Layte created or adopted.
 
-Choose a username and a **subdomain limit** (how many subdomains the login may add, 0 to 100, default 5). The password is generated and **shown once**, together with the panel's address. Send both to the user.
+Choose a username and a **subdomain limit** (how many subdomains the login may add, 0 to 100, default 5). You get a **one-time setup link**, shown once. Send it to the user privately. The link:
+- works **once** and expires after **72 hours**;
+- lets the user choose their **own password**, so no one else ever sees it;
+- then has them set up **two-factor login** by scanning a QR code with an authenticator app. 2FA is required, just as it is for admins.
 
-On the first sign-in, the user sets up **two-factor login** in the browser by scanning a QR code with an authenticator app. 2FA is required, just as it is for admins.
+If the link reaches the wrong person, or expires, issue a new one. The old link stops working at once.
 
 Each main site can have one login. Subdomain sites use the login of their main site.
 
@@ -46,7 +49,7 @@ Deleting a subdomain site removes only its folder (if you tick "Delete all site 
 ## Managing logins
 **Users** (admins) lists every login. For each site login you can:
 - change the **subdomain limit** (lowering it doesn't delete existing subdomains; it only stops new ones);
-- issue a **new password** (shown once; signs the user out everywhere);
+- issue a **password reset link** (shown once, works like the setup link). Their current password keeps working until the link is used; then every session is signed out;
 - **reset 2FA** (for a lost phone; the user sets it up again at the next sign-in);
 - **delete the login** (the sites and their files stay).
 

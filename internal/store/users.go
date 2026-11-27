@@ -30,6 +30,8 @@ type User struct {
 	MaxSubdomains int
 	DisplayName   string // Account page; "" = show the username
 	Email         string
+	// SetupExpires is when the user's pending setup link expires (zero = none).
+	SetupExpires time.Time
 }
 
 // Roles.
@@ -41,13 +43,14 @@ const (
 // IsAdmin reports whether u is a full admin.
 func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
 
-const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains, display_name, email`
+const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains, display_name, email, setup_expires`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var locked, created int64
 	var site sql.NullInt64
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains, &u.DisplayName, &u.Email)
+	var setupExp int64
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains, &u.DisplayName, &u.Email, &setupExp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -56,6 +59,9 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	}
 	u.LockedUntil, u.CreatedAt = time.Unix(locked, 0), time.Unix(created, 0)
 	u.SiteID = site.Int64
+	if setupExp > 0 {
+		u.SetupExpires = time.Unix(setupExp, 0)
+	}
 	return u, nil
 }
 
@@ -221,4 +227,42 @@ func (s *Store) SetTOTPSecret(ctx context.Context, userID int64, secretEnc []byt
 
 func isUniqueViolation(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+// SetSetupToken gives the user a new setup link (replacing any older one).
+func (s *Store) SetSetupToken(ctx context.Context, userID int64, tokenHash string, expires time.Time) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE users SET setup_token_hash = ?, setup_expires = ? WHERE id = ?`, tokenHash, expires.Unix(), userID)
+	return err
+}
+
+// UserBySetupToken returns the user whose setup link is tokenHash, if it
+// hasn't expired at now.
+func (s *Store) UserBySetupToken(ctx context.Context, tokenHash string, now time.Time) (User, error) {
+	if tokenHash == "" {
+		return User{}, ErrNotFound
+	}
+	return scanUser(s.DB.QueryRowContext(ctx,
+		`SELECT `+userCols+` FROM users WHERE setup_token_hash = ? AND setup_expires > ?`, tokenHash, now.Unix()))
+}
+
+// UseSetupToken sets the password chosen through a setup link, uses up the
+// link (only if it is still tokenHash, so it works once) and logs out every
+// session. It reports whether the link was still valid.
+func (s *Store) UseSetupToken(ctx context.Context, userID int64, tokenHash, passwordHash string) (bool, error) {
+	var ok bool
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx,
+			`UPDATE users SET password_hash = ?, setup_token_hash = '', setup_expires = 0, failed_logins = 0, locked_until = 0
+			 WHERE id = ? AND setup_token_hash = ? AND setup_token_hash <> ''`, passwordHash, userID, tokenHash)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return nil
+		}
+		ok = true
+		_, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID)
+		return err
+	})
+	return ok, err
 }

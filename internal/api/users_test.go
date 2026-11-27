@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/auth"
 )
@@ -22,7 +24,11 @@ func TestSiteAccountLifecycle(t *testing.T) {
 	if st != 201 {
 		t.Fatalf("create: %d %v", st, body)
 	}
-	pw := body["password"].(string)
+	if _, ok := body["password"]; ok {
+		t.Fatal("a password was generated and shown to the admin")
+	}
+	token := path.Base(body["setup_url"].(string))
+	const pw = "the client's own passphrase"
 	id := int64(body["user"].(map[string]any)["id"].(float64))
 	if st, _ := a.do("POST", "/api/v1/users", map[string]any{"username": "client2", "site_id": main}); st != 409 {
 		t.Errorf("second login for the same site: %d", st)
@@ -31,9 +37,9 @@ func TestSiteAccountLifecycle(t *testing.T) {
 	// First login: 2FA setup in the browser. (Few auth calls: they are rate
 	// limited per IP.)
 	c := e.client(t)
-	st, body = c.do("POST", "/api/v1/auth/login", map[string]string{"username": "client", "password": pw})
+	st, body = c.do("POST", "/api/v1/setup/"+token, map[string]string{"password": pw})
 	if st != 200 || body["totp_setup"] != true {
-		t.Fatalf("login: %d %v", st, body)
+		t.Fatalf("setup link: %d %v", st, body)
 	}
 	if st, body := c.do("POST", "/api/v1/auth/totp", map[string]string{"code": "123456"}); st != 401 || errCode(body) != "totp_setup_required" {
 		t.Errorf("totp before setup: %d %v", st, body)
@@ -63,24 +69,24 @@ func TestSiteAccountLifecycle(t *testing.T) {
 	}
 
 	// Admin: limit, password and 2FA resets, delete. Site accounts can't.
-	path := fmt.Sprintf("/api/v1/users/%d", id)
+	upath := fmt.Sprintf("/api/v1/users/%d", id)
 	if st, _ := c.do("GET", "/api/v1/users", nil); st != 403 {
 		t.Errorf("site account lists users: %d", st)
 	}
-	if st, body := a.do("PATCH", path, map[string]int{"max_subdomains": 7}); st != 200 || body["max_subdomains"] != float64(7) {
+	if st, body := a.do("PATCH", upath, map[string]int{"max_subdomains": 7}); st != 200 || body["max_subdomains"] != float64(7) {
 		t.Errorf("patch: %d %v", st, body)
 	}
-	if st, _ := a.do("PATCH", path, map[string]int{"max_subdomains": 1000}); st != 400 {
+	if st, _ := a.do("PATCH", upath, map[string]int{"max_subdomains": 1000}); st != 400 {
 		t.Errorf("patch over the cap: %d", st)
 	}
-	st, body = a.do("POST", path+"/password", nil)
-	if st != 200 || body["password"] == pw {
-		t.Errorf("password reset: %d %v", st, body)
+	st, body = a.do("POST", upath+"/password", nil)
+	if st != 200 || !strings.Contains(fmt.Sprint(body["setup_url"]), "/setup/") || body["password"] != nil {
+		t.Errorf("password reset link: %d %v", st, body)
 	}
-	if st, _ := c.do("GET", "/api/v1/auth/me", nil); st != 401 {
-		t.Errorf("session survived a password reset: %d", st)
+	if st, _ := c.do("GET", "/api/v1/auth/me", nil); st != 200 {
+		t.Errorf("a reset link logged the user out before it was used: %d", st)
 	}
-	if st, _ := a.do("POST", path+"/reset-2fa", nil); st != 204 {
+	if st, _ := a.do("POST", upath+"/reset-2fa", nil); st != 204 {
 		t.Errorf("reset 2fa: %d", st)
 	}
 	if u, _ := e.st.UserByID(context.Background(), id); len(u.TOTPSecretEnc) != 0 {
@@ -94,7 +100,7 @@ func TestSiteAccountLifecycle(t *testing.T) {
 	if st, _ := a.do("DELETE", fmt.Sprintf("/api/v1/users/%d", admin.ID), nil); st != 409 {
 		t.Errorf("delete an admin from the UI: %d", st)
 	}
-	if st, _ := a.do("DELETE", path, nil); st != 204 {
+	if st, _ := a.do("DELETE", upath, nil); st != 204 {
 		t.Errorf("delete: %d", st)
 	}
 	if _, err := e.st.SiteByID(context.Background(), main); err != nil {
@@ -112,5 +118,43 @@ func TestAdminWithoutTOTPCantSetUpInBrowser(t *testing.T) {
 	c := e.client(t)
 	if st, body := c.do("POST", "/api/v1/auth/login", map[string]string{"username": "bob", "password": testPassword}); st != 403 || errCode(body) != "totp_not_enrolled" {
 		t.Errorf("login: %d %v", st, body)
+	}
+}
+
+// Setup links work once, expire, and a new link cancels the old one.
+func TestSetupLinks(t *testing.T) {
+	e := newTestEnv(t)
+	main, _, _ := accountSites(t, e)
+	a := e.loggedIn(t)
+	_, body := a.do("POST", "/api/v1/users", map[string]any{"username": "client", "site_id": main})
+	first := path.Base(body["setup_url"].(string))
+	id := int64(body["user"].(map[string]any)["id"].(float64))
+
+	// A reset link replaces the first one.
+	_, body = a.do("POST", fmt.Sprintf("/api/v1/users/%d/password", id), nil)
+	second := path.Base(body["setup_url"].(string))
+	c := e.client(t)
+	if st, _ := c.do("GET", "/api/v1/setup/"+first, nil); st != 404 {
+		t.Errorf("replaced link still works: %d", st)
+	}
+	if st, body := c.do("GET", "/api/v1/setup/"+second, nil); st != 200 || body["username"] != "client" {
+		t.Errorf("link info: %d %v", st, body)
+	}
+	if st, _ := c.do("POST", "/api/v1/setup/"+second, map[string]string{"password": "short"}); st != 400 {
+		t.Errorf("short password: %d", st)
+	}
+	if st, _ := c.do("POST", "/api/v1/setup/"+second, map[string]string{"password": "a long enough passphrase"}); st != 200 {
+		t.Fatalf("use link: %d", st)
+	}
+	if st, _ := c.do("POST", "/api/v1/setup/"+second, map[string]string{"password": "another long passphrase"}); st != 404 {
+		t.Errorf("link used twice: %d", st)
+	}
+
+	// Expired after 72 hours.
+	_, body = a.do("POST", fmt.Sprintf("/api/v1/users/%d/password", id), nil)
+	third := path.Base(body["setup_url"].(string))
+	e.now = e.now.Add(73 * time.Hour)
+	if st, _ := e.client(t).do("GET", "/api/v1/setup/"+third, nil); st != 404 {
+		t.Errorf("expired link works: %d", st)
 	}
 }

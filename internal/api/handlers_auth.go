@@ -88,6 +88,15 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// The failure counter is NOT reset here; only after the TOTP step succeeds.
 	// Otherwise someone with the password could guess TOTP codes forever.
 
+	s.startPending(w, r, u)
+}
+
+// startPending ends a successful password step (a login, or a password set
+// through a setup link): a short-lived session waiting for the 2FA step,
+// which sets up 2FA first when the user has none yet.
+func (s *server) startPending(w http.ResponseWriter, r *http.Request, u store.User) {
+	ctx := r.Context()
+	now := s.Now()
 	if si, ok := sessionFrom(ctx); ok { // replace any existing session
 		s.Store.DeleteSession(ctx, si.Session.TokenHash)
 	}
@@ -110,7 +119,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, token, 0) // pending 2FA: a browser-session cookie
-	writeJSON(w, http.StatusOK, map[string]any{"totp_required": true, "totp_setup": setup, "csrf_token": csrf})
+	writeJSON(w, http.StatusOK, map[string]any{"totp_required": true, "totp_setup": len(u.TOTPSecretEnc) == 0, "csrf_token": csrf})
 }
 
 // POST /api/v1/auth/totp {code, remember}
