@@ -12,6 +12,20 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/pages/AuthShell";
 import { OneTimeSecrets } from "./JobProgress";
+import { UsageRows } from "./UsageCard";
+import { useUsage } from "@/api/usage";
+
+/** A login's live usage, for admins. */
+export function UsageRowsLive({ userId }: { userId: number }) {
+  const u = useUsage(userId);
+  if (u.isPending) return <Spinner />;
+  if (u.error) return <p className="text-xs text-muted-foreground">Usage unavailable: {u.error.message}</p>;
+  return (
+    <div className="rounded-[12px] bg-background p-3 shadow-inset">
+      <UsageRows u={u.data} />
+    </div>
+  );
+}
 
 /** A suggested login name for a site: its Linux user. */
 const suggestUsername = (site: Site) => site.system_user.slice(0, 32);
@@ -50,7 +64,10 @@ export function PanelLoginCard({ site, created }: { site: Site; created?: SetupL
         ) : acc.error ? (
           <p className="text-sm text-destructive">{acc.error.message}</p>
         ) : acc.account ? (
-          <AccountRow account={acc.account} onLink={setShown} />
+          <>
+            <AccountRow account={acc.account} onLink={setShown} />
+            <UsageRowsLive userId={acc.account.id} />
+          </>
         ) : (
           <CreateLogin site={site} onCreated={setShown} />
         )}

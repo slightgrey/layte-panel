@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/slightgrey/layte-panel/internal/actions"
 )
 
 // Disk quotas: off until an admin turns them on; then a login's disk limit
@@ -37,5 +39,19 @@ func TestDiskQuotas(t *testing.T) {
 	}
 	if b, _ := deps.FS.ReadFile("/var/lib/layte-dev/quota/quotatest"); string(b) != "2097152" { // hard limit in KB
 		t.Errorf("quota hard limit = %q", b)
+	}
+
+	// Usage: the slice's cgroup (made up here) and the quota.
+	cred, _ := deps.Users.Lookup("quotatest")
+	cg := "/sys/fs/cgroup/layte.slice/layte-acct.slice/" + actions.AccountSlice(cred.UID)
+	for f, v := range map[string]string{"cpu.stat": "usage_usec 1000\nuser_usec 900\n", "cpu.max": "50000 100000\n", "memory.current": "104857600\n", "memory.max": "536870912\n", "pids.current": "4\n"} {
+		deps.FS.MkdirAll(cg, 0o755)
+		deps.FS.WriteFileAtomic(cg+"/"+f, []byte(v), 0o644)
+	}
+	code, body = admin.do("GET", path+"/usage", nil)
+	if code != 200 || body["active"] != true || body["cpu_limit"] != float64(50) || body["memory_bytes"] != float64(104857600) ||
+		body["memory_limit"] != float64(536870912) || body["processes"] != float64(4) ||
+		body["disk_exact"] != true || body["disk_bytes"] != float64(1<<30) || body["disk_limit"] != float64(2<<30) {
+		t.Errorf("usage: %d %v", code, body)
 	}
 }

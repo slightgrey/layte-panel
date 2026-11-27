@@ -80,6 +80,7 @@ var siteAccountRoutes = map[string]string{
 	"GET /api/v1/auth/me": "requireAuth",
 
 	"GET /api/v1/account":                  "account",
+	"GET /api/v1/account/usage":            "account",
 	"PATCH /api/v1/account":                "account",
 	"POST /api/v1/account/password":        "limitedAccount",
 	"POST /api/v1/account/2fa":             "limitedAccount",
