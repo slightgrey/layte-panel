@@ -1,8 +1,8 @@
 import { Link } from "react-router";
 import { useState } from "react";
 import { useUsers } from "@/api/users";
-import { OneTimeSecrets } from "@/components/JobProgress";
-import { AccountRow } from "@/components/PanelLoginCard";
+import type { SetupLink } from "@/api/types";
+import { AccountRow, SetupLinkPanel } from "@/components/PanelLoginCard";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 /** Admins: every panel login. Site accounts are created from a site's page. */
 export function UsersPage() {
   const users = useUsers();
-  const [shown, setShown] = useState<{ username: string; password: string } | null>(null);
+  const [shown, setShown] = useState<SetupLink | null>(null);
   const admins = users.data?.users.filter((u) => u.role === "admin") ?? [];
   const accounts = users.data?.users.filter((u) => u.role === "site") ?? [];
 
@@ -25,7 +25,7 @@ export function UsersPage() {
         </p>
       </div>
 
-      {shown && <OneTimeSecrets secrets={{ login_username: shown.username, login_password: shown.password, login_url: window.location.origin + "/login" }} onDismiss={() => setShown(null)} />}
+      {shown && <SetupLinkPanel link={shown} onDismiss={() => setShown(null)} />}
 
       {users.isPending ? (
         <Spinner />
@@ -58,7 +58,7 @@ export function UsersPage() {
                         {a.site_domain ?? `site ${a.site_id}`}
                       </Link>
                     )}
-                    <AccountRow account={a} onPassword={(password) => setShown({ username: a.username, password })} />
+                    <AccountRow account={a} onLink={setShown} />
                   </div>
                 ))
               )}

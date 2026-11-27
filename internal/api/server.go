@@ -63,6 +63,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/auth/totp", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTP))))
 	mux.Handle("POST /api/v1/auth/totp/setup", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTPSetup))))
 	mux.Handle("POST /api/v1/auth/totp/setup/confirm", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTPSetupConfirm))))
+	mux.Handle("GET /api/v1/setup/{token}", s.rateLimited(http.HandlerFunc(s.handleSetupLink)))
+	mux.Handle("POST /api/v1/setup/{token}", s.rateLimited(http.HandlerFunc(s.handleUseSetupLink)))
 	mux.Handle("POST /api/v1/auth/logout", s.requireAnySession(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", s.requireAuth(http.HandlerFunc(s.handleMe)))
 

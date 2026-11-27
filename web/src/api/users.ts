@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type { Account, UsersResponse } from "./types";
 
+type LinkResponse = { setup_url: string; expires_at: string };
+
 export const usersKey = ["users"] as const;
 
 /** GET /users: every panel login (admins only). */
@@ -15,12 +17,12 @@ export function useSiteAccount(siteId: number) {
   return { ...users, account: users.data?.users.find((u) => u.site_id === siteId) };
 }
 
-/** POST /users: a login for a site; returns its first password once. */
+/** POST /users: a login for a site; returns its one-time setup link once. */
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { username: string; site_id: number; max_subdomains?: number }) =>
-      api<{ user: Account; password: string }>("POST", "/users", v),
+      api<{ user: Account } & LinkResponse>("POST", "/users", v),
     onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
   });
 }
@@ -34,11 +36,11 @@ export function useUpdateUser() {
   });
 }
 
-/** POST /users/{id}/password: a new generated password, shown once. */
+/** POST /users/{id}/password: a password reset link, shown once. */
 export function useResetUserPassword() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api<{ password: string }>("POST", `/users/${id}/password`),
+    mutationFn: (id: number) => api<LinkResponse>("POST", `/users/${id}/password`),
     onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
   });
 }

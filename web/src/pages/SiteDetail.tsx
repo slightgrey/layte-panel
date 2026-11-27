@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { useIsAdmin } from "@/api/auth";
 import { databasesKey, useDatabases } from "@/api/databases";
 import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
-import type { Site } from "@/api/types";
+import type { SetupLink, Site } from "@/api/types";
 import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 import { JobProgress } from "@/components/JobProgress";
 import { ObjectCacheCard } from "@/components/ObjectCacheCard";
@@ -36,7 +36,7 @@ export function SiteDetailPage() {
   const isAdmin = useIsAdmin();
   const navigate = useNavigate();
   // NewSite passes the login it created along with the site (shown once).
-  const createdLogin = (useLocation().state as { login?: { username: string; password: string } } | null)?.login;
+  const createdLogin = (useLocation().state as { login?: SetupLink } | null)?.login;
 
   if (jobId && site.error) {
     // The site row is removed when creation fails and is fully rolled back.

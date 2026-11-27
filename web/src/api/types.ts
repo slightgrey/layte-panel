@@ -62,7 +62,16 @@ export interface Account {
   subdomains: number;
   totp_set_up: boolean;
   locked: boolean;
+  /** A setup link is pending until then. */
+  setup_expires?: string;
   created_at: string;
+}
+
+/** A one-time setup link for a login, shown once to the admin. */
+export interface SetupLink {
+  username: string;
+  setup_url: string;
+  expires_at: string;
 }
 
 export interface UsersResponse {

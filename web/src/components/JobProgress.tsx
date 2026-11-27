@@ -80,6 +80,7 @@ const secretLabels: Record<string, string> = {
   login_url: "Panel address",
   login_username: "Panel username",
   login_password: "Panel password",
+  setup_url: "Setup link",
 };
 
 /** One-time credentials of a finished job (if it generated any). */

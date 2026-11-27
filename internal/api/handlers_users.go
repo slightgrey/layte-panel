@@ -21,22 +21,27 @@ const MaxSubdomainLimit = 100
 const DefaultSubdomainLimit = 5
 
 type accountJSON struct {
-	ID            int64     `json:"id"`
-	Username      string    `json:"username"`
-	Role          string    `json:"role"`
-	SiteID        int64     `json:"site_id,omitempty"`
-	SiteDomain    string    `json:"site_domain,omitempty"`
-	MaxSubdomains int       `json:"max_subdomains"`
-	Subdomains    int       `json:"subdomains"`
-	TOTPSetUp     bool      `json:"totp_set_up"`
-	Locked        bool      `json:"locked"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            int64  `json:"id"`
+	Username      string `json:"username"`
+	Role          string `json:"role"`
+	SiteID        int64  `json:"site_id,omitempty"`
+	SiteDomain    string `json:"site_domain,omitempty"`
+	MaxSubdomains int    `json:"max_subdomains"`
+	Subdomains    int    `json:"subdomains"`
+	TOTPSetUp     bool   `json:"totp_set_up"`
+	Locked        bool   `json:"locked"`
+	// SetupExpires: a setup link is pending until then.
+	SetupExpires *time.Time `json:"setup_expires,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 func (s *server) toAccountJSON(r *http.Request, u store.User) accountJSON {
 	j := accountJSON{
 		ID: u.ID, Username: u.Username, Role: u.Role, SiteID: u.SiteID,
 		TOTPSetUp: len(u.TOTPSecretEnc) > 0, Locked: s.Now().Before(u.LockedUntil), CreatedAt: u.CreatedAt,
+	}
+	if !u.SetupExpires.IsZero() {
+		j.SetupExpires = &u.SetupExpires
 	}
 	if !u.IsAdmin() {
 		j.MaxSubdomains = u.MaxSubdomains
@@ -48,9 +53,26 @@ func (s *server) toAccountJSON(r *http.Request, u store.User) accountJSON {
 	return j
 }
 
-// newLoginPassword is a generated first password: 26 characters of base32
-// (130 bits). The user can't change it yet; an admin resets it when needed.
-func newLoginPassword() string { return rand.Text() }
+// setupLinkTTL is how long a setup link works.
+const setupLinkTTL = 72 * time.Hour
+
+// issueSetupLink gives the user a new one-time setup link (the old one stops
+// working) and returns its URL. Only the token's hash is stored.
+func (s *server) issueSetupLink(r *http.Request, u store.User) (string, time.Time, error) {
+	token, hash, err := auth.NewToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	expires := s.Now().Add(setupLinkTTL)
+	if err := s.Store.SetSetupToken(r.Context(), u.ID, hash, expires); err != nil {
+		return "", time.Time{}, err
+	}
+	scheme := "https"
+	if s.Config.Dev {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host + "/setup/" + token, expires, nil
+}
 
 // GET /api/v1/users
 func (s *server) handleListUsers(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +89,8 @@ func (s *server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/users {username, site_id, max_subdomains?} — creates a site
-// account; 201 with its first password (shown once).
+// account; 201 with its setup link (shown once), where the user chooses a
+// password and sets up 2FA. Nobody else ever knows the password.
 func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username      string `json:"username"`
@@ -113,8 +136,7 @@ func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "account_exists", site.Domain+" already has a login")
 		return
 	}
-	pw := newLoginPassword()
-	hash, err := auth.HashPassword(pw)
+	hash, err := auth.HashPassword(rand.Text()) // unusable until the setup link sets one
 	if err != nil {
 		s.internalError(w, "hash password", err)
 		return
@@ -130,8 +152,14 @@ func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditPanel(r, "user.create", map[string]any{"id": id, "username": req.Username, "site": site.Domain, "max_subdomains": limit})
 	u, _ := s.Store.UserByID(r.Context(), id)
+	link, expires, err := s.issueSetupLink(r, u)
+	if err != nil {
+		s.internalError(w, "setup link", err)
+		return
+	}
+	u.SetupExpires = expires
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusCreated, map[string]any{"user": s.toAccountJSON(r, u), "password": pw})
+	writeJSON(w, http.StatusCreated, map[string]any{"user": s.toAccountJSON(r, u), "setup_url": link, "expires_at": expires})
 }
 
 // siteAccount loads the {id} user; only site accounts can be changed here.
@@ -178,26 +206,82 @@ func (s *server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.toAccountJSON(r, u))
 }
 
-// POST /api/v1/users/{id}/password — a new generated password (shown once);
-// logs the user out everywhere and clears any lockout.
+// POST /api/v1/users/{id}/password — a password reset link (shown once).
+// The current password keeps working until the link is used; then every
+// session is logged out.
 func (s *server) handleResetUserPassword(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.siteAccount(w, r)
 	if !ok {
 		return
 	}
-	pw := newLoginPassword()
-	hash, err := auth.HashPassword(pw)
+	link, expires, err := s.issueSetupLink(r, u)
+	if err != nil {
+		s.internalError(w, "setup link", err)
+		return
+	}
+	s.auditPanel(r, "user.password_reset_link", map[string]any{"id": u.ID, "username": u.Username})
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"setup_url": link, "expires_at": expires})
+}
+
+// setupUser loads the user of the {token} setup link (404 when unknown,
+// used or expired).
+func (s *server) setupUser(w http.ResponseWriter, r *http.Request) (store.User, string, bool) {
+	hash := auth.HashToken(r.PathValue("token"))
+	u, err := s.Store.UserBySetupToken(r.Context(), hash, s.Now())
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "link_invalid", "this link was already used, has expired or was replaced; ask your admin for a new one")
+		return u, "", false
+	}
+	if err != nil {
+		s.internalError(w, "setup link", err)
+		return u, "", false
+	}
+	return u, hash, true
+}
+
+// GET /api/v1/setup/{token} — who the link is for, and until when.
+func (s *server) handleSetupLink(w http.ResponseWriter, r *http.Request) {
+	u, _, ok := s.setupUser(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"username": u.Username, "expires_at": u.SetupExpires, "totp_set_up": len(u.TOTPSecretEnc) > 0})
+}
+
+// POST /api/v1/setup/{token} {password} — set the password; the link is used
+// up and the 2FA step follows (set up first for a new login).
+func (s *server) handleUseSetupLink(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	u, tokenHash, ok := s.setupUser(w, r)
+	if !ok {
+		return
+	}
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid", err.Error())
+		return
+	}
+	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		s.internalError(w, "hash password", err)
 		return
 	}
-	if err := s.Store.SetPassword(r.Context(), u.ID, hash); err != nil {
-		s.internalError(w, "reset password", err)
+	used, err := s.Store.UseSetupToken(r.Context(), u.ID, tokenHash, hash)
+	if err != nil {
+		s.internalError(w, "use setup link", err)
 		return
 	}
-	s.auditPanel(r, "user.password_reset", map[string]any{"id": u.ID, "username": u.Username})
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]any{"password": pw})
+	if !used { // used at the same moment from somewhere else
+		writeError(w, http.StatusNotFound, "link_invalid", "this link was already used; ask your admin for a new one")
+		return
+	}
+	s.Log.Info("password set via setup link", "user", u.Username, "ip", clientIP(r, s.Config.TrustedProxies))
+	s.startPending(w, r, u)
 }
 
 // POST /api/v1/users/{id}/reset-2fa — the user sets 2FA up again at the next

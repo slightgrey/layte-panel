@@ -48,6 +48,7 @@ Per-site SFTP (see [sftp.md](sftp.md)) uses Layte's own sshd drop-in, `/etc/ssh/
 The main `sshd_config` and every other login are untouched. Every change is checked with `sshd -t`, and sshd is reloaded (never restarted), so open sessions stay up.
 
 ## Logins
+- **Setup links:** new site logins and password resets get a one-time link (a 32-byte random token; only its hash is stored, it expires after 72 hours, and issuing a new one cancels the old one) instead of a generated password, so the user's password is never seen by anyone else.
 - **Roles:** admins see everything. Site logins (see [site-accounts.md](site-accounts.md)) only reach their own site and its subdomains. Every API route is admin-only unless it is explicitly opened to site logins, and a test checks that list. Other sites' ids answer 404.
 - **Passwords:** hashed with argon2id (OWASP parameters).
 - **Site names:** a new site can't take a name that the panel is reached by, or that any nginx config on the server already serves (exact names, wildcards and regex names). nginx would otherwise send that traffic, the panel's address included, to the new site.

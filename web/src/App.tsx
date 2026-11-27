@@ -26,6 +26,7 @@ import { SitesPage } from "./pages/Sites";
 import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
 import { TwoFactorSetupPage } from "./pages/TwoFactorSetup";
+import { SetupLinkPage } from "./pages/SetupLink";
 import { UsersPage } from "./pages/Users";
 import { AccountPage } from "./pages/Account";
 
@@ -35,6 +36,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/login/2fa" element={<TwoFactorPage />} />
       <Route path="/login/2fa/setup" element={<TwoFactorSetupPage />} />
+      <Route path="/setup/:token" element={<SetupLinkPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           {/* Site accounts: their sites (the server limits them to their own). */}
