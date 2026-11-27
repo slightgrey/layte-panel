@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 )
@@ -97,4 +98,37 @@ func mustUser(t *testing.T, env *testEnv, name string) int64 {
 		t.Fatal(err)
 	}
 	return u.ID
+}
+
+// A name that a hand-written nginx config serves (never scanned into Layte),
+// or that a wildcard covers, or the panel's own address can't become a site.
+func TestNewSiteCantTakeNginxNames(t *testing.T) {
+	env, admin, deps := siteEnv(t)
+	mainID := int64(createSite(t, admin, "acme.test", "8.3"))
+	conf := "server {\n  listen 80;\n  server_name panel.acme.test;\n  location / { proxy_pass http://127.0.0.1:8080; }\n}\n" +
+		"server {\n  listen 80;\n  server_name *.wild.test;\n  root /var/www/wild;\n}\n"
+	if err := deps.FS.WriteFileAtomic("/etc/nginx/conf.d/hand-written.conf", []byte(conf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := env.siteUser(t, "acme", mainID)
+	if code, body := c.do("POST", "/api/v1/sites", map[string]any{"domain": "panel.acme.test", "php_version": "8.3"}); code != 409 || errCode(body) != "domain_taken" {
+		t.Errorf("site login takes the panel's name: %d %v", code, body)
+	}
+	if code, body := admin.do("POST", "/api/v1/sites", map[string]any{"domain": "x.wild.test", "php_version": "8.3"}); code != 409 || errCode(body) != "domain_taken" {
+		t.Errorf("admin takes a wildcard's name: %d %v", code, body)
+	}
+	if code, body := c.do("POST", "/api/v1/sites", map[string]any{"domain": "shop.acme.test", "php_version": "8.3"}); code != 202 {
+		t.Errorf("a free subdomain was refused: %d %v", code, body)
+	}
+}
+
+func TestPanelHostsReserved(t *testing.T) {
+	r := httptest.NewRequest("POST", "https://Panel.Example.com:8443/api/v1/sites", nil)
+	if got := panelHosts(r); len(got) != 1 || got[0] != "panel.example.com" {
+		t.Errorf("panelHosts = %v", got)
+	}
+	r = httptest.NewRequest("POST", "http://127.0.0.1:8080/api/v1/sites", nil)
+	if got := panelHosts(r); len(got) != 0 {
+		t.Errorf("an IP address was reserved: %v", got)
+	}
 }

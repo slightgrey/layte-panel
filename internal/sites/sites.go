@@ -68,6 +68,8 @@ type CreateRequest struct {
 	SSL *SSLFields `json:"ssl"`
 	// SaveSSLEmail keeps the SSL email as the server's default (admins).
 	SaveSSLEmail bool `json:"-"`
+	// ReservedHosts are names no site may take: the panel's own address.
+	ReservedHosts []string `json:"-"`
 }
 
 type SSLFields struct {
@@ -139,6 +141,9 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 		if owner, ok := taken[d]; ok {
 			return "", 0, conflict("domain_taken", "%s is already configured on this server (site %s)", d, owner)
 		}
+	}
+	if err := s.checkNginxNames(ctx, actor, append([]string{domain}, aliases...), req.ReservedHosts); err != nil {
+		return "", 0, err
 	}
 
 	username := req.Username

@@ -102,6 +102,52 @@ func (d Deps) sitesDiscover(ctx context.Context, _ agent.Actor, _ agent.NoParams
 	return out, nil
 }
 
+// ServerNames are the names nginx answers for, from every vhost config
+// (hand-written ones too, scanned or not): exact names, and wildcard or
+// regex patterns as written.
+type ServerNames struct {
+	Exact    []string `json:"exact"`
+	Patterns []string `json:"patterns,omitempty"`
+}
+
+// nginxServerNames lists every server_name in the vhost configs, so a new
+// site can't take a name another config already serves.
+func (d Deps) nginxServerNames(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any, error) {
+	files, err := d.vhostConfigs()
+	if err != nil {
+		return nil, err
+	}
+	var out ServerNames
+	seen := map[string]bool{}
+	for _, f := range files {
+		b, err := d.FS.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		ds, err := nginx.Parse(string(b))
+		if err != nil {
+			continue
+		}
+		for _, srv := range servers(ds) {
+			for _, sn := range nginx.Find(srv.Block, "server_name") {
+				for _, n := range sn.Args {
+					n = strings.ToLower(n)
+					if n == "" || n == "_" || seen[n] {
+						continue
+					}
+					seen[n] = true
+					if strings.HasPrefix(n, "~") || strings.Contains(n, "*") || strings.HasPrefix(n, ".") {
+						out.Patterns = append(out.Patterns, n)
+					} else if dom, err := validate.Domain(n); err == nil {
+						out.Exact = append(out.Exact, dom)
+					}
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 // servers returns server{} blocks at top level or inside http{}.
 func servers(ds []*nginx.Directive) []*nginx.Directive {
 	out := nginx.Find(ds, "server")
