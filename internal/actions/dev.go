@@ -167,6 +167,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return fakeMySQLDump(root, c)
 		case c.Bin == chownBin:
 			return system.Result{}, nil // the fake root doesn't track owners
+		case c.Bin == aptGetBin && slices.Equal(args, []string{"install", "-y", "--no-install-recommends", "quota"}):
+			return system.Result{}, root.WriteFileAtomic(setquotaBin, []byte("#!/bin/sh\n"), 0o755)
 		case c.Bin == aptGetBin:
 			return fakeAptGet(root, cmds, args)
 		case c.Bin == needrestartBin:
@@ -197,6 +199,28 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 				return system.Result{Stdout: []byte("# Memory\r\nused_memory:1572864\r\n")}, nil
 			}
 			return system.Result{Stdout: []byte("OK\n")}, nil
+		case c.Bin == findmntBin && slices.Contains(args, "--verify"):
+			return system.Result{Stdout: []byte("Success, no errors or warnings detected\n")}, nil
+		case c.Bin == findmntBin:
+			return system.Result{Stdout: []byte("/ ext4 rw,relatime" + devQuotaOpt(root) + "\n")}, nil
+		case c.Bin == mountBinPath && len(args) > 1 && args[0] == "-o" && args[1] == "remount":
+			return system.Result{}, nil
+		case c.Bin == quotacheckBin:
+			return system.Result{}, root.WriteFileAtomic("/aquota.user", []byte{}, 0o600)
+		case c.Bin == quotaonBin && slices.Contains(args, "--print-state"):
+			state := "off"
+			if ok, _ := root.Exists("/var/lib/layte-dev/quota-on"); ok {
+				state = "on"
+			}
+			return system.Result{Stdout: []byte("user quota on / (/dev/vda1) is " + state + "\n")}, nil
+		case c.Bin == quotaonBin:
+			root.MkdirAll("/var/lib/layte-dev", 0o755)
+			return system.Result{}, root.WriteFileAtomic("/var/lib/layte-dev/quota-on", []byte("1"), 0o644)
+		case c.Bin == setquotaBin && len(args) >= 4:
+			root.MkdirAll("/var/lib/layte-dev/quota", 0o755)
+			return system.Result{}, root.WriteFileAtomic("/var/lib/layte-dev/quota/"+args[1], []byte(args[3]), 0o644)
+		case c.Bin == repquotaBin:
+			return devRepquota(root), nil
 		case c.Bin == mountpointBin:
 			return system.Result{}, &system.ExitError{Bin: c.Bin, ExitCode: 1} // nothing is mounted in dev
 		case strings.HasPrefix(c.Bin, "/usr/bin/php") && len(args) > 0 && strings.HasSuffix(args[0], ".phar"):
@@ -207,6 +231,26 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		return system.Result{}, fmt.Errorf("run %s: %w", c.Bin, system.ErrNotFound)
 	}
 	return handle
+}
+
+// devQuotaOpt is ",usrquota" once the fake fstab has it.
+func devQuotaOpt(root system.FS) string {
+	if b, err := root.ReadFile(fstabPath); err == nil && strings.Contains(string(b), "usrquota") {
+		return ",usrquota"
+	}
+	return ""
+}
+
+// devRepquota: every user with a fake limit uses 1 GB.
+func devRepquota(root system.FS) system.Result {
+	var b strings.Builder
+	b.WriteString("User,BlockStatus,FileStatus,BlockUsed,BlockSoftLimit,BlockHardLimit,BlockGrace,FileUsed,FileSoftLimit,FileHardLimit,FileGrace\n")
+	files, _ := root.Glob("/var/lib/layte-dev/quota/*")
+	for _, f := range files {
+		hard, _ := root.ReadFile(f)
+		fmt.Fprintf(&b, "%s,ok,ok,1048576,0,%s,,10,0,0,\n", path.Base(f), strings.TrimSpace(string(hard)))
+	}
+	return system.Result{Stdout: []byte(b.String())}
 }
 
 // fakeDu reports made-up but stable sizes: the whole site is the sum of its

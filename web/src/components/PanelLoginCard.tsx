@@ -1,5 +1,6 @@
 import { KeyRound, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { useQuotaStatus } from "@/api/quota";
 import type { Account, SetupLink, Site } from "@/api/types";
 import { useCreateUser, useDeleteUser, useResetUser2FA, useResetUserPassword, useSiteAccount, useUpdateUser } from "@/api/users";
 import { Spinner } from "@/components/Spinner";
@@ -144,6 +145,8 @@ export function limitsBody(f: LimitsForm) {
 export function LimitsFields({ id, value: v, onChange, compact = false }: { id: string; value: LimitsForm; onChange: (v: LimitsForm) => void; compact?: boolean }) {
   const set = (k: keyof LimitsForm) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...v, [k]: e.target.value });
   const w = compact ? "w-24" : "";
+  const quota = useQuotaStatus();
+  const quotaOn = Boolean(quota.data?.enabled);
   return (
     <div className={compact ? "flex flex-wrap items-end gap-2" : "grid gap-4 sm:grid-cols-2"}>
       <Field label="Subdomains" htmlFor={`${id}-sub`} hint={compact ? undefined : "How many subdomain sites they may add (0-100)."}>
@@ -154,6 +157,24 @@ export function LimitsFields({ id, value: v, onChange, compact = false }: { id: 
       </Field>
       <Field label="RAM (MB)" htmlFor={`${id}-mem`} hint={compact ? undefined : "For all their PHP and cron jobs together (64 or more). 0 = no limit."}>
         <Input id={`${id}-mem`} type="number" min={0} max={65536} step={64} required className={w} value={v.memory} onChange={set("memory")} />
+      </Field>
+      <Field
+        label="Disk (GB)"
+        htmlFor={`${id}-disk`}
+        hint={compact ? undefined : quotaOn ? "Hard limit for all their files and databases' dumps. 0 = no limit." : "Turn on disk quotas first (Users → Disk quotas)."}
+      >
+        <Input
+          id={`${id}-disk`}
+          type="number"
+          min={0}
+          max={16384}
+          required
+          className={w}
+          disabled={!quotaOn}
+          title={quotaOn ? undefined : "Turn on disk quotas first (Users → Disk quotas)"}
+          value={quotaOn ? v.disk : "0"}
+          onChange={set("disk")}
+        />
       </Field>
     </div>
   );
