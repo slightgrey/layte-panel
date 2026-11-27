@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/slightgrey/layte-panel/internal/pagecache"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -31,6 +32,16 @@ type Service struct {
 	Store *store.Store
 	Agent Caller
 	Jobs  *jobs.Runner
+	// Logger gets warnings about best-effort clean-ups (nil: slog's default).
+	Logger *slog.Logger
+}
+
+// Log returns the service's logger.
+func (s *Service) Log() *slog.Logger {
+	if s.Logger != nil {
+		return s.Logger
+	}
+	return slog.Default()
 }
 
 // Error is a request problem the API shows to the user (400/409).
@@ -177,6 +188,11 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 		ParentSiteID: parent.ID,
 		// A subdomain site of a site login: PHP shell functions follow the main site.
 		BlockPHPShell: parent.BlockPHPShell,
+		// …and so do its PHP-FPM master and resource limits.
+		OwnFPM: parent.OwnFPM,
+	}
+	if site.OwnFPM {
+		site.FPMPool = poolPath(site, site.PHPVersion)
 	}
 	if req.CreateDB {
 		base := username
@@ -284,12 +300,13 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 
 	j.Step("Configure PHP " + site.PHPVersion + " (FPM pool)")
 	s.refreshShellFlag(ctx, &site) // a login may have been created for it meanwhile
-	cfg.BlockShell = site.BlockPHPShell
+	cfg.BlockShell, cfg.OwnFPM = site.BlockPHPShell, site.OwnFPM
+	site.FPMPool = poolPath(site, site.PHPVersion)
 	if err := call("php.pool_write", cfg); err != nil {
 		return err
 	}
 	undo.push("remove PHP-FPM pool", func(ctx context.Context) error {
-		return s.Agent.Call(ctx, "php.pool_remove", actor, actions.PoolRemoveParams{Domain: site.Domain, PHPVersion: site.PHPVersion}, nil)
+		return s.Agent.Call(ctx, "php.pool_remove", actor, poolRemoveParams(site, site.PHPVersion), nil)
 	})
 
 	j.Step("Configure nginx")
@@ -339,12 +356,22 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 		secrets["wp_admin_user"], secrets["wp_admin_password"] = wp.AdminUser, adminPW
 	}
 
-	if written := site.BlockPHPShell; s.refreshShellFlag(ctx, &site) && site.BlockPHPShell != written {
-		j.Step("Update the PHP pool for the site's login")
-		c := s.siteConfig(site, false)
-		c.Aliases = aliases
-		if err := call("php.pool_write", c); err != nil {
-			return err
+	// A login may have been created for the site while it was being created:
+	// put its PHP where the login's is, with the login's settings.
+	if s.refreshShellFlag(ctx, &site) {
+		if want := site.OwnFPM; want != cfg.OwnFPM {
+			site.OwnFPM = cfg.OwnFPM // where it is now
+			j.Step("Move PHP into the site login's limits")
+			if err := s.moveFPM(ctx, actor, &site, want); err != nil {
+				return err
+			}
+		} else if site.BlockPHPShell != cfg.BlockShell {
+			j.Step("Update the PHP pool for the site's login")
+			c := s.siteConfig(site, false)
+			c.Aliases = aliases
+			if err := call("php.pool_write", c); err != nil {
+				return err
+			}
 		}
 	}
 	site.Status = "active"
@@ -458,7 +485,7 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		}
 		j.Step("Remove PHP-FPM pool")
 		if site.PHPVersion != "" {
-			if err := call("php.pool_remove", actions.PoolRemoveParams{Domain: site.Domain, PHPVersion: site.PHPVersion}); err != nil {
+			if err := call("php.pool_remove", poolRemoveParams(site, site.PHPVersion)); err != nil {
 				return fail(err)
 			}
 		}
@@ -491,6 +518,11 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 			}
 		default:
 			j.Log("Kept %s and its files (user %s).", templates.Site{Domain: site.Domain, User: site.SystemUser}.Dir(), site.SystemUser)
+		}
+		if site.OwnFPM && sharedUser <= 1 { // the login's last site: its limits go too
+			if err := s.longCall(ctx, time.Minute, "account.remove", actor, actions.UserParams{Username: site.SystemUser}, nil); err != nil {
+				j.Log("Warning: couldn't remove the login's limits (%v).", err)
+			}
 		}
 		if err := s.Store.DeleteSite(context.WithoutCancel(ctx), site.ID); err != nil {
 			return err
@@ -535,7 +567,7 @@ func (s *Service) refreshShellFlag(ctx context.Context, site *store.Site) bool {
 	if err != nil {
 		return false
 	}
-	site.BlockPHPShell = cur.BlockPHPShell
+	site.BlockPHPShell, site.OwnFPM = cur.BlockPHPShell, cur.OwnFPM
 	return true
 }
 

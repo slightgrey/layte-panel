@@ -35,6 +35,8 @@ func main() {
 		err = runAdmin(args)
 	case "fsop": // internal: file manager helper, started by the agent
 		err = runFsop()
+	case "cron-exec": // internal: a site login's cron job, started by cron
+		err = runCronExec(args)
 	case "version", "--version", "-v":
 		fmt.Println("layte", version)
 	case "help", "--help", "-h":

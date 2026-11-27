@@ -43,6 +43,14 @@ type Site struct {
 	HTTP2On bool
 	// BlockShell disables PHP's shell functions in the pool.
 	BlockShell bool
+	// OwnFPM: the site belongs to a site login, whose PHP runs in its own
+	// PHP-FPM master (and resource limits); its pool and socket live there.
+	OwnFPM bool
+}
+
+// AccountPoolPath is a site login's pool, in its own PHP-FPM master.
+func AccountPoolPath(user, version, domain string) string {
+	return "/etc/layte/fpm/" + user + "/" + version + "/pool.d/layte-" + domain + ".conf"
 }
 
 // ShellFunctions are the PHP functions BlockShell disables: they run
@@ -105,6 +113,9 @@ func (s Site) BaseDirs() string {
 // Socket is the PHP-FPM socket. It includes the PHP version so that while
 // switching versions the old and new pools never fight over one socket.
 func (s Site) Socket() string {
+	if s.OwnFPM {
+		return fmt.Sprintf("/run/layte-fpm/%s/%s-php%s.sock", s.User, s.Domain, s.PHPVersion)
+	}
 	return fmt.Sprintf("/run/php/layte-%s-php%s.sock", s.Domain, s.PHPVersion)
 }
 

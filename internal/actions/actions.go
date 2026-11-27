@@ -27,6 +27,8 @@ type Deps struct {
 	// WaitSocket waits until a unix socket accepts connections (nil = don't
 	// wait: dev and tests have no real PHP-FPM).
 	WaitSocket func(ctx context.Context, path string) error
+	// SelfBin is this binary (cron lines of a site login call `layte cron-exec`).
+	SelfBin string
 }
 
 // HostDeps returns dependencies that operate on the real machine.
@@ -47,6 +49,7 @@ func HostDeps() (Deps, error) {
 		FileOps:    helperFileOps{bin: self, runner: system.ExecRunner{}},
 		Now:        time.Now,
 		WaitSocket: waitUnixSocket,
+		SelfBin:    self,
 	}, nil
 }
 
@@ -88,6 +91,8 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("site.user_remove", false, 60*time.Second, d.siteUserRemove),
 		agent.Def("site.dirs_create", false, 15*time.Second, d.siteDirsCreate),
 		agent.Def("site.dirs_remove", false, 60*time.Second, d.siteDirsRemove),
+		agent.Def("account.apply", false, 30*time.Second, d.accountApply),
+		agent.Def("account.remove", false, 60*time.Second, d.accountRemove),
 		agent.Def("php.pool_write", false, time.Minute, d.phpPoolWrite),
 		agent.Def("php.pool_remove", false, 30*time.Second, d.phpPoolRemove),
 		agent.Def("nginx.vhost_write", false, 30*time.Second, d.nginxVhostWrite),

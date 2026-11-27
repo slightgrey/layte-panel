@@ -121,7 +121,7 @@ func (s *Service) syncCron(ctx context.Context, actor agent.Actor, site store.Si
 			entries = append(entries, actions.CronEntry{Schedule: j.Schedule, Command: j.Command})
 		}
 	}
-	params := actions.CronWriteParams{Domain: site.Domain, Username: site.SystemUser, Jobs: entries}
+	params := actions.CronWriteParams{Domain: site.Domain, Username: site.SystemUser, Jobs: entries, Limited: site.OwnFPM}
 	if site.Adopted {
 		params.WebRoot = site.RootPath
 	}

@@ -64,7 +64,8 @@ export function AccountRow({ account: a, onLink }: { account: Account; onLink: (
   const reset2fa = useResetUser2FA();
   const del = useDeleteUser();
   const update = useUpdateUser();
-  const [limit, setLimit] = useState(String(a.max_subdomains));
+  const [limits, setLimits] = useState(() => limitsForm(a));
+  const dirty = JSON.stringify(limits) !== JSON.stringify(limitsForm(a));
   const err = reset.error ?? reset2fa.error ?? del.error ?? update.error;
 
   return (
@@ -84,21 +85,19 @@ export function AccountRow({ account: a, onLink }: { account: Account; onLink: (
           {a.subdomains} of {a.max_subdomains} subdomains used
         </span>
       </div>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          update.mutate({ id: a.id, ...limitsBody(limits) });
+        }}
+      >
+        <LimitsFields id={`acc-${a.id}`} value={limits} onChange={setLimits} compact />
+        <Button type="submit" variant="outline" size="sm" disabled={update.isPending || !dirty}>
+          Save limits
+        </Button>
+      </form>
       <div className="flex flex-wrap items-end gap-2">
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            update.mutate({ id: a.id, max_subdomains: Number(limit) });
-          }}
-        >
-          <Field label="Subdomain limit" htmlFor={`limit-${a.id}`}>
-            <Input id={`limit-${a.id}`} type="number" min={0} max={100} className="w-24" value={limit} onChange={(e) => setLimit(e.target.value)} />
-          </Field>
-          <Button type="submit" variant="outline" size="sm" disabled={update.isPending || Number(limit) === a.max_subdomains}>
-            Save
-          </Button>
-        </form>
         <Button
           variant="outline"
           size="sm"
@@ -122,10 +121,48 @@ export function AccountRow({ account: a, onLink }: { account: Account; onLink: (
   );
 }
 
+/** The limits form's values, as text (inputs); "0" = no limit. */
+export type LimitsForm = { subdomains: string; cpu: string; memory: string; disk: string };
+
+export const defaultLimits: LimitsForm = { subdomains: "5", cpu: "100", memory: "512", disk: "0" };
+
+function limitsForm(a: Account): LimitsForm {
+  return {
+    subdomains: String(a.max_subdomains),
+    cpu: String(a.limits?.cpu_percent ?? 0),
+    memory: String(a.limits?.memory_mb ?? 0),
+    disk: String(Math.round((a.limits?.disk_mb ?? 0) / 1024)),
+  };
+}
+
+/** The API fields for a limits form (disk is entered in GB). */
+export function limitsBody(f: LimitsForm) {
+  return { max_subdomains: Number(f.subdomains), cpu_percent: Number(f.cpu), memory_mb: Number(f.memory), disk_mb: Number(f.disk) * 1024 };
+}
+
+/** Subdomains, CPU, RAM and disk limits of a site login. */
+export function LimitsFields({ id, value: v, onChange, compact = false }: { id: string; value: LimitsForm; onChange: (v: LimitsForm) => void; compact?: boolean }) {
+  const set = (k: keyof LimitsForm) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...v, [k]: e.target.value });
+  const w = compact ? "w-24" : "";
+  return (
+    <div className={compact ? "flex flex-wrap items-end gap-2" : "grid gap-4 sm:grid-cols-2"}>
+      <Field label="Subdomains" htmlFor={`${id}-sub`} hint={compact ? undefined : "How many subdomain sites they may add (0-100)."}>
+        <Input id={`${id}-sub`} type="number" min={0} max={100} required className={w} value={v.subdomains} onChange={set("subdomains")} />
+      </Field>
+      <Field label="CPU %" htmlFor={`${id}-cpu`} hint={compact ? undefined : "100 = one full CPU core. 0 = no limit."}>
+        <Input id={`${id}-cpu`} type="number" min={0} max={800} step={5} required className={w} value={v.cpu} onChange={set("cpu")} />
+      </Field>
+      <Field label="RAM (MB)" htmlFor={`${id}-mem`} hint={compact ? undefined : "For all their PHP and cron jobs together (64 or more). 0 = no limit."}>
+        <Input id={`${id}-mem`} type="number" min={0} max={65536} step={64} required className={w} value={v.memory} onChange={set("memory")} />
+      </Field>
+    </div>
+  );
+}
+
 function CreateLogin({ site, onCreated }: { site: Site; onCreated: (v: SetupLink) => void }) {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState(suggestUsername(site));
-  const [limit, setLimit] = useState("5");
+  const [limits, setLimits] = useState(defaultLimits);
   const create = useCreateUser();
   if (site.parent_site_id) {
     return <p className="text-sm text-muted-foreground">This is a subdomain site: it uses the login of its main site.</p>;
@@ -148,7 +185,7 @@ function CreateLogin({ site, onCreated }: { site: Site; onCreated: (v: SetupLink
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             create.mutate(
-              { username: username.trim(), site_id: site.id, max_subdomains: Number(limit) },
+              { username: username.trim(), site_id: site.id, ...limitsBody(limits) },
               {
                 onSuccess: (r) => {
                   onCreated({ username: r.user.username, setup_url: r.setup_url, expires_at: r.expires_at });
@@ -161,9 +198,7 @@ function CreateLogin({ site, onCreated }: { site: Site; onCreated: (v: SetupLink
           <Field label="Username" htmlFor="login-user" hint="3-32 lowercase letters, digits, _ or -. You get a one-time setup link to send them; they choose their own password.">
             <Input id="login-user" required pattern="[a-z][a-z0-9_\-]{2,31}" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} />
           </Field>
-          <Field label="Subdomain limit" htmlFor="login-limit" hint={`How many subdomains of ${site.domain} they may add (0-100).`}>
-            <Input id="login-limit" type="number" min={0} max={100} required value={limit} onChange={(e) => setLimit(e.target.value)} />
-          </Field>
+          <LimitsFields id="login" value={limits} onChange={setLimits} />
           <FormError message={create.error?.message} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={close}>

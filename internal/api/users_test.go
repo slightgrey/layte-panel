@@ -12,7 +12,8 @@ import (
 )
 
 func TestSiteAccountLifecycle(t *testing.T) {
-	e := newTestEnv(t)
+	ag, _ := devAgent(t) // applying a login's limits talks to the agent
+	e := newTestEnvWithAgent(t, ag)
 	main, sub, _ := accountSites(t, e)
 	a := e.loggedIn(t)
 
@@ -123,7 +124,8 @@ func TestAdminWithoutTOTPCantSetUpInBrowser(t *testing.T) {
 
 // Setup links work once, expire, and a new link cancels the old one.
 func TestSetupLinks(t *testing.T) {
-	e := newTestEnv(t)
+	ag, _ := devAgent(t)
+	e := newTestEnvWithAgent(t, ag)
 	main, _, _ := accountSites(t, e)
 	a := e.loggedIn(t)
 	_, body := a.do("POST", "/api/v1/users", map[string]any{"username": "client", "site_id": main})

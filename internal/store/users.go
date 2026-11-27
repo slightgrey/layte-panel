@@ -32,6 +32,15 @@ type User struct {
 	Email         string
 	// SetupExpires is when the user's pending setup link expires (zero = none).
 	SetupExpires time.Time
+	// Limits of a site login (0 = none).
+	Limits Limits
+}
+
+// Limits are a site login's resource limits; 0 means no limit.
+type Limits struct {
+	CPUPercent int `json:"cpu_percent"` // of one CPU (200 = two CPUs)
+	MemoryMB   int `json:"memory_mb"`
+	DiskMB     int `json:"disk_mb"`
 }
 
 // Roles.
@@ -43,14 +52,14 @@ const (
 // IsAdmin reports whether u is a full admin.
 func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
 
-const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains, display_name, email, setup_expires`
+const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains, display_name, email, setup_expires, cpu_percent, memory_mb, disk_mb`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var locked, created int64
 	var site sql.NullInt64
 	var setupExp int64
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains, &u.DisplayName, &u.Email, &setupExp)
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains, &u.DisplayName, &u.Email, &setupExp, &u.Limits.CPUPercent, &u.Limits.MemoryMB, &u.Limits.DiskMB)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -265,4 +274,10 @@ func (s *Store) UseSetupToken(ctx context.Context, userID int64, tokenHash, pass
 		return err
 	})
 	return ok, err
+}
+
+// SetLimits saves a site login's resource limits.
+func (s *Store) SetLimits(ctx context.Context, userID int64, l Limits) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE users SET cpu_percent = ?, memory_mb = ?, disk_mb = ? WHERE id = ?`, l.CPUPercent, l.MemoryMB, l.DiskMB, userID)
+	return err
 }

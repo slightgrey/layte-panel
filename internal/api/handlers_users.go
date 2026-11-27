@@ -20,16 +20,49 @@ const MaxSubdomainLimit = 100
 // DefaultSubdomainLimit is the limit of a new site account.
 const DefaultSubdomainLimit = 5
 
+// DefaultLimits are a new site login's resource limits.
+var DefaultLimits = store.Limits{CPUPercent: 100, MemoryMB: 512}
+
+// limitsRequest is the optional limits of a create or update request.
+type limitsRequest struct {
+	CPUPercent *int `json:"cpu_percent"`
+	MemoryMB   *int `json:"memory_mb"`
+	DiskMB     *int `json:"disk_mb"`
+}
+
+// apply returns l with the request's fields set, or an error message.
+func (r limitsRequest) apply(l store.Limits) (store.Limits, string) {
+	if r.CPUPercent != nil {
+		l.CPUPercent = *r.CPUPercent
+	}
+	if r.MemoryMB != nil {
+		l.MemoryMB = *r.MemoryMB
+	}
+	if r.DiskMB != nil {
+		l.DiskMB = *r.DiskMB
+	}
+	switch {
+	case l.CPUPercent < 0 || l.CPUPercent > 800:
+		return l, "the CPU limit must be 0-800% (100% = one CPU; 0 = none)"
+	case l.MemoryMB != 0 && (l.MemoryMB < 64 || l.MemoryMB > 65536):
+		return l, "the memory limit must be 64-65536 MB (0 = none)"
+	case l.DiskMB < 0 || l.DiskMB > 16<<20:
+		return l, "the disk limit must be 0-16777216 MB (0 = none)"
+	}
+	return l, ""
+}
+
 type accountJSON struct {
-	ID            int64  `json:"id"`
-	Username      string `json:"username"`
-	Role          string `json:"role"`
-	SiteID        int64  `json:"site_id,omitempty"`
-	SiteDomain    string `json:"site_domain,omitempty"`
-	MaxSubdomains int    `json:"max_subdomains"`
-	Subdomains    int    `json:"subdomains"`
-	TOTPSetUp     bool   `json:"totp_set_up"`
-	Locked        bool   `json:"locked"`
+	ID            int64         `json:"id"`
+	Username      string        `json:"username"`
+	Role          string        `json:"role"`
+	SiteID        int64         `json:"site_id,omitempty"`
+	SiteDomain    string        `json:"site_domain,omitempty"`
+	MaxSubdomains int           `json:"max_subdomains"`
+	Subdomains    int           `json:"subdomains"`
+	Limits        *store.Limits `json:"limits,omitempty"`
+	TOTPSetUp     bool          `json:"totp_set_up"`
+	Locked        bool          `json:"locked"`
 	// SetupExpires: a setup link is pending until then.
 	SetupExpires *time.Time `json:"setup_expires,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -44,6 +77,7 @@ func (s *server) toAccountJSON(r *http.Request, u store.User) accountJSON {
 		j.SetupExpires = &u.SetupExpires
 	}
 	if !u.IsAdmin() {
+		j.Limits = &u.Limits
 		j.MaxSubdomains = u.MaxSubdomains
 		if site, err := s.Store.SiteByID(r.Context(), u.SiteID); err == nil {
 			j.SiteDomain = site.Domain
@@ -96,8 +130,14 @@ func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		Username      string `json:"username"`
 		SiteID        int64  `json:"site_id"`
 		MaxSubdomains *int   `json:"max_subdomains"`
+		limitsRequest
 	}
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+	limits, bad := req.limitsRequest.apply(DefaultLimits)
+	if bad != "" {
+		writeError(w, http.StatusBadRequest, "invalid", bad)
 		return
 	}
 	if err := auth.ValidateUsername(req.Username); err != nil {
@@ -157,6 +197,11 @@ func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		s.Log.Warn("block php shell functions", "site", site.Domain, "err", err)
 	}
 	u, _ := s.Store.UserByID(r.Context(), id)
+	// Its PHP and cron jobs move into the login's own limits.
+	if err := s.sites.SetAccountLimits(r.Context(), actorOf(r), u, limits); err != nil {
+		s.Log.Warn("apply limits", "user", u.Username, "err", err)
+	}
+	u, _ = s.Store.UserByID(r.Context(), id)
 	link, expires, err := s.issueSetupLink(r, u)
 	if err != nil {
 		s.internalError(w, "setup link", err)
@@ -193,21 +238,36 @@ func (s *server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		MaxSubdomains int `json:"max_subdomains"`
+		MaxSubdomains *int `json:"max_subdomains"`
+		limitsRequest
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.MaxSubdomains < 0 || req.MaxSubdomains > MaxSubdomainLimit {
-		writeError(w, http.StatusBadRequest, "invalid", "the subdomain limit must be 0-"+strconv.Itoa(MaxSubdomainLimit))
-		return
+	if req.MaxSubdomains != nil {
+		if *req.MaxSubdomains < 0 || *req.MaxSubdomains > MaxSubdomainLimit {
+			writeError(w, http.StatusBadRequest, "invalid", "the subdomain limit must be 0-"+strconv.Itoa(MaxSubdomainLimit))
+			return
+		}
+		if err := s.Store.SetMaxSubdomains(r.Context(), u.ID, *req.MaxSubdomains); err != nil {
+			s.internalError(w, "update user", err)
+			return
+		}
+		u.MaxSubdomains = *req.MaxSubdomains
 	}
-	if err := s.Store.SetMaxSubdomains(r.Context(), u.ID, req.MaxSubdomains); err != nil {
-		s.internalError(w, "update user", err)
-		return
+	if req.CPUPercent != nil || req.MemoryMB != nil || req.DiskMB != nil {
+		limits, bad := req.limitsRequest.apply(u.Limits)
+		if bad != "" {
+			writeError(w, http.StatusBadRequest, "invalid", bad)
+			return
+		}
+		if err := s.sites.SetAccountLimits(r.Context(), actorOf(r), u, limits); err != nil {
+			s.writeSiteError(w, "apply limits", err)
+			return
+		}
+		u.Limits = limits
 	}
-	s.auditPanel(r, "user.update", map[string]any{"id": u.ID, "username": u.Username, "max_subdomains": req.MaxSubdomains})
-	u.MaxSubdomains = req.MaxSubdomains
+	s.auditPanel(r, "user.update", map[string]any{"id": u.ID, "username": u.Username, "max_subdomains": u.MaxSubdomains, "limits": u.Limits})
 	writeJSON(w, http.StatusOK, s.toAccountJSON(r, u))
 }
 
@@ -308,6 +368,11 @@ func (s *server) handleResetUser2FA(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.siteAccount(w, r)
 	if !ok {
+		return
+	}
+	// Its sites' PHP goes back to the shared PHP-FPM services, without limits.
+	if err := s.sites.ReleaseAccount(r.Context(), actorOf(r), u); err != nil {
+		s.writeSiteError(w, "release limits", err)
 		return
 	}
 	if err := s.Store.DeleteUser(r.Context(), u.ID); err != nil {

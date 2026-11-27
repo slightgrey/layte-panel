@@ -56,6 +56,7 @@ func DevDeps(dir string) (Deps, error) {
 		Now:     time.Now,
 		// Dev sites aren't served, so they always "answer" 200.
 		SiteCheck: func(context.Context, string, bool) (int, error) { return 200, nil },
+		SelfBin:   "/usr/local/bin/layte",
 	}, nil
 }
 
@@ -152,7 +153,7 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{Stderr: []byte("nginx: configuration file /etc/nginx/nginx.conf test is successful\n")}, nil
 		case c.Bin == nginxBin && len(args) == 1 && args[0] == "-T":
 			return fakeNginxDump(root)
-		case strings.HasPrefix(path.Base(c.Bin), "php-fpm") && len(args) == 1 && args[0] == "-t":
+		case strings.HasPrefix(path.Base(c.Bin), "php-fpm") && len(args) >= 1 && args[0] == "-t":
 			return system.Result{Stderr: []byte("NOTICE: configuration file test is successful\n")}, nil
 		case c.Bin == useraddBin && len(args) > 0:
 			u := args[len(args)-1]
