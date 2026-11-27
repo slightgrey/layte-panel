@@ -187,6 +187,19 @@ func (s *Store) SetPassword(ctx context.Context, userID int64, hash string) erro
 	})
 }
 
+// EnrollTOTP stores a 2FA secret confirmed in the browser and records step
+// as used. It only succeeds while the user has no secret, so it can't
+// replace one that is already set up. Sessions are kept (the caller promotes
+// the one that did the setup).
+func (s *Store) EnrollTOTP(ctx context.Context, userID int64, secretEnc []byte, step int64) (bool, error) {
+	res, err := s.DB.ExecContext(ctx, `UPDATE users SET totp_secret_enc = ?, totp_last_step = ? WHERE id = ? AND totp_secret_enc IS NULL`, secretEnc, step, userID)
+	if err != nil {
+		return false, fmt.Errorf("enroll totp: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
 // ClearTOTP removes the 2FA secret, so the user sets it up again at the next
 // login, and logs out all sessions.
 func (s *Store) ClearTOTP(ctx context.Context, userID int64) error {

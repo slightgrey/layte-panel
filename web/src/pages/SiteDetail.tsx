@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { type FormEvent, lazy, type ReactNode, Suspense, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { useIsAdmin } from "@/api/auth";
 import { databasesKey, useDatabases } from "@/api/databases";
 import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { Site } from "@/api/types";
@@ -9,6 +10,7 @@ import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 import { JobProgress } from "@/components/JobProgress";
 import { ObjectCacheCard } from "@/components/ObjectCacheCard";
 import { PageCacheCard } from "@/components/PageCacheCard";
+import { PanelLoginCard } from "@/components/PanelLoginCard";
 import { PHPSettingsButton } from "@/components/PHPSettingsDialog";
 import { SiteHeader, SiteJobCard } from "@/components/SiteShell";
 import { Spinner } from "@/components/Spinner";
@@ -31,6 +33,9 @@ export function SiteDetailPage() {
   const site = useSite(id);
   const [params] = useSearchParams();
   const jobId = params.get("job");
+  const isAdmin = useIsAdmin();
+  // NewSite passes the login it created along with the site (shown once).
+  const createdLogin = (useLocation().state as { login?: { username: string; password: string } } | null)?.login;
 
   if (jobId && site.error) {
     // The site row is removed when creation fails and is fully rolled back.
@@ -86,6 +91,7 @@ export function SiteDetailPage() {
       )}
 
       <OverviewCard site={s} />
+      {isAdmin && (s.managed || s.adopted) && !s.parent_site_id && <PanelLoginCard site={s} created={createdLogin} />}
       {layteConfigs(s) && s.wordpress && <PageCacheCard site={s} />}
       {s.wordpress && (s.managed || s.adopted) && s.system_user && <ObjectCacheCard site={s} />}
       <VhostCard site={s} />

@@ -18,6 +18,9 @@ type Session struct {
 	IP          string
 	UserAgent   string
 	Remember    bool // "remember this browser": longer limits, persistent cookie
+	// TOTPSetupEnc is the encrypted 2FA secret being set up in the browser
+	// (pending sessions of users without 2FA), until it is confirmed.
+	TOTPSetupEnc []byte
 }
 
 func (s *Store) CreateSession(ctx context.Context, ss Session) error {
@@ -35,8 +38,8 @@ func (s *Store) SessionByHash(ctx context.Context, hash string) (Session, error)
 	var ss Session
 	var created, seen int64
 	err := s.DB.QueryRowContext(ctx,
-		`SELECT token_hash, user_id, csrf_token, totp_pending, created_at, last_seen_at, ip, user_agent, remember FROM sessions WHERE token_hash = ?`, hash).
-		Scan(&ss.TokenHash, &ss.UserID, &ss.CSRFToken, &ss.TOTPPending, &created, &seen, &ss.IP, &ss.UserAgent, &ss.Remember)
+		`SELECT token_hash, user_id, csrf_token, totp_pending, created_at, last_seen_at, ip, user_agent, remember, totp_setup_enc FROM sessions WHERE token_hash = ?`, hash).
+		Scan(&ss.TokenHash, &ss.UserID, &ss.CSRFToken, &ss.TOTPPending, &created, &seen, &ss.IP, &ss.UserAgent, &ss.Remember, &ss.TOTPSetupEnc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrNotFound
 	}
@@ -58,7 +61,7 @@ func (s *Store) TouchSession(ctx context.Context, hash string, t time.Time) erro
 // "remember this browser" session.
 func (s *Store) PromoteSession(ctx context.Context, oldHash, newHash, newCSRF string, now time.Time, remember bool) error {
 	res, err := s.DB.ExecContext(ctx,
-		`UPDATE sessions SET token_hash = ?, csrf_token = ?, totp_pending = 0, created_at = ?, last_seen_at = ?, remember = ?
+		`UPDATE sessions SET token_hash = ?, csrf_token = ?, totp_pending = 0, totp_setup_enc = NULL, created_at = ?, last_seen_at = ?, remember = ?
 		 WHERE token_hash = ? AND totp_pending = 1`,
 		newHash, newCSRF, now.Unix(), now.Unix(), remember, oldHash)
 	if err != nil {
@@ -68,6 +71,12 @@ func (s *Store) PromoteSession(ctx context.Context, oldHash, newHash, newCSRF st
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetSessionTOTPSetup keeps the 2FA secret being set up on a pending session.
+func (s *Store) SetSessionTOTPSetup(ctx context.Context, hash string, secretEnc []byte) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE sessions SET totp_setup_enc = ? WHERE token_hash = ? AND totp_pending = 1`, secretEnc, hash)
+	return err
 }
 
 func (s *Store) DeleteSession(ctx context.Context, hash string) error {

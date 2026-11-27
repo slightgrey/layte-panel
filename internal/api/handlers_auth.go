@@ -76,7 +76,10 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", invalidCreds)
 		return
 	}
-	if len(u.TOTPSecretEnc) == 0 {
+	// Site accounts set up 2FA in the browser on their first login (and after
+	// an admin resets it); admins enrol with `layte admin`.
+	setup := len(u.TOTPSecretEnc) == 0
+	if setup && u.IsAdmin() {
 		writeError(w, http.StatusForbidden, "totp_not_enrolled", "two-factor authentication is not set up; run `layte admin reset-2fa`")
 		return
 	}
@@ -105,7 +108,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, token, 0) // pending 2FA: a browser-session cookie
-	writeJSON(w, http.StatusOK, map[string]any{"totp_required": true, "csrf_token": csrf})
+	writeJSON(w, http.StatusOK, map[string]any{"totp_required": true, "totp_setup": setup, "csrf_token": csrf})
 }
 
 // POST /api/v1/auth/totp {code, remember}
@@ -130,6 +133,10 @@ func (s *server) handleTOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", invalidCreds)
 		return
 	}
+	if len(u.TOTPSecretEnc) == 0 {
+		writeError(w, http.StatusUnauthorized, "totp_setup_required", "set up two-factor authentication first")
+		return
+	}
 	secret, err := s.Keyring.Open(u.TOTPSecretEnc, []byte(u.Username))
 	if err != nil {
 		s.internalError(w, "decrypt totp secret", err)
@@ -152,7 +159,14 @@ func (s *server) handleTOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_code", "invalid or already used code")
 		return
 	}
+	s.finishLogin(w, r, si, u, req.Remember)
+}
 
+// finishLogin ends a successful second step: it clears the failure counter
+// and replaces the pending session with a full one under a new token.
+func (s *server) finishLogin(w http.ResponseWriter, r *http.Request, si sessionInfo, u store.User, remember bool) {
+	ctx := r.Context()
+	now := s.Now()
 	if err := s.Store.ResetLoginFailures(ctx, u.ID); err != nil {
 		s.internalError(w, "reset failures", err)
 		return
@@ -167,16 +181,16 @@ func (s *server) handleTOTP(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "new csrf token", err)
 		return
 	}
-	if err := s.Store.PromoteSession(ctx, si.Session.TokenHash, hash, csrf, now, req.Remember); err != nil {
+	if err := s.Store.PromoteSession(ctx, si.Session.TokenHash, hash, csrf, now, remember); err != nil {
 		s.internalError(w, "promote session", err)
 		return
 	}
 	var cookieAge time.Duration // 0 = browser-session cookie
-	if req.Remember {
+	if remember {
 		cookieAge = rememberMax // survives closing the browser
 	}
 	s.setSessionCookie(w, token, cookieAge)
-	s.Log.Info("login", "user", u.Username, "ip", clientIP(r, s.Config.TrustedProxies), "remember", req.Remember)
+	s.Log.Info("login", "user", u.Username, "role", u.Role, "ip", clientIP(r, s.Config.TrustedProxies), "remember", remember)
 	writeJSON(w, http.StatusOK, map[string]any{"user": toUserJSON(u), "csrf_token": csrf})
 }
 

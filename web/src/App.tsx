@@ -25,12 +25,15 @@ import { UpdatesPage } from "./pages/Updates";
 import { SitesPage } from "./pages/Sites";
 import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
+import { TwoFactorSetupPage } from "./pages/TwoFactorSetup";
+import { UsersPage } from "./pages/Users";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/login/2fa" element={<TwoFactorPage />} />
+      <Route path="/login/2fa/setup" element={<TwoFactorSetupPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route index element={<DashboardPage />} />
@@ -44,6 +47,7 @@ export function App() {
           <Route path="files" element={<FilesPage />} />
           <Route path="security" element={<SecurityPage />} />
           <Route path="keys" element={<KeysPage />} />
+          <Route path="users" element={<UsersPage />} />
           <Route path="sites/:id/ssl" element={<SiteSSLPage />} />
           <Route path="sites/:id/database" element={<SiteDatabasePage />} />
           <Route path="sites/:id/cron" element={<SiteCronPage />} />

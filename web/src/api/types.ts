@@ -1,9 +1,14 @@
 // Mirrors the Go JSON types in internal/api and internal/actions.
 
+export type Role = "admin" | "site";
+
 export interface User {
   id: number;
   username: string;
-  role: string;
+  role: Role;
+  /** Site accounts: their main site and how many subdomains they may add. */
+  site_id?: number;
+  max_subdomains?: number;
 }
 
 export interface MeResponse {
@@ -13,7 +18,32 @@ export interface MeResponse {
 
 export interface LoginResponse {
   totp_required: boolean;
+  /** No 2FA yet (site accounts): set it up in the browser. */
+  totp_setup?: boolean;
   csrf_token: string;
+}
+
+export interface TOTPSetupResponse {
+  secret: string;
+  uri: string;
+}
+
+/** A panel login, as the admin's Users page shows it. */
+export interface Account {
+  id: number;
+  username: string;
+  role: Role;
+  site_id?: number;
+  site_domain?: string;
+  max_subdomains: number;
+  subdomains: number;
+  totp_set_up: boolean;
+  locked: boolean;
+  created_at: string;
+}
+
+export interface UsersResponse {
+  users: Account[];
 }
 
 export interface SectionError {
@@ -107,6 +137,8 @@ export interface Site {
   page_cache: PageCache;
   /** Redirects in the site's nginx config (sites whose config Layte manages). */
   redirects: Redirect[];
+  /** Set on a subdomain site: its main site (they share the Linux user and the site account). */
+  parent_site_id?: number;
   created_at: string;
   updated_at: string;
 }
