@@ -45,6 +45,8 @@ export function Layout() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
+  // Site accounts only manage their own sites (the server enforces this too).
+  const items = me.data?.user.role === "admin" ? nav : nav.filter((i) => i.to === "/sites");
 
   const onLogout = () => logout.mutate(undefined, { onSettled: () => navigate("/login", { replace: true }) });
 
@@ -52,9 +54,9 @@ export function Layout() {
     <div className="flex min-h-svh gap-6 p-3 md:p-5">
       <aside className="sticky top-5 hidden h-[calc(100svh-2.5rem)] w-60 shrink-0 flex-col rounded-[1.5rem] bg-card shadow-raised md:flex">
         <Brand className="h-16 px-5" />
-        <p className="eyebrow px-6 pt-1 pb-2">Server</p>
+        <p className="eyebrow px-6 pt-1 pb-2">{me.data?.user.role === "admin" ? "Server" : "Your account"}</p>
         <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3" aria-label="Main">
-          {nav.map((item) => (
+          {items.map((item) => (
             <NavEntry key={item.label} item={item} />
           ))}
         </nav>
@@ -77,7 +79,7 @@ export function Layout() {
         </header>
 
         <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 md:hidden" aria-label="Main (mobile)">
-          {nav.map((item) => (
+          {items.map((item) => (
             <NavEntry key={item.label} item={item} compact />
           ))}
         </nav>

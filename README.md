@@ -23,6 +23,7 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
 - **Cron:** per-site jobs that run as the site's own user, with WP-Cron in one click.
 - **Logs:** live tail of nginx, PHP-FPM and site logs.
 - **File manager:** browse, edit, upload and download. It always runs as the site's user, inside the site folder.
+- **Site logins and subdomains:** give a site its own panel login (2FA required) that sees only that site and its subdomains, and can add subdomain sites up to a limit you set. See [docs/site-accounts.md](docs/site-accounts.md).
 - **SFTP per site:** an SFTP-only login (SSH keys, optional generated password) jailed to the site's folder, working as the site's user, so FileZilla, VS Code or rsync keep files owned correctly. See [docs/sftp.md](docs/sftp.md).
 - **Updates:** preview and install package updates. Only upgrades (nothing is removed), your config files are kept, every site is checked afterwards, and you're told when a reboot is needed.
 - **Server insight:** see what uses the CPU and memory (per service and per site's PHP pool), and what takes up disk space.

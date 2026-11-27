@@ -66,7 +66,9 @@ func (s *Service) requireManagedActive(site store.Site) error {
 //
 // For a taken-over adopted site still on its own certbot certificate, this
 // switches it to a Layte one; deleteOldCert then deletes the old one.
-func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Site, email string, deleteOldCert bool) (string, error) {
+// saveEmail keeps email as the server's default (admins only: a site
+// account's address is used for its own certificate).
+func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Site, email string, deleteOldCert, saveEmail bool) (string, error) {
 	oldCert := ownCert(site) // "" unless an adopted site uses its own certificate
 	if err := s.requireManagedActive(site); err != nil {
 		return "", err
@@ -74,8 +76,10 @@ func (s *Service) IssueSSL(ctx context.Context, actor agent.Actor, site store.Si
 	if err := validate.Email(email); err != nil {
 		return "", badRequest("%v", err)
 	}
-	if err := s.Store.SetSetting(ctx, store.SettingLetsEncryptEmail, email); err != nil {
-		return "", err
+	if saveEmail {
+		if err := s.Store.SetSetting(ctx, store.SettingLetsEncryptEmail, email); err != nil {
+			return "", err
+		}
 	}
 	jobID, err := s.Jobs.Start("site.ssl_issue", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
 		call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }

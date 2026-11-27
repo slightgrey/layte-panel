@@ -418,6 +418,8 @@ export interface CreateSiteRequest {
   php_version: string;
   create_db: boolean;
   wordpress?: { title: string; admin_user: string; admin_email: string };
+  /** A subdomain site of this main site (shares its Linux user). */
+  parent_site_id?: number;
 }
 
 export interface DeleteSiteRequest {

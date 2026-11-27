@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
-import { RequireAuth } from "./components/RequireAuth";
+import { RequireAdmin, RequireAuth } from "./components/RequireAuth";
 import { DashboardPage } from "./pages/Dashboard";
 import { CronPage } from "./pages/Cron";
 import { DatabasesPage } from "./pages/Databases";
@@ -36,18 +36,25 @@ export function App() {
       <Route path="/login/2fa/setup" element={<TwoFactorSetupPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
-          <Route index element={<DashboardPage />} />
+          {/* Site accounts: their sites (the server limits them to their own). */}
           <Route path="sites" element={<SitesPage />} />
           <Route path="sites/new" element={<NewSitePage />} />
           <Route path="sites/:id" element={<SiteDetailPage />} />
-          <Route path="ssl" element={<SSLPage />} />
-          <Route path="databases" element={<DatabasesPage />} />
-          <Route path="cron" element={<CronPage />} />
-          <Route path="logs" element={<LogsPage />} />
-          <Route path="files" element={<FilesPage />} />
-          <Route path="security" element={<SecurityPage />} />
-          <Route path="keys" element={<KeysPage />} />
-          <Route path="users" element={<UsersPage />} />
+          <Route element={<RequireAdmin />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="ssl" element={<SSLPage />} />
+            <Route path="databases" element={<DatabasesPage />} />
+            <Route path="cron" element={<CronPage />} />
+            <Route path="logs" element={<LogsPage />} />
+            <Route path="files" element={<FilesPage />} />
+            <Route path="security" element={<SecurityPage />} />
+            <Route path="keys" element={<KeysPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="system/load" element={<SystemLoadPage />} />
+            <Route path="system/memory" element={<SystemMemoryPage />} />
+            <Route path="system/disk" element={<SystemDiskPage />} />
+            <Route path="updates" element={<UpdatesPage />} />
+          </Route>
           <Route path="sites/:id/ssl" element={<SiteSSLPage />} />
           <Route path="sites/:id/database" element={<SiteDatabasePage />} />
           <Route path="sites/:id/cron" element={<SiteCronPage />} />
@@ -55,10 +62,6 @@ export function App() {
           <Route path="sites/:id/redirects" element={<SiteRedirectsPage />} />
           <Route path="sites/:id/logs" element={<SiteLogsPage />} />
           <Route path="sites/:id/files" element={<SiteFilesPage />} />
-          <Route path="system/load" element={<SystemLoadPage />} />
-          <Route path="system/memory" element={<SystemMemoryPage />} />
-          <Route path="system/disk" element={<SystemDiskPage />} />
-          <Route path="updates" element={<UpdatesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

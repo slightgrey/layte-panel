@@ -8,6 +8,7 @@ import {
   useLinkDatabase,
   useUnlinkDatabase,
 } from "@/api/databases";
+import { useIsAdmin } from "@/api/auth";
 import { downloadURL, useFileActions, useFiles } from "@/api/files";
 import type { DatabaseRow, Site } from "@/api/types";
 import { OneTimeSecrets } from "@/components/JobProgress";
@@ -58,6 +59,18 @@ function suggestName(site: Site) {
 function NoDatabase({ site, all, onCreated }: { site: Site; all: DatabaseRow[]; onCreated: (s: Record<string, string>) => void }) {
   const create = useCreateDatabase();
   const [name, setName] = useState(() => suggestName(site));
+  const isAdmin = useIsAdmin();
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <EmptyState icon={Database} title="No database for this site">
+            Ask your admin to add one.
+          </EmptyState>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardContent className="pt-6">
@@ -141,6 +154,7 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
   const job = useJobFeedback(`export-${db.name}`, `Exporting ${db.name}`);
   const canDump = db.managed && (site.managed || site.adopted) && site.status === "active";
   const unlink = useUnlinkDatabase();
+  const isAdmin = useIsAdmin();
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
@@ -185,7 +199,7 @@ function DatabaseCards({ site, db, onSecrets }: { site: Site; db: DatabaseRow; o
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-3">
-            {db.linked && (
+            {db.linked && isAdmin && (
               <Button
                 variant="outline"
                 disabled={unlink.isPending}

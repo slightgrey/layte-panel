@@ -89,7 +89,7 @@ func (s *server) handleIssueSSL(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	jobID, err := s.sites.IssueSSL(r.Context(), actorOf(r), site, req.Email, req.DeleteOldCert)
+	jobID, err := s.sites.IssueSSL(r.Context(), actorOf(r), site, req.Email, req.DeleteOldCert, !isSiteUser(r))
 	if err != nil {
 		s.writeSiteError(w, "issue ssl", err)
 		return
