@@ -18,6 +18,15 @@ export function useSwitchPHP(id: number) {
   });
 }
 
+/** PUT /sites/{id}/php-shell (admins): block or allow PHP's shell functions. */
+export function useSetPHPShell(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (block: boolean) => api<Site>("PUT", `/sites/${id}/php-shell`, { block }),
+    onSuccess: (site) => qc.setQueryData(siteKey(id), site),
+  });
+}
+
 /** PUT /sites/{id}/php-settings: starts a job that rewrites the pool (and vhost). */
 export function useSetPHPSettings(id: number) {
   return useMutation({

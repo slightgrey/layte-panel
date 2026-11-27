@@ -4,7 +4,7 @@ import { type FormEvent, lazy, type ReactNode, Suspense, useState } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useIsAdmin } from "@/api/auth";
 import { databasesKey, useDatabases } from "@/api/databases";
-import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
+import { layteConfigs, siteKey, sitesKey, useDeleteSite, useSetPHPShell, useSiteDisk, usePHPVersions, useSite, useSiteVhost, useSwitchPHP } from "@/api/sites";
 import type { SetupLink, Site } from "@/api/types";
 import { JobButtonLabel, useJobFeedback } from "@/components/JobFeedback";
 import { JobProgress } from "@/components/JobProgress";
@@ -286,6 +286,31 @@ function DiskSize({ site }: { site: Site }) {
   );
 }
 
+/** exec(), system() & co.: blocked on a site login's sites (they'd reach past the site's folder). */
+function PHPShell({ site, isAdmin }: { site: Site; isAdmin: boolean }) {
+  const set = useSetPHPShell(site.id);
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      {site.block_php_shell ? "Blocked (exec, system, shell_exec, proc_open…)" : "Allowed"}
+      {isAdmin && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={set.isPending || site.status !== "active"}
+          onClick={() =>
+            (site.block_php_shell
+              ? confirm("Allow PHP's shell functions on this site? Its PHP could then run programs that reach the other sites of the same Linux user.")
+              : true) && set.mutate(!site.block_php_shell)
+          }
+        >
+          {site.block_php_shell ? "Allow" : "Block"}
+        </Button>
+      )}
+      {set.error && <span className="text-xs text-destructive">{set.error.message}</span>}
+    </span>
+  );
+}
+
 function OverviewCard({ site: s, isAdmin }: { site: Site; isAdmin: boolean }) {
   const parent = useSite(s.parent_site_id ?? 0, Boolean(s.parent_site_id));
   return (
@@ -314,6 +339,11 @@ function OverviewCard({ site: s, isAdmin }: { site: Site; isAdmin: boolean }) {
           <Row label="Size on disk">
             <DiskSize site={s} />
           </Row>
+          {layteConfigs(s) && s.php_version && (
+            <Row label="PHP shell functions">
+              <PHPShell site={s} isAdmin={isAdmin} />
+            </Row>
+          )}
           {s.system_user && <Row label="System user">{s.system_user}</Row>}
           {s.db_name && (
             <Row label="Database">

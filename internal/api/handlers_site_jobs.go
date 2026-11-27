@@ -190,3 +190,25 @@ func panelHosts(r *http.Request) []string {
 	}
 	return nil
 }
+
+// PUT /api/v1/sites/{id}/php-shell {block} — admins: block or allow PHP's
+// shell functions (exec, system, …) on a site.
+func (s *server) handleSetPHPShell(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.loadSite(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Block bool `json:"block"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.sites.SetPHPShell(r.Context(), actorOf(r), site, req.Block); err != nil {
+		s.writeSiteError(w, "php shell", err)
+		return
+	}
+	s.auditPanel(r, "site.php_shell", map[string]any{"site": site.Domain, "block": req.Block})
+	site, _ = s.Store.SiteByID(r.Context(), site.ID)
+	writeJSON(w, http.StatusOK, site)
+}

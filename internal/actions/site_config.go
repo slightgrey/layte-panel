@@ -36,6 +36,8 @@ type SiteConfigParams struct {
 	// OwnCert: a taken-over adopted site that still uses its own certbot
 	// certificate (live folder), until it gets a Layte one.
 	OwnCert string `json:"own_cert,omitempty"`
+	// BlockShell disables PHP's shell functions in the pool.
+	BlockShell bool `json:"block_shell,omitempty"`
 }
 
 // validOwnCert checks a certbot live folder (/etc/letsencrypt/live/<name>).
@@ -102,7 +104,7 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert, Redirects: p.Redirects}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert, Redirects: p.Redirects, BlockShell: p.BlockShell}
 }
 
 // checkWebRoot: config writes for an adopted site need its vhost taken over.

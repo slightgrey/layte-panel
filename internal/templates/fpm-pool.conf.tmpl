@@ -24,6 +24,10 @@ php_admin_value[sys_temp_dir] = {{.DataDir}}/tmp
 php_admin_value[session.save_path] = {{.DataDir}}/tmp
 php_admin_value[error_log] = {{.DataDir}}/logs/php-error.log
 php_admin_flag[log_errors] = on
+{{- if .BlockShell}}
+; A site login's site: no running programs (they'd bypass open_basedir).
+php_admin_value[disable_functions] = {{.ShellFunctions}}
+{{- end}}
 
 php_value[upload_max_filesize] = {{.PHP.Upload}}
 php_value[post_max_size] = {{.PHP.Upload}}

@@ -41,7 +41,13 @@ type Site struct {
 	// HTTP2On: nginx 1.25.1+ turns HTTP/2 on with "http2 on;" and warns
 	// about the older "listen … http2" form (which 1.24 and older need).
 	HTTP2On bool
+	// BlockShell disables PHP's shell functions in the pool.
+	BlockShell bool
 }
+
+// ShellFunctions are the PHP functions BlockShell disables: they run
+// programs, which aren't bound by open_basedir.
+func (s Site) ShellFunctions() string { return "exec,passthru,shell_exec,system,proc_open,popen" }
 
 // CacheDir is the site's page cache folder; CacheZone its nginx zone name.
 func (s Site) CacheDir() string  { return pagecache.Dir(s.Domain) }

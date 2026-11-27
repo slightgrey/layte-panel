@@ -32,6 +32,8 @@ func TestGolden(t *testing.T) {
 	http2On.HTTP2On = true
 	tuned := site
 	tuned.PHP = phpini.Settings{MemoryLimit: "512M", UploadMax: "1G", MaxExecutionTime: 600, MaxInputVars: 5000}
+	noShell := site // a site login's site
+	noShell.BlockShell = true
 	tests := []struct {
 		golden string
 		render func(Site) ([]byte, error)
@@ -45,6 +47,7 @@ func TestGolden(t *testing.T) {
 		{"nginx-site-cache.golden", func(Site) ([]byte, error) { return Vhost(cached) }},
 		{"nginx-site-adopted.golden", func(Site) ([]byte, error) { return Vhost(adopted) }},
 		{"fpm-pool-adopted.golden", func(Site) ([]byte, error) { return Pool(adopted) }},
+		{"fpm-pool-no-shell.golden", func(Site) ([]byte, error) { return Pool(noShell) }},
 		{"nginx-site-redirects.golden", func(Site) ([]byte, error) { return Vhost(redirected) }},
 		{"nginx-redirects.golden", func(Site) ([]byte, error) { return Redirects(redirected) }},
 	}

@@ -175,6 +175,8 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 		PHPVersion: req.PHPVersion, Managed: true, Source: "created", WordPress: req.WordPress != nil,
 		Status: "creating", NginxConf: templates.VhostPath(domain), FPMPool: templates.PoolPath(req.PHPVersion, domain),
 		ParentSiteID: parent.ID,
+		// A subdomain site of a site login: PHP shell functions follow the main site.
+		BlockPHPShell: parent.BlockPHPShell,
 	}
 	if req.CreateDB {
 		base := username
@@ -281,6 +283,8 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 	}
 
 	j.Step("Configure PHP " + site.PHPVersion + " (FPM pool)")
+	s.refreshShellFlag(ctx, &site) // a login may have been created for it meanwhile
+	cfg.BlockShell = site.BlockPHPShell
 	if err := call("php.pool_write", cfg); err != nil {
 		return err
 	}
@@ -335,6 +339,14 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 		secrets["wp_admin_user"], secrets["wp_admin_password"] = wp.AdminUser, adminPW
 	}
 
+	if written := site.BlockPHPShell; s.refreshShellFlag(ctx, &site) && site.BlockPHPShell != written {
+		j.Step("Update the PHP pool for the site's login")
+		c := s.siteConfig(site, false)
+		c.Aliases = aliases
+		if err := call("php.pool_write", c); err != nil {
+			return err
+		}
+	}
 	site.Status = "active"
 	if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
 		return err
@@ -514,6 +526,64 @@ func (s *Service) longCall(ctx context.Context, timeout time.Duration, action st
 	ctx, cancel := context.WithTimeout(ctx, timeout+30*time.Second)
 	defer cancel()
 	return s.Agent.Call(ctx, action, actor, params, out)
+}
+
+// refreshShellFlag re-reads the site's PHP shell flag (a login can be
+// created while the site is being created). It reports whether it could.
+func (s *Service) refreshShellFlag(ctx context.Context, site *store.Site) bool {
+	cur, err := s.Store.SiteByID(ctx, site.ID)
+	if err != nil {
+		return false
+	}
+	site.BlockPHPShell = cur.BlockPHPShell
+	return true
+}
+
+// SetPHPShell blocks or allows PHP's shell functions on a site and rewrites
+// its pool. A site still being created only gets the flag: its creation
+// job writes the pool with it.
+func (s *Service) SetPHPShell(ctx context.Context, actor agent.Actor, site store.Site, block bool) error {
+	if site.BlockPHPShell == block {
+		return nil
+	}
+	if !site.LayteConfigs() || site.PHPVersion == "" {
+		return conflict("site_unmanaged", "%s's PHP pool isn't managed by Layte Panel", site.Domain)
+	}
+	if err := s.Store.SetBlockPHPShell(ctx, site.ID, block); err != nil {
+		return err
+	}
+	if site.Status == "creating" {
+		return nil
+	}
+	if site.Status != "active" {
+		s.Store.SetBlockPHPShell(context.WithoutCancel(ctx), site.ID, site.BlockPHPShell)
+		return conflict("site_busy", "%s is %s", site.Domain, site.Status)
+	}
+	site.BlockPHPShell = block
+	if err := s.Agent.Call(ctx, "php.pool_write", actor, s.siteConfig(site, site.SSL), nil); err != nil {
+		s.Store.SetBlockPHPShell(context.WithoutCancel(ctx), site.ID, !block)
+		return err
+	}
+	return nil
+}
+
+// BlockAccountShell blocks PHP's shell functions on every site of a new
+// site login (main site and subdomains). Sites an admin allowed stay so
+// only if it happens after this.
+func (s *Service) BlockAccountShell(ctx context.Context, actor agent.Actor, mainID int64) error {
+	sites, err := s.Store.SitesForAccount(ctx, mainID)
+	if err != nil {
+		return err
+	}
+	for _, x := range sites {
+		if !x.LayteConfigs() || x.PHPVersion == "" {
+			continue // its pool isn't Layte's (an adopted site still on its own config)
+		}
+		if err := s.SetPHPShell(ctx, actor, x, true); err != nil {
+			return fmt.Errorf("block PHP shell functions on %s: %w", x.Domain, err)
+		}
+	}
+	return nil
 }
 
 // subdomainParent checks a new subdomain site against its main site and
