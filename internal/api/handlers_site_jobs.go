@@ -6,11 +6,13 @@ import (
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 	"github.com/slightgrey/layte-panel/internal/redirects"
+	"net"
 	"net/http"
 
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/sites"
+	"github.com/slightgrey/layte-panel/internal/validate"
 )
 
 // writeSiteError maps orchestrator errors to API errors.
@@ -55,6 +57,7 @@ func (s *server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	req.SaveSSLEmail = !isSiteUser(r)
+	req.ReservedHosts = panelHosts(r)
 	jobID, siteID, err := s.sites.Create(r.Context(), actorOf(r), req)
 	if err != nil {
 		s.writeSiteError(w, "create site", err)
@@ -173,4 +176,17 @@ func (s *server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "site_id": site.ID})
+}
+
+// panelHosts are the names this panel is reached by (the Host of the
+// request, normalised): no site may take them.
+func panelHosts(r *http.Request) []string {
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if d, err := validate.Domain(host); err == nil {
+		return []string{d}
+	}
+	return nil
 }

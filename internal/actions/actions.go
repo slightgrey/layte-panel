@@ -66,6 +66,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("updates.pending", true, 60*time.Second, u.pending),
 		agent.Def("updates.plan", true, 2*time.Minute, u.updatesPlan),
 		agent.Def("sites.discover", true, 20*time.Second, d.sitesDiscover),
+		agent.Def("nginx.server_names", true, 20*time.Second, d.nginxServerNames),
 		agent.Def("php.versions", true, 5*time.Second, d.phpVersionsAction),
 		agent.Def("nginx.vhost_read", true, 5*time.Second, d.vhostRead),
 		agent.Def("ssl.list", true, 10*time.Second, d.sslList),

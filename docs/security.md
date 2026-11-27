@@ -50,6 +50,7 @@ The main `sshd_config` and every other login are untouched. Every change is chec
 ## Logins
 - **Roles:** admins see everything. Site logins (see [site-accounts.md](site-accounts.md)) only reach their own site and its subdomains. Every API route is admin-only unless it is explicitly opened to site logins, and a test checks that list. Other sites' ids answer 404.
 - **Passwords:** hashed with argon2id (OWASP parameters).
+- **Site names:** a new site can't take a name that the panel is reached by, or that any nginx config on the server already serves (exact names, wildcards and regex names). nginx would otherwise send that traffic, the panel's address included, to the new site.
 - **Account page** (gear icon, top right): anyone signed in can change their own password or move 2FA to a new device, and both need the current password. Wrong answers count towards the lockout. Either change signs out every other session. You can also see your sessions and sign out the others.
 - **2FA:** TOTP is mandatory. Codes can't be reused.
 - **Brute force:** 5 failed attempts lock the account for 15 minutes, and each IP is rate-limited on the login endpoints.

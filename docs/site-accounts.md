@@ -38,7 +38,8 @@ A subdomain site:
 - runs as the **main site's Linux user**, in `/home/<user>/blog.example.com/{public,logs,tmp}`, with its own PHP-FPM pool, nginx config, cron file and (optionally) database and WordPress;
 - has **no aliases** and no username of its own;
 - shares the main site's **SFTP login**, which sees both folders (see [sftp.md](sftp.md#subdomain-sites));
-- needs its own DNS record pointing to the server before you issue SSL.
+- needs its own DNS record pointing to the server before you issue SSL;
+- can't take a name that's already in use. Layte refuses a name that another nginx config on the server serves (hand-written ones too, including `*.example.com` wildcards), and the panel's own address.
 
 Deleting a subdomain site removes only its folder (if you tick "Delete all site files"). The Linux user and the main site stay. The main site can't be deleted while it has subdomain sites.
 
