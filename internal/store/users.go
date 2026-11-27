@@ -28,6 +28,8 @@ type User struct {
 	// SiteID is the main site of a site account (Role "site"); 0 for admins.
 	SiteID        int64
 	MaxSubdomains int
+	DisplayName   string // Account page; "" = show the username
+	Email         string
 }
 
 // Roles.
@@ -39,13 +41,13 @@ const (
 // IsAdmin reports whether u is a full admin.
 func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
 
-const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains`
+const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains, display_name, email`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var locked, created int64
 	var site sql.NullInt64
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains)
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains, &u.DisplayName, &u.Email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}

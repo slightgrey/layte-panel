@@ -50,6 +50,7 @@ The main `sshd_config` and every other login are untouched. Every change is chec
 ## Logins
 - **Roles:** admins see everything. Site logins (see [site-accounts.md](site-accounts.md)) only reach their own site and its subdomains. Every API route is admin-only unless it is explicitly opened to site logins, and a test checks that list. Other sites' ids answer 404.
 - **Passwords:** hashed with argon2id (OWASP parameters).
+- **Account page** (gear icon, top right): anyone signed in can change their own password or move 2FA to a new device, and both need the current password. Wrong answers count towards the lockout. Either change signs out every other session. You can also see your sessions and sign out the others.
 - **2FA:** TOTP is mandatory. Codes can't be reused.
 - **Brute force:** 5 failed attempts lock the account for 15 minutes, and each IP is rate-limited on the login endpoints.
 - **Sessions:** cookies are `HttpOnly`, `Secure` and `SameSite=Strict`. The token changes after 2FA. Sessions end after 30 minutes idle or 12 hours in total.

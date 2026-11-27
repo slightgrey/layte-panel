@@ -10,7 +10,7 @@ import { Input, Label } from "@/components/ui/input";
 import { AuthShell, FormError } from "./AuthShell";
 
 /** A QR code of the otpauth:// URI, drawn as an inline SVG data URL. */
-function QRImage({ uri }: { uri: string }) {
+export function QRImage({ uri }: { uri: string }) {
   const src = useMemo(() => {
     const qr = qrcode(0, "M");
     qr.addData(uri);

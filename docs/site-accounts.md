@@ -51,9 +51,10 @@ Deleting a subdomain site removes only its folder (if you tick "Delete all site 
 
 Deleting a main site deletes its login too.
 
-Admins are managed on the server with `layte admin create | reset-password | reset-2fa`, never from the UI.
+New admins are added on the server with `layte admin create`. An admin can change their own password and 2FA on the Account page. A locked-out admin is helped on the server with `layte admin reset-password | reset-2fa`.
 
 ## Good to know
 - Site logins follow the same rules as admins: argon2id passwords, mandatory 2FA, lockout after 5 failed attempts, and session timeouts. See [security.md](security.md#logins).
 - Everything a site login changes goes through the same agent actions as an admin's, and the audit log records it under the login's username.
+- Site logins have the same **Account page** as admins (gear icon, top right), where they can change their password, move 2FA to a new phone and sign out other sessions.
 - A site login can't create API keys. API keys are read-only and server-wide, so only admins create them.

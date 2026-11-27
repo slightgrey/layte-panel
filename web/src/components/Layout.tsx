@@ -9,6 +9,7 @@ import {
   type LucideIcon,
   PackageCheck,
   ScrollText,
+  Settings,
   Shield,
   ShieldCheck,
   Users,
@@ -69,9 +70,19 @@ export function Layout() {
           <PromptPath />
           <div className="flex items-center gap-2 md:gap-3">
             <ThemeToggle />
-            <span className="hidden rounded-full px-3 py-1 font-mono text-xs text-muted-foreground shadow-inset sm:inline">
-              {me.data?.user.username ?? "…"}
+            <span className="hidden rounded-full px-3 py-1 font-mono text-xs text-muted-foreground shadow-inset sm:inline" title={me.data?.user.username}>
+              {me.data?.user.display_name || me.data?.user.username || "…"}
             </span>
+            <NavLink
+              to="/account"
+              aria-label="Account settings"
+              title="Account settings"
+              className={({ isActive }) =>
+                cn("grid size-8 place-items-center rounded-full transition-colors hover:text-foreground", isActive ? "text-primary shadow-inset" : "text-muted-foreground")
+              }
+            >
+              <Settings className="size-4" />
+            </NavLink>
             <Button variant="ghost" size="sm" onClick={onLogout} disabled={logout.isPending} aria-label="Log out">
               <LogOut /> <span className="hidden sm:inline">Log out</span>
             </Button>

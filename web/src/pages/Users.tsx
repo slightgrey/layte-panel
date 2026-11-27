@@ -20,7 +20,8 @@ export function UsersPage() {
         <h1 className="text-2xl font-bold tracking-tight">Users</h1>
         <p className="text-sm text-muted-foreground">
           Site logins see only their own site and its subdomains. To add one, open the site and use <strong>Panel login</strong>.
-          Admins are managed on the server with <code className="font-mono">layte admin</code>.
+          New admins are added on the server with <code className="font-mono">layte admin create</code>; your own password and 2FA are on
+          the Account page (gear icon).
         </p>
       </div>
 

@@ -27,6 +27,7 @@ import { SSLPage } from "./pages/SSL";
 import { TwoFactorPage } from "./pages/TwoFactor";
 import { TwoFactorSetupPage } from "./pages/TwoFactorSetup";
 import { UsersPage } from "./pages/Users";
+import { AccountPage } from "./pages/Account";
 
 export function App() {
   return (
@@ -40,6 +41,7 @@ export function App() {
           <Route path="sites" element={<SitesPage />} />
           <Route path="sites/new" element={<NewSitePage />} />
           <Route path="sites/:id" element={<SiteDetailPage />} />
+          <Route path="account" element={<AccountPage />} />
           <Route element={<RequireAdmin />}>
             <Route index element={<DashboardPage />} />
             <Route path="ssl" element={<SSLPage />} />
