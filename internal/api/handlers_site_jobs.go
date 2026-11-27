@@ -54,6 +54,7 @@ func (s *server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	req.SaveSSLEmail = !isSiteUser(r)
 	jobID, siteID, err := s.sites.Create(r.Context(), actorOf(r), req)
 	if err != nil {
 		s.writeSiteError(w, "create site", err)

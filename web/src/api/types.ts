@@ -420,6 +420,8 @@ export interface CreateSiteRequest {
   wordpress?: { title: string; admin_user: string; admin_email: string };
   /** A subdomain site of this main site (shares its Linux user). */
   parent_site_id?: number;
+  /** Issue a Let's Encrypt certificate once the site is live (DNS must point here). */
+  ssl?: { email: string };
 }
 
 export interface DeleteSiteRequest {

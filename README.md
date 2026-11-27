@@ -18,7 +18,7 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
   - Redirects per site (old path → new page or another site, 301/302) on their own tab, with CSV import/export. They live in a separate file the site's nginx config includes, checked with `nginx -t` before they go live.
   - WordPress speed: a page cache (nginx FastCGI cache) and an object cache (Redis). Each site gets its own small Redis that only it can reach.
   - Size on disk per site.
-- **SSL:** Let's Encrypt certificates via certbot, renewed automatically, with an expiry overview and certificate details. Test renewal or renew now from the panel.
+- **SSL:** Let's Encrypt certificates via certbot, renewed automatically, with an expiry overview and certificate details. Issue one while creating the site, or later from its SSL tab. Test renewal or renew now from the panel.
 - **Databases:** create, drop and see sizes. Export and import `.sql` dumps. Reset passwords (shown once); for WordPress sites `wp-config.php` is updated in the same step.
 - **Cron:** per-site jobs that run as the site's own user, with WP-Cron in one click.
 - **Logs:** live tail of nginx, PHP-FPM and site logs.

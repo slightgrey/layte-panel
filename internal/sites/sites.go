@@ -62,6 +62,16 @@ type CreateRequest struct {
 	// be <label>.<main domain>, and it shares the main site's Linux user (no
 	// aliases, no username of its own).
 	ParentSiteID int64 `json:"parent_site_id"`
+	// SSL, when set, issues a Let's Encrypt certificate once the site is
+	// live (the domains' DNS must already point here). If that fails, the
+	// site stays up on HTTP.
+	SSL *SSLFields `json:"ssl"`
+	// SaveSSLEmail keeps the SSL email as the server's default (admins).
+	SaveSSLEmail bool `json:"-"`
+}
+
+type SSLFields struct {
+	Email string `json:"email"`
 }
 
 type WordPressFields struct {
@@ -99,6 +109,17 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 		}
 		if err := validate.Email(wp.AdminEmail); err != nil {
 			return "", 0, badRequest("%v", err)
+		}
+	}
+
+	if req.SSL != nil {
+		if err := validate.Email(req.SSL.Email); err != nil {
+			return "", 0, badRequest("SSL: %v", err)
+		}
+		if req.SaveSSLEmail {
+			if err := s.Store.SetSetting(ctx, store.SettingLetsEncryptEmail, req.SSL.Email); err != nil {
+				return "", 0, err
+			}
 		}
 	}
 
@@ -170,7 +191,7 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 	site.ID = siteID
 
 	jobID, err = s.Jobs.Start("site.create", siteID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
-		return s.runCreate(ctx, j, actor, site, aliases, req.WordPress)
+		return s.runCreate(ctx, j, actor, site, aliases, req.WordPress, req.SSL)
 	})
 	if err != nil {
 		s.Store.DeleteSite(ctx, siteID)
@@ -210,7 +231,7 @@ func (u undoStack) run(j *jobs.Job) bool {
 	return ok
 }
 
-func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor, site store.Site, aliases []string, wp *WordPressFields) (err error) {
+func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor, site store.Site, aliases []string, wp *WordPressFields, ssl *SSLFields) (err error) {
 	var undo undoStack
 	call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
 	cfg := s.siteConfig(site, false) // HTTPS comes later, in its own step
@@ -316,8 +337,27 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 	if site.ParentSiteID != 0 {
 		s.syncAccountSFTP(ctx, j, actor, site.ParentSiteID, 0)
 	}
-	j.Log("Site is live at http://%s (point its DNS to this server; HTTPS comes with the SSL feature)", site.Domain)
-	j.SetResult(map[string]any{"site_id": site.ID, "domain": site.Domain, "url": "http://" + site.Domain})
+	// The site is live from here on: an SSL failure doesn't roll it back.
+	scheme := "http"
+	if ssl != nil {
+		site.Aliases = aliases
+		if err := s.enableHTTPS(ctx, j, actor, &site, ssl.Email); err != nil {
+			j.FailStep()
+			j.Log("Warning: no certificate yet (%v). The site works over HTTP; once its DNS points to this server, issue one on the SSL tab.", err)
+		} else {
+			scheme = "https"
+		}
+	}
+	url := scheme + "://" + site.Domain
+	if scheme == "http" {
+		j.Log("Site is live at %s (point its DNS to this server, then add SSL on the SSL tab)", url)
+	} else {
+		j.Log("Site is live at %s", url)
+	}
+	if secrets["wp_admin_url"] != "" {
+		secrets["wp_admin_url"] = url + "/wp-admin/"
+	}
+	j.SetResult(map[string]any{"site_id": site.ID, "domain": site.Domain, "url": url})
 	if len(secrets) > 0 {
 		j.SetSecret(secrets)
 	}
