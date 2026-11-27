@@ -92,7 +92,7 @@ func (d Deps) cronWriteLimited(ctx context.Context, p CronWriteParams, dir, logD
 	if !safeUnitPath.MatchString(d.SelfBin) {
 		return nil, fmt.Errorf("can't run cron jobs within limits: unexpected binary path %q", d.SelfBin)
 	}
-	jobs := CronJobs{Domain: p.Domain, Username: p.Username, Slice: acctSlice(p.Username), Dir: dir, LogFile: logDir + "/cron.log"}
+	jobs := CronJobs{Domain: p.Domain, Username: p.Username, Slice: d.acctSlice(p.Username), Dir: dir, LogFile: logDir + "/cron.log"}
 	for _, j := range p.Jobs {
 		jobs.Commands = append(jobs.Commands, j.Command)
 	}

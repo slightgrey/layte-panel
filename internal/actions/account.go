@@ -37,7 +37,41 @@ const (
 	minMemoryMB   = 64
 )
 
-func acctSlice(user string) string { return "layte-acct-" + user + ".slice" }
+// AccountSlice is the login's slice, named by its Linux user's UID: a "-"
+// in a slice name means nesting to systemd (layte-acct-my-site.slice would
+// sit inside layte-acct-my.slice, under the login "my"'s limits), and a UID
+// has none.
+func AccountSlice(uid uint32) string { return fmt.Sprintf("layte-acct-u%d.slice", uid) }
+
+// acctSlice is user's slice ("" if there's no such user).
+func (d Deps) acctSlice(user string) string {
+	cred, err := d.Users.Lookup(user)
+	if err != nil {
+		return ""
+	}
+	return AccountSlice(cred.UID)
+}
+
+// acctCgroup is a slice's cgroup folder (layte.slice/layte-acct.slice/…).
+func acctCgroup(slice string) string {
+	return "/sys/fs/cgroup/layte.slice/layte-acct.slice/" + slice
+}
+
+// acctFPMUnits lists the user's own PHP-FPM units by version. The version
+// must be the whole rest of the name: "layte-fpm-my-*" also matches the
+// login "my-site"'s units, which must never be touched for "my".
+func (d Deps) acctFPMUnits(user string) map[string]string {
+	prefix := "layte-fpm-" + user + "-"
+	out := map[string]string{}
+	paths, _ := d.FS.Glob(systemdUnitDir + "/" + prefix + "*.service")
+	for _, p := range paths {
+		v := strings.TrimSuffix(strings.TrimPrefix(path.Base(p), prefix), ".service")
+		if phpVersionRe.MatchString(v) {
+			out[v] = path.Base(p)
+		}
+	}
+	return out
+}
 
 func acctFPMUnit(user, version string) string {
 	return "layte-fpm-" + user + "-" + version + ".service"
@@ -104,26 +138,25 @@ func (d Deps) accountApply(ctx context.Context, _ agent.Actor, p AccountParams) 
 	if err := d.FS.MkdirAll(systemdUnitDir, 0o755); err != nil {
 		return nil, err
 	}
-	unitPath := systemdUnitDir + "/" + acctSlice(p.Username)
+	unitPath := systemdUnitDir + "/" + d.acctSlice(p.Username)
 	if err := system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
 		Path: unitPath, Content: []byte(sliceContent(p)), Reload: daemonReload,
 	}); err != nil {
 		return nil, err
 	}
-	return map[string]string{"slice": acctSlice(p.Username)}, nil
+	return map[string]string{"slice": d.acctSlice(p.Username)}, nil
 }
 
 // accountRemove removes the login's slice once its sites are back on the
 // shared PHP-FPM services (the caller moves them first).
 func (d Deps) accountRemove(ctx context.Context, _ agent.Actor, p UserParams) (any, error) {
-	units, _ := d.FS.Glob(systemdUnitDir + "/layte-fpm-" + p.Username + "-*.service")
-	for _, u := range units {
-		if err := d.stopAccountFPM(ctx, path.Base(u)); err != nil {
+	for _, unit := range d.acctFPMUnits(p.Username) {
+		if err := d.stopAccountFPM(ctx, unit); err != nil {
 			return nil, err
 		}
 	}
 	d.FS.RemoveAll(acctFPMRoot + "/" + p.Username)
-	unitPath := systemdUnitDir + "/" + acctSlice(p.Username)
+	unitPath := systemdUnitDir + "/" + d.acctSlice(p.Username)
 	if ok, _ := d.FS.Exists(unitPath); ok {
 		if err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: unitPath, Test: daemonReload, Reload: daemonReload}); err != nil {
 			return nil, err
@@ -146,7 +179,7 @@ include = ` + acctFPMDir(user, version) + `/pool.d/*.conf
 `
 }
 
-func fpmUnitContent(user, version string) string {
+func fpmUnitContent(user, version, slice string) string {
 	return system.Marker + ` — do not edit by hand
 [Unit]
 Description=PHP ` + version + ` FPM for ` + user + ` (Layte Panel)
@@ -154,7 +187,7 @@ After=network.target
 
 [Service]
 Type=notify
-Slice=` + acctSlice(user) + `
+Slice=` + slice + `
 RuntimeDirectory=layte-fpm/` + user + `
 RuntimeDirectoryPreserve=yes
 ExecStart=` + phpFPMBin(version) + ` --nodaemonize --fpm-config ` + acctFPMConf(user, version) + `
@@ -175,7 +208,7 @@ func (d Deps) ensureAccountFPM(ctx context.Context, user, version string) error 
 	if err := d.FS.WriteFileAtomic(acctFPMConf(user, version), []byte(fpmMasterContent(user, version)), 0o644); err != nil {
 		return err
 	}
-	if ok, _ := d.FS.Exists(systemdUnitDir + "/" + acctSlice(user)); !ok {
+	if ok, _ := d.FS.Exists(systemdUnitDir + "/" + d.acctSlice(user)); !ok {
 		// No limits set yet: an empty slice, so the unit's Slice= exists.
 		if _, err := d.accountApply(ctx, agent.Actor{}, AccountParams{Username: user}); err != nil {
 			return err
@@ -183,7 +216,7 @@ func (d Deps) ensureAccountFPM(ctx context.Context, user, version string) error 
 	}
 	unit := acctFPMUnit(user, version)
 	if err := system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
-		Path: systemdUnitDir + "/" + unit, Content: []byte(fpmUnitContent(user, version)), Reload: daemonReload,
+		Path: systemdUnitDir + "/" + unit, Content: []byte(fpmUnitContent(user, version, d.acctSlice(user))), Reload: daemonReload,
 	}); err != nil {
 		return err
 	}
