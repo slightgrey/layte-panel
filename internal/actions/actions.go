@@ -71,6 +71,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("sites.discover", true, 20*time.Second, d.sitesDiscover),
 		agent.Def("nginx.server_names", true, 20*time.Second, d.nginxServerNames),
 		agent.Def("quota.status", true, 15*time.Second, d.quotaStatus),
+		agent.Def("account.usage", true, 60*time.Second, d.accountUsage),
 		agent.Def("php.versions", true, 5*time.Second, d.phpVersionsAction),
 		agent.Def("nginx.vhost_read", true, 5*time.Second, d.vhostRead),
 		agent.Def("ssl.list", true, 10*time.Second, d.sslList),

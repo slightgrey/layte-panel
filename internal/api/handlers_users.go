@@ -485,3 +485,31 @@ func (s *server) handleEnableQuotas(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, st)
 }
+
+// GET /api/v1/account/usage — a site login's own usage and limits.
+func (s *server) handleAccountUsage(w http.ResponseWriter, r *http.Request) {
+	si, _ := sessionFrom(r.Context())
+	if si.User.IsAdmin() {
+		writeError(w, http.StatusNotFound, "not_found", "admins have no limits")
+		return
+	}
+	s.writeUsage(w, r, si.User)
+}
+
+// GET /api/v1/users/{id}/usage — admins: a site login's usage and limits.
+func (s *server) handleUserUsage(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.siteAccount(w, r)
+	if !ok {
+		return
+	}
+	s.writeUsage(w, r, u)
+}
+
+func (s *server) writeUsage(w http.ResponseWriter, r *http.Request, u store.User) {
+	usage, err := s.sites.AccountUsage(r.Context(), actorOf(r), u)
+	if err != nil {
+		s.writeSiteError(w, "usage", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, usage)
+}

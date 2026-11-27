@@ -47,9 +47,40 @@ A subdomain site:
 
 Deleting a subdomain site removes only its folder (if you tick "Delete all site files"). The Linux user and the main site stay. The main site can't be deleted while it has subdomain sites.
 
+## Limits
+Each site login has limits, set when you create it and changed any time on its Panel login card or the Users page (0 = no limit):
+
+| Limit | Default | How it's enforced |
+|---|---|---|
+| Subdomains | 5 | Layte refuses new subdomain sites past it |
+| CPU | 100% (one core) | kernel cgroup (`CPUQuota`): the login's PHP and cron jobs share it |
+| RAM | 512 MB | kernel cgroup (`MemoryMax`, no swap past it): if PHP needs more, requests fail |
+| Disk | none until quotas are on | Linux disk quota: writes past it fail everywhere (PHP, SFTP, cron, uploads) |
+
+How it works:
+- Each login gets a systemd slice, `layte-acct-u<uid>.slice`, that holds its limits.
+- The login's sites' PHP runs in **its own PHP-FPM service** inside that slice: `layte-fpm-<user>-<version>.service`, with its pools in `/etc/layte/fpm/<user>/`. One login can't take PHP workers or RAM from another. Moving a site in or out of it has no downtime: the new pool starts before nginx switches over.
+- **Cron jobs** run in the slice too. Their line in `/etc/cron.d` only calls `layte cron-exec <site> <n>`; the commands themselves sit in a root-only file and run as the site's user.
+- **Disk quotas** need turning on once: Users → **Disk quotas** → Turn on disk quotas. That:
+  - installs the `quota` tools;
+  - adds `usrquota` to the `/home` filesystem's line in `/etc/fstab`. The original is kept as `/etc/fstab.layte-orig`, and the new file is checked with `findmnt --verify` and put back if the check fails;
+  - remounts the filesystem and builds the quota file.
+
+  Only ext4 is supported; xfs needs boot options that Layte doesn't change.
+
+Each login sees **Your plan** at the top of its Sites page:
+- disk used of its limit;
+- RAM and CPU in use right now;
+- subdomains used.
+
+Admins see the same on the site's Panel login card and under **Usage** on the Users page. The numbers come straight from the kernel (the slice's cgroup and the disk quota). Without quotas, disk use is measured with `du`.
+
+Adopted sites whose nginx config is still yours keep running in the shared PHP-FPM service, because their socket can't be moved without changing your config. They have no CPU or RAM limit until you let Layte manage the site's nginx config.
+
 ## Managing logins
 **Users** (admins) lists every login. For each site login you can:
-- change the **subdomain limit** (lowering it doesn't delete existing subdomains; it only stops new ones);
+- change the **limits**: subdomains, CPU, RAM and disk. Lowering the subdomain limit doesn't delete existing subdomains; it only stops new ones. New CPU and RAM limits apply at once;
+- see its **usage**;
 - issue a **password reset link** (shown once, works like the setup link). Their current password keeps working until the link is used; then every session is signed out;
 - **reset 2FA** (for a lost phone; the user sets it up again at the next sign-in);
 - **delete the login** (the sites and their files stay).

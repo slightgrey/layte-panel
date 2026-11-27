@@ -2,11 +2,26 @@ import { Link } from "react-router";
 import { useState } from "react";
 import { useUsers } from "@/api/users";
 import type { SetupLink } from "@/api/types";
-import { AccountRow, SetupLinkPanel } from "@/components/PanelLoginCard";
+import { AccountRow, SetupLinkPanel, UsageRowsLive } from "@/components/PanelLoginCard";
 import { QuotaCard } from "@/components/QuotaCard";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+
+/** A login's usage, loaded only when opened (it asks the server live). */
+function UsageToggle({ userId }: { userId: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)} className="text-sm">
+      <summary className="cursor-pointer text-muted-foreground">Usage</summary>
+      {open && (
+        <div className="mt-2">
+          <UsageRowsLive userId={userId} />
+        </div>
+      )}
+    </details>
+  );
+}
 
 /** Admins: every panel login. Site accounts are created from a site's page. */
 export function UsersPage() {
@@ -62,6 +77,7 @@ export function UsersPage() {
                       </Link>
                     )}
                     <AccountRow account={a} onLink={setShown} />
+                    <UsageToggle userId={a.id} />
                   </div>
                 ))
               )}

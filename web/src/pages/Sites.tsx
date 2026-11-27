@@ -5,6 +5,7 @@ import { useMe } from "@/api/auth";
 import { useScanSites, useSites } from "@/api/sites";
 import type { Site } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
+import { UsageCard } from "@/components/UsageCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,6 +65,8 @@ export function SitesPage() {
           </Button>
         )}
       </div>
+
+      {!isAdmin && user && <UsageCard />}
 
       {scan.data && (
         <p className="text-sm text-muted-foreground" role="status">
