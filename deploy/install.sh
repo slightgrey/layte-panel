@@ -108,7 +108,8 @@ if [ "$STACK" = yes ]; then
     default-mysql-server certbot ufw unattended-upgrades curl ca-certificates
   # cron runs the sites' cron jobs (Debian's cloud images don't ship it).
   # Without its recommends: on Debian those pull in a mail server (exim4).
-  apt-get install -y -q --no-install-recommends cron
+  # quota: disk limits for site logins (turned on later, from Users → Disk quotas).
+  apt-get install -y -q --no-install-recommends cron quota
   PHP_FPM_UNIT="$(systemctl list-unit-files 'php*-fpm.service' --no-legend 2>/dev/null | awk '{print $1}' | sort -V | tail -n1)"
   DB_UNIT=mysql
   systemctl list-unit-files mariadb.service --no-legend 2>/dev/null | grep -q mariadb && DB_UNIT=mariadb

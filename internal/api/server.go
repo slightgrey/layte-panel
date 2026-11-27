@@ -174,6 +174,8 @@ func New(d Deps) http.Handler {
 	mux.Handle("DELETE /api/v1/account/sessions", account(s.handleSignOutOthers))
 	mux.Handle("DELETE /api/v1/account/sessions/{id}", account(s.handleSignOutSession))
 
+	mux.Handle("GET /api/v1/quota", authed(s.handleQuotaStatus))
+	mux.Handle("POST /api/v1/quota/enable", authed(s.handleEnableQuotas))
 	mux.Handle("GET /api/v1/users", authed(s.handleListUsers))
 	mux.Handle("POST /api/v1/users", authed(s.handleCreateUser))
 	mux.Handle("PATCH /api/v1/users/{id}", authed(s.handleUpdateUser))

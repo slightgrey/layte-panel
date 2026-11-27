@@ -464,3 +464,24 @@ func (s *server) handleTOTPSetupConfirm(w http.ResponseWriter, r *http.Request) 
 	s.Log.Info("2fa set up", "user", u.Username)
 	s.finishLogin(w, r, si, u, req.Remember)
 }
+
+// GET /api/v1/quota — whether disk quotas are on for /home's filesystem.
+func (s *server) handleQuotaStatus(w http.ResponseWriter, r *http.Request) {
+	st, err := s.sites.QuotaStatus(r.Context(), actorOf(r))
+	if err != nil {
+		s.writeSiteError(w, "quota status", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// POST /api/v1/quota/enable — turn disk quotas on (installs the quota tools,
+// adds usrquota to /etc/fstab, remounts). Admins, once.
+func (s *server) handleEnableQuotas(w http.ResponseWriter, r *http.Request) {
+	st, err := s.sites.EnableQuotas(r.Context(), actorOf(r))
+	if err != nil {
+		s.writeSiteError(w, "enable quotas", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}

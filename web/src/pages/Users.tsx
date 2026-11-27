@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useUsers } from "@/api/users";
 import type { SetupLink } from "@/api/types";
 import { AccountRow, SetupLinkPanel } from "@/components/PanelLoginCard";
+import { QuotaCard } from "@/components/QuotaCard";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +27,8 @@ export function UsersPage() {
       </div>
 
       {shown && <SetupLinkPanel link={shown} onDismiss={() => setShown(null)} />}
+
+      <QuotaCard />
 
       {users.isPending ? (
         <Spinner />
