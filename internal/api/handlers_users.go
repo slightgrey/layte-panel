@@ -151,6 +151,11 @@ func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auditPanel(r, "user.create", map[string]any{"id": id, "username": req.Username, "site": site.Domain, "max_subdomains": limit})
+	// The login's sites share a Linux user: no PHP shell functions, which
+	// could reach past each site's own folder.
+	if err := s.sites.BlockAccountShell(r.Context(), actorOf(r), site.ID); err != nil {
+		s.Log.Warn("block php shell functions", "site", site.Domain, "err", err)
+	}
 	u, _ := s.Store.UserByID(r.Context(), id)
 	link, expires, err := s.issueSetupLink(r, u)
 	if err != nil {

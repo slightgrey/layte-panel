@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -130,5 +131,48 @@ func TestPanelHostsReserved(t *testing.T) {
 	r = httptest.NewRequest("POST", "http://127.0.0.1:8080/api/v1/sites", nil)
 	if got := panelHosts(r); len(got) != 0 {
 		t.Errorf("an IP address was reserved: %v", got)
+	}
+}
+
+// A site login's sites get PHP's shell functions blocked in their pools;
+// an admin can allow them per site.
+func TestSiteLoginBlocksPHPShell(t *testing.T) {
+	env, admin, deps := siteEnv(t)
+	mainID := int64(createSite(t, admin, "shell.test", "8.3"))
+	pool := "/etc/php/8.3/fpm/pool.d/layte-shell.test.conf"
+	hasBlock := func(p string) bool {
+		b, _ := deps.FS.ReadFile(p)
+		return strings.Contains(string(b), "disable_functions] = exec,")
+	}
+	if hasBlock(pool) {
+		t.Fatal("an admin's site got the block")
+	}
+	if code, body := admin.do("POST", "/api/v1/users", map[string]any{"username": "shellco", "site_id": mainID}); code != 201 {
+		t.Fatalf("create login: %d %v", code, body)
+	}
+	if !hasBlock(pool) {
+		t.Error("pool not blocked after the login was created")
+	}
+
+	// A subdomain site of the login inherits it.
+	c := env.signIn(t, "shellco")
+	_, body := c.do("POST", "/api/v1/sites", map[string]any{"domain": "app.shell.test", "php_version": "8.3"})
+	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
+		t.Fatalf("subdomain: %v", job)
+	}
+	if !hasBlock("/etc/php/8.3/fpm/pool.d/layte-app.shell.test.conf") {
+		t.Error("subdomain pool not blocked")
+	}
+
+	// Only an admin can allow them.
+	path := fmt.Sprintf("/api/v1/sites/%d/php-shell", mainID)
+	if code, _ := c.do("PUT", path, map[string]bool{"block": false}); code != 403 {
+		t.Errorf("site login allowed shell functions: %d", code)
+	}
+	if code, body := admin.do("PUT", path, map[string]bool{"block": false}); code != 200 || body["block_php_shell"] != false {
+		t.Fatalf("allow: %d %v", code, body)
+	}
+	if hasBlock(pool) {
+		t.Error("pool still blocked after the admin allowed shell functions")
 	}
 }

@@ -38,6 +38,13 @@ Each WordPress site with the object cache on gets **its own Redis**, run by syst
 
 WordPress uses it through Layte's own object cache, no third-party plugin: a small `wp-content/object-cache.php` drop-in that loads the cache code from `wp-content/mu-plugins/layte-object-cache/`, plus a settings page (Settings → Object Cache) to flush it or disable it for a while. `wp-config.php` gets the socket path and a key prefix (`LAYTE_REDIS_SOCKET`, `LAYTE_REDIS_PREFIX`). If Redis can't be reached, or the cache is disabled in WordPress, the site keeps working with WordPress's normal per-request cache, and transients stay in the database. Turning it on is undone if the site answers differently afterwards.
 
+## Sites that share a Linux user
+A site login's main site and its subdomain sites run as one Linux user (see [site-accounts.md](site-accounts.md)). Each site's PHP is still kept apart:
+- `open_basedir` limits PHP's file functions to the site's own folder, and each site has its own `tmp/` and session folder;
+- PHP's **shell functions** (`exec`, `passthru`, `shell_exec`, `system`, `proc_open`, `popen`) are disabled on a site login's sites, because a program started by PHP isn't bound by `open_basedir`. An admin can allow them per site (Overview → PHP shell functions), for example for an image optimiser plugin.
+
+Cron jobs and the SFTP login belong to the whole login, so they reach all of its sites by design.
+
 ## SFTP logins
 Per-site SFTP (see [sftp.md](sftp.md)) uses Layte's own sshd drop-in, `/etc/ssh/sshd_config.d/zz-layte-sftp.conf`, which applies only to members of the `layte-sftp` group (site users Layte created or adopted; never sudo users or system accounts):
 - chrooted to `/srv/layte-sftp/<user>`, which contains only the site folder (a bind mount);

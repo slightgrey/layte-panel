@@ -169,6 +169,8 @@ export interface Site {
   page_cache: PageCache;
   /** Redirects in the site's nginx config (sites whose config Layte manages). */
   redirects: Redirect[];
+  /** PHP's shell functions (exec, system, …) are disabled in the site's pool. */
+  block_php_shell: boolean;
   /** Set on a subdomain site: its main site (they share the Linux user and the site account). */
   parent_site_id?: number;
   created_at: string;

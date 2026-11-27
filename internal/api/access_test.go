@@ -37,8 +37,24 @@ func (e *testEnv) siteUser(t *testing.T, username string, siteID int64) *client 
 	t.Helper()
 	ctx := context.Background()
 	hash, _ := auth.HashPassword(testPassword)
-	id, err := e.st.CreateSiteUser(ctx, username, hash, siteID, 5)
+	if _, err := e.st.CreateSiteUser(ctx, username, hash, siteID, 5); err != nil {
+		t.Fatal(err)
+	}
+	return e.signIn(t, username)
+}
+
+// signIn gives an existing site login the test password and a 2FA secret,
+// and returns a logged-in client for it.
+func (e *testEnv) signIn(t *testing.T, username string) *client {
+	t.Helper()
+	ctx := context.Background()
+	u, err := e.st.UserByUsername(ctx, username)
 	if err != nil {
+		t.Fatal(err)
+	}
+	id := u.ID
+	hash, _ := auth.HashPassword(testPassword)
+	if err := e.st.SetPassword(ctx, id, hash); err != nil {
 		t.Fatal(err)
 	}
 	enr, _ := auth.NewTOTP(username)

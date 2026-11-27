@@ -19,7 +19,7 @@ import (
 // pool. Every rewrite goes through here, so none of them drops a setting.
 func (s *Service) siteConfig(site store.Site, ssl bool) actions.SiteConfigParams {
 	c := actions.SiteConfigParams{Domain: site.Domain, Aliases: site.Aliases, Username: site.SystemUser, PHPVersion: site.PHPVersion,
-		SSL: ssl, PHP: site.PHPSettings, Cache: site.PageCache}
+		SSL: ssl, PHP: site.PHPSettings, Cache: site.PageCache, BlockShell: site.BlockPHPShell}
 	if len(site.Redirects) > 0 {
 		c.Redirects = site.Redirects // kept on every vhost write
 	}
