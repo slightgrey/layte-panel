@@ -245,3 +245,36 @@ func TestPHPVersionsIgnoresLeftoverConfig(t *testing.T) {
 		t.Errorf("phpVersions = %v, want [8.2 8.3]", got)
 	}
 }
+
+func TestSiteDirsRemove(t *testing.T) {
+	d := devDeps(t)
+	d.FS.MkdirAll("/home/bob/bob.test", 0o750) // not a Layte user
+	if _, err := d.siteDirsRemove(ctx, agent.Actor{}, DirsParams{Username: "bob", Domain: "bob.test"}); err == nil {
+		t.Error("removed a folder of a non-Layte user")
+	}
+
+	if _, err := d.siteUserCreate(ctx, agent.Actor{}, UserParams{Username: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, dom := range []string{"acme.test", "blog.acme.test"} {
+		if _, err := d.siteDirsCreate(ctx, agent.Actor{}, DirsParams{Username: "acme", Domain: dom}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.siteDirsRemove(ctx, agent.Actor{}, DirsParams{Username: "acme", Domain: "blog.acme.test"}); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]bool{
+		"/home/acme/blog.acme.test":    false,
+		"/home/acme/acme.test/public":  true,
+		"/home/acme/" + siteUserMarker: true,
+	} {
+		if ok, _ := d.FS.Exists(p); ok != want {
+			t.Errorf("%s exists = %v, want %v", p, ok, want)
+		}
+	}
+	// Already gone: fine.
+	if _, err := d.siteDirsRemove(ctx, agent.Actor{}, DirsParams{Username: "acme", Domain: "blog.acme.test"}); err != nil {
+		t.Errorf("second remove: %v", err)
+	}
+}

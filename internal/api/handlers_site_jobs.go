@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"github.com/slightgrey/layte-panel/internal/pagecache"
 	"github.com/slightgrey/layte-panel/internal/phpini"
 	"github.com/slightgrey/layte-panel/internal/redirects"
@@ -40,9 +41,18 @@ func (s *server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if isSiteUser(r) { // TODO(site accounts): subdomains
-		writeError(w, http.StatusForbidden, "forbidden", "only admins can add sites")
-		return
+	if si, _ := sessionFrom(r.Context()); isSiteUser(r) {
+		// Site accounts add subdomain sites of their main site, up to their limit.
+		req.ParentSiteID, req.Aliases, req.Username = si.User.SiteID, nil, ""
+		n, err := s.Store.CountSubdomains(r.Context(), si.User.SiteID)
+		if err != nil {
+			s.internalError(w, "count subdomains", err)
+			return
+		}
+		if n >= si.User.MaxSubdomains {
+			writeError(w, http.StatusConflict, "limit_reached", fmt.Sprintf("this account may have %d subdomain site(s); ask your admin for more", si.User.MaxSubdomains))
+			return
+		}
 	}
 	jobID, siteID, err := s.sites.Create(r.Context(), actorOf(r), req)
 	if err != nil {

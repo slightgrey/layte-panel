@@ -17,6 +17,9 @@ Turn it on under **site → Files & SFTP → SFTP access**.
 - **rsync:** `rsync -av ./theme/ examplecom@your-server:/example.com/public/wp-content/themes/theme/` (sites Layte created have `public/`, `logs/` and `tmp/` in the folder; adopted sites show their web root).
 - **VS Code / FileZilla:** add an SFTP connection with the values above and your private key.
 
+## Subdomain sites
+A subdomain site (for example `blog.example.com`, added under `example.com`) shares its main site's Linux user, so it has **no SFTP login of its own**: the main site's login sees both folders, `/example.com` and `/blog.example.com`. Its Files & SFTP tab shows and changes the main site's login. Adding or deleting a subdomain site updates the login's folders. See [site-accounts.md](site-accounts.md).
+
 ## Keys and passwords
 - **SSH keys (recommended):** paste the line from your `.pub` file (`ssh-ed25519 AAAA… you@pc`). ed25519 and ecdsa keys, and RSA keys of 2048 bits or more, are accepted. Key options such as `command=` are refused.
 - **Password (optional):** tick **Allow password login**, then **Generate password**. It's shown **once** and never stored; generate a new one if you lose it. Unticking it locks the password again.
@@ -26,7 +29,7 @@ SFTP only: no shell, no tunnels or port forwarding, and nothing outside the site
 
 ## How it works
 - `/etc/ssh/sshd_config.d/zz-layte-sftp.conf` applies to members of the groups `layte-sftp` and `layte-sftp-password` only (chroot, `internal-sftp`, no forwarding).
-- `/srv/layte-sftp/<user>/<domain>` is a bind mount of the site folder, made by `layte-sftp-<user>.service` (comes back after a reboot).
+- `/srv/layte-sftp/<user>/<domain>` is a bind mount of the site folder, made by `layte-sftp-<user>.service` (comes back after a reboot). Each subdomain site's folder has its own mount, made by `layte-sftp-<user>.<domain>.service`.
 - Keys are in `/etc/ssh/layte-sftp/<user>` (root-owned).
 
 Turning SFTP off (or deleting the site) removes the user from those groups, locks the password, and removes the keys file, the mount and the service.

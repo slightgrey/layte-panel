@@ -7,6 +7,7 @@ import (
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/agent"
+	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/store"
 )
 
@@ -18,12 +19,67 @@ type SFTPRequest struct {
 	Keys     []string `json:"keys"`
 }
 
-// SFTPState is what the Files tab shows.
+// SFTPState is what the Files tab shows. A subdomain site shows its main
+// site's login (they share the Linux user): SiteID is the site whose
+// settings these are.
 type SFTPState struct {
 	store.SFTP
+	SiteID   int64    `json:"site_id"`
+	Domain   string   `json:"domain"`
 	Username string   `json:"username"`
 	Folder   string   `json:"folder"`
+	Folders  []string `json:"folders"`
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+// SFTPSite is the site that holds the SFTP login for site: itself, or the
+// main site of a subdomain site.
+func (s *Service) SFTPSite(ctx context.Context, site store.Site) (store.Site, error) {
+	if site.ParentSiteID == 0 {
+		return site, nil
+	}
+	return s.Store.SiteByID(ctx, site.ParentSiteID)
+}
+
+// accountSFTPParams are a main site's SFTP params with its subdomain sites'
+// folders, leaving out the site exclude (one being deleted).
+func (s *Service) accountSFTPParams(ctx context.Context, main store.Site, exclude int64) (actions.SFTPParams, error) {
+	p := sftpParams(main)
+	if main.Adopted {
+		return p, nil
+	}
+	sites, err := s.Store.SitesForAccount(ctx, main.ID)
+	if err != nil {
+		return p, err
+	}
+	for _, x := range sites {
+		if x.ParentSiteID == main.ID && x.ID != exclude && x.Managed && x.SystemUser == main.SystemUser && x.Status != "creating" {
+			p.Extra = append(p.Extra, x.Domain)
+		}
+	}
+	return p, nil
+}
+
+// syncAccountSFTP updates a main site's SFTP login after a subdomain site
+// was added or (exclude) is being deleted. A failure is only logged: the
+// site itself is fine, and saving the SFTP settings again retries it.
+func (s *Service) syncAccountSFTP(ctx context.Context, j *jobs.Job, actor agent.Actor, mainID, exclude int64) {
+	main, err := s.Store.SiteByID(ctx, mainID)
+	if err != nil || !main.SFTP.Enabled {
+		return
+	}
+	p, err := s.accountSFTPParams(ctx, main, exclude)
+	if err == nil {
+		j.Step("Update the SFTP login")
+		for _, k := range main.SFTP.Keys {
+			p.Keys = append(p.Keys, k.Key)
+		}
+		p.Password = main.SFTP.Password
+		err = s.longCall(ctx, time.Minute, "sftp.set", actor, p, nil)
+	}
+	if err != nil {
+		j.Log("Warning: couldn't update the SFTP login of %s (%v); save its SFTP settings again to retry.", main.Domain, err)
+	}
 }
 
 func sftpParams(site store.Site) actions.SFTPParams {
@@ -46,9 +102,16 @@ func requireSFTP(site store.Site) error {
 	return nil
 }
 
-// SFTP returns the site's SFTP state.
-func (s *Service) SFTP(site store.Site) SFTPState {
-	return SFTPState{SFTP: site.SFTP, Username: site.SystemUser, Folder: "/" + site.Domain}
+// SFTP returns the SFTP state of a main site (see SFTPSite).
+func (s *Service) SFTP(ctx context.Context, site store.Site) SFTPState {
+	st := SFTPState{SFTP: site.SFTP, SiteID: site.ID, Domain: site.Domain, Username: site.SystemUser, Folder: "/" + site.Domain}
+	st.Folders = []string{st.Folder}
+	if p, err := s.accountSFTPParams(ctx, site, 0); err == nil {
+		for _, d := range p.Extra {
+			st.Folders = append(st.Folders, "/"+d)
+		}
+	}
+	return st
 }
 
 // SetSFTP turns the site's SFTP login on or off, or changes its keys and
@@ -74,7 +137,10 @@ func (s *Service) SetSFTP(ctx context.Context, actor agent.Actor, site store.Sit
 		return SFTPState{}, badRequest("add an SSH key or allow password logins")
 	}
 
-	p := sftpParams(site)
+	p, err := s.accountSFTPParams(ctx, site, 0)
+	if err != nil {
+		return SFTPState{}, err
+	}
 	var res actions.SFTPResult
 	if next.Enabled {
 		for _, k := range next.Keys {
@@ -93,7 +159,7 @@ func (s *Service) SetSFTP(ctx context.Context, actor agent.Actor, site store.Sit
 	if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
 		return SFTPState{}, err
 	}
-	st := s.SFTP(site)
+	st := s.SFTP(ctx, site)
 	st.Warnings = res.Warnings
 	return st, nil
 }

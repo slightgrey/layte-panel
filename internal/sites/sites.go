@@ -58,6 +58,10 @@ type CreateRequest struct {
 	PHPVersion string           `json:"php_version"`
 	CreateDB   bool             `json:"create_db"`
 	WordPress  *WordPressFields `json:"wordpress"`
+	// ParentSiteID makes a subdomain site of that main site: the domain must
+	// be <label>.<main domain>, and it shares the main site's Linux user (no
+	// aliases, no username of its own).
+	ParentSiteID int64 `json:"parent_site_id"`
 }
 
 type WordPressFields struct {
@@ -117,14 +121,23 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 	}
 
 	username := req.Username
-	if username == "" {
+	var parent store.Site
+	switch {
+	case req.ParentSiteID != 0:
+		if parent, err = s.subdomainParent(ctx, req.ParentSiteID, domain, aliases); err != nil {
+			return "", 0, err
+		}
+		username = parent.SystemUser
+	case username == "":
 		if username, err = s.freeUsername(ctx, validate.DefaultUsername(domain)); err != nil {
 			return "", 0, err
 		}
-	} else if inUse, err := s.Store.SystemUserInUse(ctx, username); err != nil {
-		return "", 0, err
-	} else if inUse {
-		return "", 0, conflict("username_taken", "username %s is already used by another site", username)
+	default:
+		if inUse, err := s.Store.SystemUserInUse(ctx, username); err != nil {
+			return "", 0, err
+		} else if inUse {
+			return "", 0, conflict("username_taken", "username %s is already used by another site", username)
+		}
 	}
 	if err := validate.SiteUsername(username); err != nil {
 		return "", 0, badRequest("%v", err)
@@ -135,9 +148,16 @@ func (s *Service) Create(ctx context.Context, actor agent.Actor, req CreateReque
 		Domain: domain, Aliases: aliases, SystemUser: username, RootPath: tsite.Dir() + "/public",
 		PHPVersion: req.PHPVersion, Managed: true, Source: "created", WordPress: req.WordPress != nil,
 		Status: "creating", NginxConf: templates.VhostPath(domain), FPMPool: templates.PoolPath(req.PHPVersion, domain),
+		ParentSiteID: parent.ID,
 	}
 	if req.CreateDB {
-		site.DBName = dbIdent(username)
+		base := username
+		if parent.ID != 0 { // the main site's database is already named after the user
+			base = username + "_" + strings.TrimSuffix(domain, "."+parent.Domain)
+		}
+		if site.DBName, err = s.freeDBName(ctx, dbIdent(base)); err != nil {
+			return "", 0, err
+		}
 		site.DBUser = site.DBName
 	}
 	siteID, err = s.Store.CreateSite(ctx, site)
@@ -228,6 +248,11 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 	if err := call("site.dirs_create", actions.DirsParams{Username: site.SystemUser, Domain: site.Domain}); err != nil {
 		return err
 	}
+	if !created.Created { // a subdomain site: the user (and its other sites) stay on rollback
+		undo.push("remove site directories", func(ctx context.Context) error {
+			return s.Agent.Call(ctx, "site.dirs_remove", actor, actions.DirsParams{Username: site.SystemUser, Domain: site.Domain}, nil)
+		})
+	}
 
 	j.Step("Configure PHP " + site.PHPVersion + " (FPM pool)")
 	if err := call("php.pool_write", cfg); err != nil {
@@ -288,6 +313,9 @@ func (s *Service) runCreate(ctx context.Context, j *jobs.Job, actor agent.Actor,
 	if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
 		return err
 	}
+	if site.ParentSiteID != 0 {
+		s.syncAccountSFTP(ctx, j, actor, site.ParentSiteID, 0)
+	}
 	j.Log("Site is live at http://%s (point its DNS to this server; HTTPS comes with the SSL feature)", site.Domain)
 	j.SetResult(map[string]any{"site_id": site.ID, "domain": site.Domain, "url": "http://" + site.Domain})
 	if len(secrets) > 0 {
@@ -314,6 +342,19 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 	if site.Status == "creating" || site.Status == "deleting" {
 		return "", conflict("site_busy", "%s is busy (%s)", site.Domain, site.Status)
 	}
+	if site.ParentSiteID == 0 {
+		if n, err := s.Store.CountSubdomains(ctx, site.ID); err != nil {
+			return "", err
+		} else if n > 0 {
+			return "", conflict("has_subdomains", "%s has %d subdomain site(s); delete them first", site.Domain, n)
+		}
+	}
+	// Other sites on the same Linux user (subdomain sites): only this site's
+	// folder goes, never the user and its home.
+	sharedUser, err := s.Store.SitesUsingUser(ctx, site.SystemUser)
+	if err != nil {
+		return "", err
+	}
 	jobID, err := s.Jobs.Start("site.delete", site.ID, actor.UserID, func(ctx context.Context, j *jobs.Job) error {
 		s.Store.SetSiteStatus(ctx, site.ID, "deleting")
 		call := func(action string, params any) error { return s.Agent.Call(ctx, action, actor, params, nil) }
@@ -328,6 +369,9 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 					j.Log("Warning: couldn't stop the object cache (%v).", err)
 				}
 			}
+		}
+		if site.ParentSiteID != 0 { // take the folder out of the account's SFTP login
+			s.syncAccountSFTP(ctx, j, actor, site.ParentSiteID, site.ID)
 		}
 		if site.SFTP.Enabled {
 			j.Step("Turn off SFTP")
@@ -376,12 +420,19 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 		}
 		// Without DropDB, linked databases are kept: deleting the site row unlinks
 		// them (ON DELETE SET NULL) and they stay manageable on the Databases page.
-		if req.RemoveFiles {
+		switch {
+		case req.RemoveFiles && sharedUser > 1:
+			dir := templates.Site{Domain: site.Domain, User: site.SystemUser}.Dir()
+			j.Step("Remove " + dir)
+			if err := s.longCall(ctx, time.Minute, "site.dirs_remove", actor, actions.DirsParams{Username: site.SystemUser, Domain: site.Domain}, nil); err != nil {
+				return fail(err)
+			}
+		case req.RemoveFiles:
 			j.Step("Remove Linux user " + site.SystemUser + " and all site files")
 			if err := s.longCall(ctx, time.Minute, "site.user_remove", actor, actions.UserParams{Username: site.SystemUser}, nil); err != nil {
 				return fail(err)
 			}
-		} else {
+		default:
 			j.Log("Kept %s and its files (user %s).", templates.Site{Domain: site.Domain, User: site.SystemUser}.Dir(), site.SystemUser)
 		}
 		if err := s.Store.DeleteSite(context.WithoutCancel(ctx), site.ID); err != nil {
@@ -418,6 +469,65 @@ func (s *Service) longCall(ctx context.Context, timeout time.Duration, action st
 	ctx, cancel := context.WithTimeout(ctx, timeout+30*time.Second)
 	defer cancel()
 	return s.Agent.Call(ctx, action, actor, params, out)
+}
+
+// subdomainParent checks a new subdomain site against its main site and
+// returns the main site.
+func (s *Service) subdomainParent(ctx context.Context, parentID int64, domain string, aliases []string) (store.Site, error) {
+	parent, err := s.Store.SiteByID(ctx, parentID)
+	if errors.Is(err, store.ErrNotFound) {
+		return parent, badRequest("no such main site")
+	}
+	if err != nil {
+		return parent, err
+	}
+	switch {
+	case parent.ParentSiteID != 0:
+		return parent, badRequest("%s is itself a subdomain site", parent.Domain)
+	case !parent.Managed || parent.SystemUser == "":
+		return parent, conflict("site_unmanaged", "subdomains can only be added to sites Layte Panel created")
+	case parent.Status != "active":
+		return parent, conflict("site_busy", "%s is %s", parent.Domain, parent.Status)
+	}
+	label, ok := strings.CutSuffix(domain, "."+parent.Domain)
+	if !ok || label == "" || strings.Contains(label, ".") {
+		return parent, badRequest("the domain must be a subdomain of %s, like blog.%s", parent.Domain, parent.Domain)
+	}
+	if len(aliases) > 0 {
+		return parent, badRequest("subdomain sites can't have aliases")
+	}
+	return parent, nil
+}
+
+// freeDBName returns base, or base2, base3, … if a database or site already uses it.
+func (s *Service) freeDBName(ctx context.Context, base string) (string, error) {
+	sites, err := s.Store.ListSites(ctx)
+	if err != nil {
+		return "", err
+	}
+	taken := map[string]bool{}
+	for _, x := range sites {
+		taken[x.DBName] = true
+	}
+	for i := 1; i < 100; i++ {
+		n := base
+		if i > 1 {
+			suffix := fmt.Sprint(i)
+			if len(n)+len(suffix) > 32 {
+				n = n[:32-len(suffix)]
+			}
+			n += suffix
+		}
+		if taken[n] {
+			continue
+		}
+		if _, err := s.Store.DatabaseByName(ctx, n); errors.Is(err, store.ErrNotFound) {
+			return n, nil
+		} else if err != nil {
+			return "", err
+		}
+	}
+	return "", conflict("db_taken", "no free database name for %s", base)
 }
 
 // freeUsername returns base, or base2, base3, … if taken by another site.

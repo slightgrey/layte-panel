@@ -144,6 +144,33 @@ func (d Deps) siteDirsCreate(ctx context.Context, _ agent.Actor, p DirsParams) (
 	return map[string]string{"dir": site.Dir()}, nil
 }
 
+// siteDirsRemove deletes /home/<user>/<domain> of a site that shares its
+// Linux user with other sites (a subdomain site). The user, its home and
+// its other sites stay. Users without the Layte marker are refused.
+func (d Deps) siteDirsRemove(ctx context.Context, _ agent.Actor, p DirsParams) (any, error) {
+	if _, err := d.Users.Lookup(p.Username); err != nil {
+		return nil, err
+	}
+	if ok, _ := d.FS.Exists("/home/" + p.Username + "/" + siteUserMarker); !ok {
+		return nil, agent.Errorf(agent.CodeInvalidParams, "user %q wasn't created by Layte Panel; refusing to delete its files", p.Username)
+	}
+	dir := templates.Site{Domain: p.Domain, User: p.Username}.Dir()
+	fi, err := d.FS.Lstat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]bool{"removed": false}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if fi.Mode()&fs.ModeSymlink != 0 || !fi.IsDir() {
+		return nil, agent.Errorf(agent.CodeInvalidParams, "%s is not a plain directory", dir)
+	}
+	if err := d.FS.RemoveAll(dir); err != nil {
+		return nil, fmt.Errorf("remove %s: %w", dir, err)
+	}
+	return map[string]bool{"removed": true}, nil
+}
+
 // validDomain requires an already-normalised domain (the API normalises; the
 // agent only accepts the canonical form).
 func validDomain(domain string) error {

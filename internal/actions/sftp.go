@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -29,6 +30,9 @@ import (
 //     holds only the site folder, bind-mounted by a Layte systemd .mount unit
 //     so it survives reboots: /home/<user>/<domain> for sites Layte created,
 //     the web root for adopted ones.
+//   - Subdomain sites share their main site's Linux user, so one login sees
+//     them all: each extra site folder gets its own mount in the same jail
+//     (unit layte-sftp-<user>.<domain>.service; a username has no dots).
 //   - sshd is reloaded, never restarted (open sessions stay), and every
 //     change is tested with sshd -t first.
 
@@ -88,7 +92,13 @@ type SFTPParams struct {
 	WebRoot  string   `json:"web_root,omitempty"`
 	Keys     []string `json:"keys,omitempty"`     // authorized_keys lines (normalised)
 	Password bool     `json:"password,omitempty"` // allow password logins
+	// Extra are the user's other sites (subdomain sites Layte created), whose
+	// folders the same login reaches. sftp.set removes mounts not listed.
+	Extra []string `json:"extra,omitempty"`
 }
+
+// MaxSFTPSites is how many folders one SFTP login may hold.
+const MaxSFTPSites = 101
 
 func (p SFTPParams) Validate() error {
 	if p.Username == "" {
@@ -99,6 +109,20 @@ func (p SFTPParams) Validate() error {
 	}
 	if len(p.Keys) > MaxSFTPKeys {
 		return fmt.Errorf("at most %d keys per site", MaxSFTPKeys)
+	}
+	if len(p.Extra) >= MaxSFTPSites {
+		return fmt.Errorf("at most %d sites per SFTP login", MaxSFTPSites)
+	}
+	for _, dom := range p.Extra {
+		if p.WebRoot != "" {
+			return errors.New("adopted sites have no extra sites")
+		}
+		if err := validDomain(dom); err != nil {
+			return err
+		}
+		if dom == p.Domain {
+			return errors.New("an extra site repeats the main one")
+		}
 	}
 	for _, k := range p.Keys {
 		n, _, err := NormalizeSSHKey(k)
@@ -180,6 +204,73 @@ func sftpMountPoint(user, domain string) string { return sftpJail(user) + "/" + 
 // the jail (a .mount unit's name would have to encode the path).
 func sftpUnit(user string) string { return "layte-sftp-" + user + ".service" }
 
+// sftpExtraUnit mounts one of the user's other sites. Usernames have no
+// dots, so the "<user>." prefix only matches that user's units.
+func sftpExtraUnit(user, domain string) string {
+	return "layte-sftp-" + user + "." + domain + ".service"
+}
+
+// sftpExtraUnits lists the extra-site units installed for user, by domain.
+func (d Deps) sftpExtraUnits(user string) (map[string]string, error) {
+	prefix := "layte-sftp-" + user + "."
+	paths, err := d.FS.Glob(systemdUnitDir + "/" + prefix + "*.service")
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, p := range paths {
+		name := path.Base(p)
+		domain := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".service")
+		if validDomain(domain) == nil {
+			out[domain] = name
+		}
+	}
+	return out, nil
+}
+
+// mountSFTP installs and starts the unit that bind-mounts root at where.
+func (d Deps) mountSFTP(ctx context.Context, unit, domain, root, where string) error {
+	if err := d.FS.MkdirAll(where, 0o755); err != nil {
+		return err
+	}
+	if !safeUnitPath.MatchString(root) || !safeUnitPath.MatchString(where) {
+		return agent.Errorf(agent.CodeInvalidParams, "SFTP needs a folder path without spaces or special characters (%s)", root)
+	}
+	if err := d.FS.MkdirAll(systemdUnitDir, 0o755); err != nil {
+		return err
+	}
+	err := system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
+		Path: systemdUnitDir + "/" + unit, Content: []byte(sftpUnitContent(domain, root, where)),
+		Reload: system.Cmd{Bin: systemctl, Args: []string{"daemon-reload"}},
+	})
+	if err != nil {
+		return err
+	}
+	if res, err := d.Runner.Run(ctx, systemctl, "enable", "--now", unit); err != nil {
+		return fmt.Errorf("start %s: %s", unit, failure(res, err, 3))
+	}
+	return nil
+}
+
+// unmountSFTP stops and removes a mount unit, then the empty mount point.
+func (d Deps) unmountSFTP(ctx context.Context, unit, where string) error {
+	unitPath := systemdUnitDir + "/" + unit
+	if ok, _ := d.FS.Exists(unitPath); ok {
+		if res, err := d.Runner.Run(ctx, systemctl, "disable", "--now", unit); err != nil {
+			return fmt.Errorf("stop %s: %s", unit, failure(res, err, 3))
+		}
+		daemonReload := system.Cmd{Bin: systemctl, Args: []string{"daemon-reload"}}
+		if err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: unitPath, Test: daemonReload, Reload: daemonReload}); err != nil {
+			return err
+		}
+	}
+	// Only remove the mount point once nothing is mounted there.
+	if _, err := d.Runner.Run(ctx, mountpointBin, "-q", where); err != nil {
+		d.FS.Remove(where) // empty directory
+	}
+	return nil
+}
+
 // safeUnitPath: systemd splits ExecStart on spaces and expands % and \, so
 // the paths in the unit may only use plain characters.
 var safeUnitPath = regexp.MustCompile(`^/[A-Za-z0-9._@+/-]+$`)
@@ -206,7 +297,8 @@ WantedBy=multi-user.target
 // SFTPResult describes a site's SFTP login after sftp.set.
 type SFTPResult struct {
 	Username string   `json:"username"`
-	Folder   string   `json:"folder"` // what the login sees, e.g. /example.com
+	Folder   string   `json:"folder"`            // what the login sees, e.g. /example.com
+	Folders  []string `json:"folders,omitempty"` // with the extra sites: /example.com, /blog.example.com
 	Warnings []string `json:"warnings,omitempty"`
 }
 
@@ -246,14 +338,12 @@ func (d Deps) sftpSet(ctx context.Context, _ agent.Actor, p SFTPParams) (any, er
 		return nil, fmt.Errorf("write keys: %w", err)
 	}
 
-	// 3. The jail and the bind mount of the site folder.
-	jail, where := sftpJail(p.Username), sftpMountPoint(p.Username, p.Domain)
-	for _, dir := range []string{sftpJailRoot, jail, where} {
+	// 3. The jail and the bind mount of each site folder.
+	jail := sftpJail(p.Username)
+	for _, dir := range []string{sftpJailRoot, jail} {
 		if err := d.FS.MkdirAll(dir, 0o755); err != nil {
 			return nil, err
 		}
-	}
-	for _, dir := range []string{sftpJailRoot, jail} {
 		if err := d.FS.Chown(dir, 0, 0); err != nil {
 			return nil, err
 		}
@@ -261,22 +351,29 @@ func (d Deps) sftpSet(ctx context.Context, _ agent.Actor, p SFTPParams) (any, er
 			return nil, err
 		}
 	}
-	if !safeUnitPath.MatchString(root) || !safeUnitPath.MatchString(where) {
-		return nil, agent.Errorf(agent.CodeInvalidParams, "SFTP needs a folder path without spaces or special characters (%s)", root)
-	}
-	if err := d.FS.MkdirAll(systemdUnitDir, 0o755); err != nil {
+	if err := d.mountSFTP(ctx, sftpUnit(p.Username), p.Domain, root, sftpMountPoint(p.Username, p.Domain)); err != nil {
 		return nil, err
 	}
-	unit := sftpUnit(p.Username)
-	err = system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
-		Path: systemdUnitDir + "/" + unit, Content: []byte(sftpUnitContent(p.Domain, root, where)),
-		Reload: system.Cmd{Bin: systemctl, Args: []string{"daemon-reload"}},
-	})
+	folders := []string{"/" + p.Domain}
+	installed, err := d.sftpExtraUnits(p.Username)
 	if err != nil {
 		return nil, err
 	}
-	if err := run(systemctl, "enable", "--now", unit); err != nil {
-		return nil, err
+	for _, dom := range p.Extra {
+		extraRoot, err := d.sftpTarget(ctx, SFTPParams{Domain: dom, Username: p.Username})
+		if err != nil {
+			return nil, err
+		}
+		if err := d.mountSFTP(ctx, sftpExtraUnit(p.Username, dom), dom, extraRoot, sftpMountPoint(p.Username, dom)); err != nil {
+			return nil, err
+		}
+		folders = append(folders, "/"+dom)
+		delete(installed, dom)
+	}
+	for dom, unit := range installed { // sites no longer on the login
+		if err := d.unmountSFTP(ctx, unit, sftpMountPoint(p.Username, dom)); err != nil {
+			return nil, err
+		}
 	}
 
 	// 4. Password logins only when asked; otherwise the password is locked.
@@ -297,7 +394,7 @@ func (d Deps) sftpSet(ctx context.Context, _ agent.Actor, p SFTPParams) (any, er
 	}); err != nil {
 		return nil, configError(err)
 	}
-	return SFTPResult{Username: p.Username, Folder: "/" + p.Domain, Warnings: d.sftpWarnings(ctx, p.Username)}, nil
+	return SFTPResult{Username: p.Username, Folder: "/" + p.Domain, Folders: folders, Warnings: d.sftpWarnings(ctx, p.Username)}, nil
 }
 
 // sftpWarnings: sshd settings of the admin's that would block the login.
@@ -331,24 +428,19 @@ func (d Deps) sftpDisable(ctx context.Context, _ agent.Actor, p SFTPParams) (any
 	}
 	d.FS.Remove(sftpKeysDir + "/" + p.Username)
 
-	unit := sftpUnit(p.Username)
-	unitPath := systemdUnitDir + "/" + unit
-	if ok, _ := d.FS.Exists(unitPath); ok {
-		if res, err := d.Runner.Run(ctx, systemctl, "disable", "--now", unit); err != nil {
-			return nil, fmt.Errorf("stop %s: %s", unit, failure(res, err, 3))
-		}
-		daemonReload := system.Cmd{Bin: systemctl, Args: []string{"daemon-reload"}}
-		err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: unitPath, Test: daemonReload, Reload: daemonReload})
-		if err != nil {
+	extra, err := d.sftpExtraUnits(p.Username)
+	if err != nil {
+		return nil, err
+	}
+	for dom, unit := range extra {
+		if err := d.unmountSFTP(ctx, unit, sftpMountPoint(p.Username, dom)); err != nil {
 			return nil, err
 		}
 	}
-	// Only remove the mount point once nothing is mounted there.
-	where := sftpMountPoint(p.Username, p.Domain)
-	if _, err := d.Runner.Run(ctx, mountpointBin, "-q", where); err != nil {
-		d.FS.Remove(where) // empty directory
-		d.FS.Remove(sftpJail(p.Username))
+	if err := d.unmountSFTP(ctx, sftpUnit(p.Username), sftpMountPoint(p.Username, p.Domain)); err != nil {
+		return nil, err
 	}
+	d.FS.Remove(sftpJail(p.Username)) // only once empty
 	return map[string]bool{"disabled": true}, nil
 }
 

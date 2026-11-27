@@ -86,6 +86,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("site.user_create", false, 30*time.Second, d.siteUserCreate),
 		agent.Def("site.user_remove", false, 60*time.Second, d.siteUserRemove),
 		agent.Def("site.dirs_create", false, 15*time.Second, d.siteDirsCreate),
+		agent.Def("site.dirs_remove", false, 60*time.Second, d.siteDirsRemove),
 		agent.Def("php.pool_write", false, time.Minute, d.phpPoolWrite),
 		agent.Def("php.pool_remove", false, 30*time.Second, d.phpPoolRemove),
 		agent.Def("nginx.vhost_write", false, 30*time.Second, d.nginxVhostWrite),
