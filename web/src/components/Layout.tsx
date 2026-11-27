@@ -11,6 +11,7 @@ import {
   ScrollText,
   Shield,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useLogout, useMe } from "@/api/auth";
@@ -36,6 +37,7 @@ const nav: NavItem[] = [
   { label: "Files", to: "/files", icon: FolderOpen },
   { label: "Security", to: "/security", icon: Shield },
   { label: "Updates", to: "/updates", icon: PackageCheck },
+  { label: "Users", to: "/users", icon: Users },
   { label: "API keys", to: "/keys", icon: KeyRound },
 ];
 

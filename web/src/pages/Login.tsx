@@ -13,11 +13,11 @@ export function LoginPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    login.mutate({ username, password }, { onSuccess: () => navigate("/login/2fa") });
+    login.mutate({ username, password }, { onSuccess: (r) => navigate(r.totp_setup ? "/login/2fa/setup" : "/login/2fa") });
   };
 
   return (
-    <AuthShell title="Sign in" description="Use your Layte Panel admin account.">
+    <AuthShell title="Sign in" description="Use your Layte Panel account.">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="username">Username</Label>

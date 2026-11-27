@@ -23,6 +23,7 @@ export function TwoFactorPage() {
         if (err instanceof ApiError && (err.code === "unauthenticated" || err.code === "invalid_credentials")) {
           navigate("/login", { replace: true });
         }
+        if (err instanceof ApiError && err.code === "totp_setup_required") navigate("/login/2fa/setup", { replace: true });
       },
     });
   };

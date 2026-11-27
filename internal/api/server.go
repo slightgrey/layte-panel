@@ -61,6 +61,8 @@ func New(d Deps) http.Handler {
 
 	mux.Handle("POST /api/v1/auth/login", s.rateLimited(http.HandlerFunc(s.handleLogin)))
 	mux.Handle("POST /api/v1/auth/totp", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTP))))
+	mux.Handle("POST /api/v1/auth/totp/setup", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTPSetup))))
+	mux.Handle("POST /api/v1/auth/totp/setup/confirm", s.rateLimited(s.requirePending(http.HandlerFunc(s.handleTOTPSetupConfirm))))
 	mux.Handle("POST /api/v1/auth/logout", s.requireAnySession(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", s.requireAuth(http.HandlerFunc(s.handleMe)))
 
@@ -159,6 +161,12 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/jobs/{id}", account(s.handleGetJob))
 	mux.Handle("GET /api/v1/jobs/{id}/events", account(s.handleJobEvents))
 	mux.Handle("GET /api/v1/jobs/{id}/secret", account(s.handleJobSecret))
+	mux.Handle("GET /api/v1/users", authed(s.handleListUsers))
+	mux.Handle("POST /api/v1/users", authed(s.handleCreateUser))
+	mux.Handle("PATCH /api/v1/users/{id}", authed(s.handleUpdateUser))
+	mux.Handle("POST /api/v1/users/{id}/password", authed(s.handleResetUserPassword))
+	mux.Handle("POST /api/v1/users/{id}/reset-2fa", authed(s.handleResetUser2FA))
+	mux.Handle("DELETE /api/v1/users/{id}", authed(s.handleDeleteUser))
 	mux.Handle("GET /api/v1/keys", authed(s.handleListKeys))
 	mux.Handle("POST /api/v1/keys", authed(s.handleCreateKey))
 	mux.Handle("DELETE /api/v1/keys/{id}", authed(s.handleRevokeKey))

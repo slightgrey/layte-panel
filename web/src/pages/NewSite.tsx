@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useCreateSite, usePHPVersions } from "@/api/sites";
+import { useCreateUser } from "@/api/users";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox, Field, Select } from "@/components/ui/field";
@@ -31,6 +32,10 @@ export function NewSitePage() {
   const [title, setTitle] = useState("");
   const [adminUser, setAdminUser] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [withLogin, setWithLogin] = useState(false);
+  const [loginUser, setLoginUser] = useState("");
+  const [loginLimit, setLoginLimit] = useState("5");
+  const createUser = useCreateUser();
 
   // Default to the newest installed PHP.
   useEffect(() => {
@@ -51,7 +56,18 @@ export function NewSitePage() {
         create_db: createDb || wordpress,
         wordpress: wordpress ? { title: title.trim() || domain.trim(), admin_user: adminUser.trim(), admin_email: adminEmail.trim() } : undefined,
       },
-      { onSuccess: (res) => navigate(`/sites/${res.site_id}?job=${res.job_id}`) },
+      {
+        onSuccess: (res) => {
+          const go = (login?: { username: string; password: string }) => navigate(`/sites/${res.site_id}?job=${res.job_id}`, { state: login ? { login } : undefined });
+          if (!withLogin) return go();
+          // The site row exists as soon as the job starts, so its login can be made right away.
+          const user = loginUser.trim() || defaultUsername(domain.trim());
+          createUser.mutate(
+            { username: user, site_id: res.site_id, max_subdomains: Number(loginLimit) },
+            { onSuccess: (r) => go({ username: r.user.username, password: r.password }), onError: () => go() },
+          );
+        },
+      },
     );
   };
 
@@ -130,12 +146,36 @@ export function NewSitePage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Panel login</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Checkbox
+              label="Create a login for this site"
+              description="For whoever runs the site: it sees only this site and its subdomains, with files and SFTP limited to its own folder. The password is generated and shown once."
+              checked={withLogin}
+              onChange={(e) => setWithLogin(e.target.checked)}
+            />
+            {withLogin && (
+              <div className="grid gap-4 border-l-2 pl-4 sm:grid-cols-2">
+                <Field label="Username" htmlFor="login_user">
+                  <Input id="login_user" pattern="[a-z][a-z0-9_\-]{2,31}" title="3-32 lowercase letters, digits, _ or -" placeholder={domain ? defaultUsername(domain) : ""} spellCheck={false} value={loginUser} onChange={(e) => setLoginUser(e.target.value)} />
+                </Field>
+                <Field label="Subdomain limit" htmlFor="login_limit" hint="Subdomains they may add (0-100).">
+                  <Input id="login_limit" type="number" min={0} max={100} required value={loginLimit} onChange={(e) => setLoginLimit(e.target.value)} />
+                </Field>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <FormError message={create.error?.message} />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => navigate("/sites")}>
             Cancel
           </Button>
-          <Button type="submit" disabled={create.isPending || !domainOk || !phpVersion}>
+          <Button type="submit" disabled={create.isPending || createUser.isPending || !domainOk || !phpVersion}>
             {create.isPending ? "Starting…" : "Create site"}
           </Button>
         </div>
