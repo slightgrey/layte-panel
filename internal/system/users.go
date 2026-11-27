@@ -3,6 +3,7 @@ package system
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"os/user"
 	"strconv"
 )
@@ -49,5 +50,9 @@ func (d DirUsers) Lookup(name string) (Credential, error) {
 	if !ok {
 		return Credential{}, fmt.Errorf("user %s: %w", name, ErrNoUser)
 	}
-	return Credential{UID: 1001, GID: 1001}, nil
+	// A stable, distinct id per name (like real users have).
+	h := fnv.New32a()
+	h.Write([]byte(name))
+	id := 1001 + h.Sum32()%50000
+	return Credential{UID: id, GID: id}, nil
 }

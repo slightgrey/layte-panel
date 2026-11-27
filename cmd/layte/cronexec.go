@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"runtime"
 	"strconv"
 	"strings"
@@ -69,7 +70,12 @@ func runCronExec(args []string) error {
 	if err := validate.SiteUsername(jobs.Username); err != nil {
 		return err
 	}
-	if jobs.Slice != "layte-acct-"+jobs.Username+".slice" || strings.ContainsAny(jobs.Dir+jobs.LogFile, "'\n") {
+	u, err := user.Lookup(jobs.Username)
+	if err != nil {
+		return err
+	}
+	uid, _ := strconv.ParseUint(u.Uid, 10, 32)
+	if jobs.Slice != actions.AccountSlice(uint32(uid)) || strings.ContainsAny(jobs.Dir+jobs.LogFile, "'\n") {
 		return fmt.Errorf("%s doesn't look like Layte's", path)
 	}
 	// What cron would run for a site without a login, as the user.

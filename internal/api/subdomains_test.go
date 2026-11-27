@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/slightgrey/layte-panel/internal/actions"
 )
 
 // TestSiteAccountSubdomains: a site account adds subdomain sites on its
@@ -162,12 +164,15 @@ func TestSiteLoginBlocksPHPShell(t *testing.T) {
 	if !strings.Contains(string(vhost), "unix:/run/layte-fpm/shelltest/shell.test-php8.3.sock") {
 		t.Errorf("vhost not pointed at the login's PHP:\n%s", vhost)
 	}
-	for _, p := range []string{"/etc/systemd/system/layte-acct-shelltest.slice", "/etc/systemd/system/layte-fpm-shelltest-8.3.service"} {
+	cred, _ := deps.Users.Lookup("shelltest")
+	slice := actions.AccountSlice(cred.UID)
+	slicePath := "/etc/systemd/system/" + slice
+	for _, p := range []string{slicePath, "/etc/systemd/system/layte-fpm-shelltest-8.3.service"} {
 		if !exists(t, deps.FS, p) {
 			t.Errorf("missing %s", p)
 		}
 	}
-	if b, _ := deps.FS.ReadFile("/etc/systemd/system/layte-acct-shelltest.slice"); !strings.Contains(string(b), "CPUQuota=100%") || !strings.Contains(string(b), "MemoryMax=512M") {
+	if b, _ := deps.FS.ReadFile(slicePath); !strings.Contains(string(b), "CPUQuota=100%") || !strings.Contains(string(b), "MemoryMax=512M") {
 		t.Errorf("slice:\n%s", b)
 	}
 
@@ -201,7 +206,7 @@ func TestSiteLoginBlocksPHPShell(t *testing.T) {
 	if !strings.Contains(string(line), "*/5 * * * * root /usr/local/bin/layte cron-exec shell.test 0") || strings.Contains(string(line), "cleanup.php") {
 		t.Errorf("cron file:\n%s", line)
 	}
-	if jobs, _ := deps.FS.ReadFile("/etc/layte/cron/shell.test.json"); !strings.Contains(string(jobs), "cleanup.php") || !strings.Contains(string(jobs), "layte-acct-shelltest.slice") {
+	if jobs, _ := deps.FS.ReadFile("/etc/layte/cron/shell.test.json"); !strings.Contains(string(jobs), "cleanup.php") || !strings.Contains(string(jobs), slice) {
 		t.Errorf("cron jobs file:\n%s", jobs)
 	}
 
@@ -216,7 +221,7 @@ func TestSiteLoginBlocksPHPShell(t *testing.T) {
 	if code, body := admin.do("DELETE", fmt.Sprintf("/api/v1/users/%d", int(id)), nil); code != 204 {
 		t.Fatalf("delete login: %d %v", code, body)
 	}
-	if !exists(t, deps.FS, pool) || exists(t, deps.FS, ownPool) || exists(t, deps.FS, "/etc/systemd/system/layte-acct-shelltest.slice") {
+	if !exists(t, deps.FS, pool) || exists(t, deps.FS, ownPool) || exists(t, deps.FS, slicePath) {
 		t.Error("PHP not moved back to the shared PHP-FPM after deleting the login")
 	}
 	if line, _ := deps.FS.ReadFile("/etc/cron.d/layte-shell_test"); !strings.Contains(string(line), " shelltest cd ") {
