@@ -225,6 +225,13 @@ func (s *Store) CountSubdomains(ctx context.Context, mainID int64) (int, error) 
 	return n, err
 }
 
+// SitesUsingUser counts the sites that run as the Linux user.
+func (s *Store) SitesUsingUser(ctx context.Context, user string) (int, error) {
+	var n int
+	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE system_user=?`, user).Scan(&n)
+	return n, err
+}
+
 // SystemUserInUse reports whether any site uses the Linux user name.
 func (s *Store) SystemUserInUse(ctx context.Context, user string) (bool, error) {
 	var n int
