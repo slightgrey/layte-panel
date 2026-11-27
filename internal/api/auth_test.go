@@ -28,6 +28,7 @@ type testEnv struct {
 	secret string
 	now    time.Time
 	jobs   *jobs.Runner
+	kr     *auth.Keyring
 }
 
 // loggedIn returns a client that has completed password + TOTP.
@@ -71,7 +72,7 @@ func newTestEnvWithAgent(t *testing.T, ag AgentCaller) *testEnv {
 	runner := jobs.New(jobsCtx, st, log, 2)
 	t.Cleanup(func() { stopJobs(); runner.Wait() })
 
-	env := &testEnv{st: st, secret: enr.Secret, now: time.Now(), jobs: runner}
+	env := &testEnv{st: st, secret: enr.Secret, now: time.Now(), jobs: runner, kr: kr}
 	cfg := config.DevDefaults()
 	h := New(Deps{
 		Config:  cfg,
@@ -99,6 +100,9 @@ type client struct {
 	env  *testEnv
 	http *http.Client
 	csrf string
+	// secret is the TOTP secret of the user this client logs in as
+	// ("" = the env's admin).
+	secret string
 }
 
 func (e *testEnv) client(t *testing.T) *client {
@@ -132,7 +136,11 @@ func (c *client) do(method, path string, body any) (int, map[string]any) {
 }
 
 func (c *client) code(offset time.Duration) string {
-	code, _ := auth.TOTPCode(c.env.secret, c.env.now.Add(offset))
+	secret := c.env.secret
+	if c.secret != "" {
+		secret = c.secret
+	}
+	code, _ := auth.TOTPCode(secret, c.env.now.Add(offset))
 	return code
 }
 

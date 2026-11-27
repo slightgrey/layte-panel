@@ -44,19 +44,23 @@ type Site struct {
 	SFTP SFTP `json:"sftp"`
 	// ObjectCache is the site's Redis object cache (WordPress sites).
 	ObjectCache ObjectCache `json:"object_cache"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
+	// ParentSiteID is set on a subdomain site: it belongs to that main site
+	// (and its site account) and shares its Linux user. 0 = a main site.
+	ParentSiteID int64     `json:"parent_site_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 const siteCols = `id, domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl,
-	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, redirects_json, sftp_json, object_cache_json, created_at, updated_at`
+	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, redirects_json, sftp_json, object_cache_json, parent_site_id, created_at, updated_at`
 
 func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
 	var aliases, php, cache, redirs, sftp, ocache string
 	var created, updated int64
+	var parent sql.NullInt64
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.SystemUser, &s.RootPath, &s.PHPVersion, &s.Managed, &s.Source,
-		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &redirs, &sftp, &ocache, &created, &updated)
+		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &redirs, &sftp, &ocache, &parent, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Site{}, ErrNotFound
 	}
@@ -76,6 +80,7 @@ func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	if s.SFTP.Keys == nil {
 		s.SFTP.Keys = []SFTPKey{}
 	}
+	s.ParentSiteID = parent.Int64
 	s.CreatedAt, s.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return s, nil
 }
@@ -133,10 +138,10 @@ func aliasesJSON(a []string) string {
 func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 	now := time.Now().Unix()
 	res, err := s.DB.ExecContext(ctx, `INSERT INTO sites
-		(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, db_name, db_user, status, nginx_conf, fpm_pool, cert_path, php_settings_json, page_cache_json, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, db_name, db_user, status, nginx_conf, fpm_pool, cert_path, php_settings_json, page_cache_json, parent_site_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		x.Domain, aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.Source, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), now, now)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), nullID(x.ParentSiteID), now, now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return 0, fmt.Errorf("site %s: %w", x.Domain, ErrExists)
@@ -192,6 +197,32 @@ func (s *Store) ListSites(ctx context.Context) ([]Site, error) {
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+
+// SitesForAccount returns a site account's sites: the main site and its
+// subdomains, ordered by domain.
+func (s *Store) SitesForAccount(ctx context.Context, mainID int64) ([]Site, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+siteCols+` FROM sites WHERE id=? OR parent_site_id=? ORDER BY domain`, mainID, mainID)
+	if err != nil {
+		return nil, fmt.Errorf("list account sites: %w", err)
+	}
+	defer rows.Close()
+	out := []Site{}
+	for rows.Next() {
+		x, err := scanSite(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// CountSubdomains counts the subdomain sites of a main site.
+func (s *Store) CountSubdomains(ctx context.Context, mainID int64) (int, error) {
+	var n int
+	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE parent_site_id=?`, mainID).Scan(&n)
+	return n, err
 }
 
 // SystemUserInUse reports whether any site uses the Linux user name.

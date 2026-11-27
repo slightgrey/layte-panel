@@ -30,9 +30,17 @@ func (s *server) logSources(r *http.Request) ([]logSourceJSON, error) {
 	for _, x := range sites {
 		ids[x.Domain] = x.ID
 	}
+	sc, err := s.scopeOf(r)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]logSourceJSON, 0, len(srcs))
 	for _, src := range srcs {
-		out = append(out, logSourceJSON{LogSource: src, SiteID: ids[src.Domain]})
+		id := ids[src.Domain]
+		if sc != nil && (id == 0 || !sc.has(id)) { // site accounts: their sites' logs only
+			continue
+		}
+		out = append(out, logSourceJSON{LogSource: src, SiteID: id})
 	}
 	return out, nil
 }

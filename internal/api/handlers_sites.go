@@ -45,7 +45,18 @@ func (s *server) handleListSites(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "list sites", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sites": sites})
+	sc, err := s.scopeOf(r)
+	if err != nil {
+		s.internalError(w, "list sites", err)
+		return
+	}
+	visible := sites[:0]
+	for _, x := range sites {
+		if sc.has(x.ID) {
+			visible = append(visible, x)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sites": visible})
 }
 
 // GET /api/v1/sites/{id}

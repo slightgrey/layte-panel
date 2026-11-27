@@ -81,8 +81,9 @@ func (s *server) loadAPIKey(next http.Handler) http.Handler {
 	})
 }
 
-// scoped allows a logged-in admin, or an API key with the given scope (GET only).
-func (s *server) scoped(scope string, h http.HandlerFunc) http.Handler {
+// scoped allows an API key with the given scope (GET only), or a session
+// that passes the session check (requireAdmin, requireSiteAccess, …).
+func (s *server) scoped(scope string, session func(http.Handler) http.Handler, h http.HandlerFunc) http.Handler {
 	if !validScope(scope) {
 		panic("unknown scope " + scope) // programmer error at startup
 	}
@@ -99,7 +100,7 @@ func (s *server) scoped(scope string, h http.HandlerFunc) http.Handler {
 			h(w, r)
 			return
 		}
-		s.requireAuth(h).ServeHTTP(w, r)
+		session(h).ServeHTTP(w, r)
 	})
 }
 
