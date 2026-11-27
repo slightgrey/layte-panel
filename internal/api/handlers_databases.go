@@ -4,12 +4,39 @@ import (
 	"net/http"
 )
 
+// checkDatabase writes a 404 unless the request may manage the {name} database.
+func (s *server) checkDatabase(w http.ResponseWriter, r *http.Request) bool {
+	ok, err := s.ownsDatabase(r, r.PathValue("name"))
+	if err != nil {
+		s.internalError(w, "database access", err)
+		return false
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "no such database")
+	}
+	return ok
+}
+
 // GET /api/v1/databases
 func (s *server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 	engine, dbs, err := s.sites.ListDatabases(r.Context(), actorOf(r))
 	if err != nil {
 		s.writeSiteError(w, "list databases", err)
 		return
+	}
+	sc, err := s.scopeOf(r)
+	if err != nil {
+		s.internalError(w, "list databases", err)
+		return
+	}
+	if sc != nil { // site accounts: their sites' databases only
+		visible := dbs[:0]
+		for _, d := range dbs {
+			if d.SiteID > 0 && sc.has(d.SiteID) {
+				visible = append(visible, d)
+			}
+		}
+		dbs = visible
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"engine": engine, "databases": dbs})
 }
@@ -50,6 +77,9 @@ func (s *server) handleDropDatabase(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/databases/{name}/password — new random password (shown once).
 func (s *server) handleResetDBPassword(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if !s.checkDatabase(w, r) {
+		return
+	}
 	pw, err := s.sites.ResetDBPassword(r.Context(), actorOf(r), name)
 	if err != nil {
 		s.writeSiteError(w, "reset database password", err)
@@ -61,6 +91,9 @@ func (s *server) handleResetDBPassword(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/databases/{name}/export — dump to the site's tmp/ folder (job).
 func (s *server) handleExportDatabase(w http.ResponseWriter, r *http.Request) {
+	if !s.checkDatabase(w, r) {
+		return
+	}
 	jobID, err := s.sites.ExportDatabase(r.Context(), actorOf(r), r.PathValue("name"))
 	if err != nil {
 		s.writeSiteError(w, "export database", err)
@@ -75,7 +108,7 @@ func (s *server) handleImportDatabase(w http.ResponseWriter, r *http.Request) {
 		Path    string `json:"path"`
 		Confirm string `json:"confirm"`
 	}
-	if !decodeJSON(w, r, &req) {
+	if !decodeJSON(w, r, &req) || !s.checkDatabase(w, r) {
 		return
 	}
 	jobID, err := s.sites.ImportDatabase(r.Context(), actorOf(r), r.PathValue("name"), req.Path, req.Confirm)

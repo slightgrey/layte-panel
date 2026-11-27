@@ -25,14 +25,27 @@ type User struct {
 	FailedLogins  int
 	LockedUntil   time.Time
 	CreatedAt     time.Time
+	// SiteID is the main site of a site account (Role "site"); 0 for admins.
+	SiteID        int64
+	MaxSubdomains int
 }
 
-const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at`
+// Roles.
+const (
+	RoleAdmin = "admin"
+	RoleSite  = "site"
+)
+
+// IsAdmin reports whether u is a full admin.
+func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
+
+const userCols = `id, username, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_until, created_at, site_id, max_subdomains`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var locked, created int64
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created)
+	var site sql.NullInt64
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.TOTPSecretEnc, &u.TOTPLastStep, &u.FailedLogins, &locked, &created, &site, &u.MaxSubdomains)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -40,6 +53,7 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 		return User{}, err
 	}
 	u.LockedUntil, u.CreatedAt = time.Unix(locked, 0), time.Unix(created, 0)
+	u.SiteID = site.Int64
 	return u, nil
 }
 
@@ -55,6 +69,56 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash string, t
 		return 0, fmt.Errorf("create user %s: %w", username, err)
 	}
 	return res.LastInsertId()
+}
+
+// CreateSiteUser inserts a site account for the main site siteID. 2FA is
+// set up by the user at the first login (totp_secret_enc stays NULL).
+func (s *Store) CreateSiteUser(ctx context.Context, username, passwordHash string, siteID int64, maxSubdomains int) (int64, error) {
+	res, err := s.DB.ExecContext(ctx,
+		`INSERT INTO users (username, password_hash, role, site_id, max_subdomains, created_at) VALUES (?, ?, 'site', ?, ?, ?)`,
+		username, passwordHash, siteID, maxSubdomains, time.Now().Unix())
+	if err != nil {
+		if isUniqueViolation(err) {
+			return 0, fmt.Errorf("user %s: %w", username, ErrExists)
+		}
+		return 0, fmt.Errorf("create user %s: %w", username, err)
+	}
+	return res.LastInsertId()
+}
+
+// ListUsers returns every panel user, admins first.
+func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+userCols+` FROM users ORDER BY role = 'site', username`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+	out := []User{}
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// UserBySite returns the site account of a main site.
+func (s *Store) UserBySite(ctx context.Context, siteID int64) (User, error) {
+	return scanUser(s.DB.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE site_id = ?`, siteID))
+}
+
+// DeleteUser removes a user (their sessions go with it).
+func (s *Store) DeleteUser(ctx context.Context, id int64) error {
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	return err
+}
+
+// SetMaxSubdomains changes a site account's subdomain limit.
+func (s *Store) SetMaxSubdomains(ctx context.Context, id int64, n int) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE users SET max_subdomains = ? WHERE id = ?`, n, id)
+	return err
 }
 
 func (s *Store) UserByUsername(ctx context.Context, username string) (User, error) {
@@ -121,6 +185,12 @@ func (s *Store) SetPassword(ctx context.Context, userID int64, hash string) erro
 		_, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID)
 		return err
 	})
+}
+
+// ClearTOTP removes the 2FA secret, so the user sets it up again at the next
+// login, and logs out all sessions.
+func (s *Store) ClearTOTP(ctx context.Context, userID int64) error {
+	return s.SetTOTPSecret(ctx, userID, nil)
 }
 
 // SetTOTPSecret replaces the TOTP secret, resets the replay step and logs out all sessions.

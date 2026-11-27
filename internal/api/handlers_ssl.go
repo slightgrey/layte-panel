@@ -46,6 +46,11 @@ func (s *server) handleListSSL(w http.ResponseWriter, r *http.Request) {
 			byName[path.Base(path.Dir(site.CertPath))] = site
 		}
 	}
+	sc, err := s.scopeOf(r)
+	if err != nil {
+		s.internalError(w, "list certificates", err)
+		return
+	}
 	now := s.Now()
 	out := make([]certJSON, 0, len(certs))
 	for _, c := range certs {
@@ -59,9 +64,15 @@ func (s *server) handleListSSL(w http.ResponseWriter, r *http.Request) {
 		if site, ok := byName[c.Name]; ok {
 			cj.SiteID, cj.Domain = site.ID, site.Domain
 		}
+		if sc != nil && (cj.SiteID == 0 || !sc.has(cj.SiteID)) { // site accounts: their own certificates only
+			continue
+		}
 		out = append(out, cj)
 	}
-	email, _ := s.Store.Setting(r.Context(), store.SettingLetsEncryptEmail)
+	email := ""
+	if !isSiteUser(r) { // the admin's Let's Encrypt address
+		email, _ = s.Store.Setting(r.Context(), store.SettingLetsEncryptEmail)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"certificates": out, "email": email})
 }
 

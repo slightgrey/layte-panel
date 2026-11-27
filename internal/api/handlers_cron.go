@@ -12,6 +12,25 @@ func (s *server) handleListCron(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "list cron", err)
 		return
 	}
+	sc, err := s.scopeOf(r)
+	if err != nil {
+		s.internalError(w, "list cron", err)
+		return
+	}
+	if sc != nil { // site accounts: their sites' jobs only
+		visible := jobs[:0]
+		for _, j := range jobs {
+			if sc.has(j.SiteID) {
+				visible = append(visible, j)
+			}
+		}
+		jobs = visible
+		for id := range suggest {
+			if !sc.has(id) {
+				delete(suggest, id)
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs, "wp_cron": suggest})
 }
 
@@ -41,12 +60,25 @@ func cronID(r *http.Request) int64 {
 	return id
 }
 
+// checkCron writes a 404 unless the request may change the cron job.
+func (s *server) checkCron(w http.ResponseWriter, r *http.Request) bool {
+	ok, err := s.ownsCron(r, cronID(r))
+	if err != nil {
+		s.internalError(w, "cron access", err)
+		return false
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "no such cron job")
+	}
+	return ok
+}
+
 // PATCH /api/v1/cron/{id} {enabled}
 func (s *server) handleUpdateCron(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Enabled bool `json:"enabled"`
 	}
-	if !decodeJSON(w, r, &req) {
+	if !decodeJSON(w, r, &req) || !s.checkCron(w, r) {
 		return
 	}
 	if err := s.sites.SetCronEnabled(r.Context(), actorOf(r), cronID(r), req.Enabled); err != nil {
@@ -58,6 +90,9 @@ func (s *server) handleUpdateCron(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/cron/{id}
 func (s *server) handleDeleteCron(w http.ResponseWriter, r *http.Request) {
+	if !s.checkCron(w, r) {
+		return
+	}
 	if err := s.sites.DeleteCron(r.Context(), actorOf(r), cronID(r)); err != nil {
 		s.writeSiteError(w, "delete cron", err)
 		return

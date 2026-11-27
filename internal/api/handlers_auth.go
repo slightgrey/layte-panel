@@ -14,10 +14,19 @@ func hashToken(t string) string { return auth.HashToken(t) }
 type userJSON struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
-	Role     string `json:"role"`
+	Role     string `json:"role"` // admin | site
+	// Site accounts: the main site, and how many subdomains they may add.
+	SiteID        int64 `json:"site_id,omitempty"`
+	MaxSubdomains int   `json:"max_subdomains,omitempty"`
 }
 
-func toUserJSON(u store.User) userJSON { return userJSON{ID: u.ID, Username: u.Username, Role: u.Role} }
+func toUserJSON(u store.User) userJSON {
+	j := userJSON{ID: u.ID, Username: u.Username, Role: u.Role}
+	if !u.IsAdmin() {
+		j.SiteID, j.MaxSubdomains = u.SiteID, u.MaxSubdomains
+	}
+	return j
+}
 
 // One message for every login failure, so responses don't reveal whether a
 // username exists or an account is locked.

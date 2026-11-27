@@ -66,62 +66,73 @@ func New(d Deps) http.Handler {
 
 	// authed: a logged-in admin only (sessions). Everything that changes
 	// something, plus files, jobs and key management, is session-only.
-	authed := func(h http.HandlerFunc) http.Handler { return s.requireAuth(h) }
+	// This is the default; site accounts only get the routes below that are
+	// wrapped in siteAuthed or account (see access.go).
+	authed := func(h http.HandlerFunc) http.Handler { return s.requireAdmin(h) }
+	// siteAuthed: an admin, or the site account that owns the {id} site.
+	siteAuthed := func(h http.HandlerFunc) http.Handler { return s.requireSiteAccess(h) }
+	// account: any logged-in user; the handler limits a site account to its
+	// own sites (lists are filtered, single items checked).
+	account := func(h http.HandlerFunc) http.Handler { return s.requireAuth(h) }
 	// read: a logged-in admin, or an API key with the scope (GET only).
-	read := s.scoped
+	// readSite / readAccount: the same, but also open to site accounts, like
+	// siteAuthed / account.
+	read := func(scope string, h http.HandlerFunc) http.Handler { return s.scoped(scope, s.requireAdmin, h) }
+	readSite := func(scope string, h http.HandlerFunc) http.Handler { return s.scoped(scope, s.requireSiteAccess, h) }
+	readAccount := func(scope string, h http.HandlerFunc) http.Handler { return s.scoped(scope, s.requireAuth, h) }
 
 	mux.Handle("GET /api/v1/openapi.json", http.HandlerFunc(s.handleOpenAPI))
 
 	// Readable with API keys.
 	mux.Handle("GET /api/v1/dashboard", read("system:read", s.handleDashboard))
-	mux.Handle("GET /api/v1/sites", read("sites:read", s.handleListSites))
-	mux.Handle("GET /api/v1/sites/{id}", read("sites:read", s.handleGetSite))
+	mux.Handle("GET /api/v1/sites", readAccount("sites:read", s.handleListSites))
+	mux.Handle("GET /api/v1/sites/{id}", readSite("sites:read", s.handleGetSite))
 	mux.Handle("GET /api/v1/sites/{id}/vhost", read("sites:read", s.handleSiteVhost))
-	mux.Handle("GET /api/v1/sites/{id}/disk", read("sites:read", s.handleSiteDisk))
-	mux.Handle("GET /api/v1/php/versions", read("sites:read", s.handlePHPVersions))
-	mux.Handle("GET /api/v1/ssl", read("ssl:read", s.handleListSSL))
-	mux.Handle("GET /api/v1/databases", read("databases:read", s.handleListDatabases))
-	mux.Handle("GET /api/v1/cron", read("cron:read", s.handleListCron))
+	mux.Handle("GET /api/v1/sites/{id}/disk", readSite("sites:read", s.handleSiteDisk))
+	mux.Handle("GET /api/v1/php/versions", readAccount("sites:read", s.handlePHPVersions))
+	mux.Handle("GET /api/v1/ssl", readAccount("ssl:read", s.handleListSSL))
+	mux.Handle("GET /api/v1/databases", readAccount("databases:read", s.handleListDatabases))
+	mux.Handle("GET /api/v1/cron", readAccount("cron:read", s.handleListCron))
 	mux.Handle("GET /api/v1/security", read("security:read", s.handleSecurity))
-	mux.Handle("GET /api/v1/logs", read("logs:read", s.handleLogSources))
-	mux.Handle("GET /api/v1/logs/stream", read("logs:read", s.handleLogStream))
+	mux.Handle("GET /api/v1/logs", readAccount("logs:read", s.handleLogSources))
+	mux.Handle("GET /api/v1/logs/stream", readAccount("logs:read", s.handleLogStream))
 
 	// Sites (session only).
-	mux.Handle("POST /api/v1/sites", authed(s.handleCreateSite))
+	mux.Handle("POST /api/v1/sites", account(s.handleCreateSite))
 	mux.Handle("POST /api/v1/sites/scan", authed(s.handleScanSites))
-	mux.Handle("DELETE /api/v1/sites/{id}", authed(s.handleDeleteSite))
-	mux.Handle("POST /api/v1/sites/{id}/php", authed(s.handleSwitchPHP))
-	mux.Handle("PUT /api/v1/sites/{id}/php-settings", authed(s.handleSetPHPSettings))
-	mux.Handle("PUT /api/v1/sites/{id}/redirects", authed(s.handleSetRedirects))
-	mux.Handle("GET /api/v1/sites/{id}/sftp", authed(s.handleSFTP))
-	mux.Handle("PUT /api/v1/sites/{id}/sftp", authed(s.handleSetSFTP))
-	mux.Handle("POST /api/v1/sites/{id}/sftp/password", authed(s.handleSFTPPassword))
-	mux.Handle("PUT /api/v1/sites/{id}/page-cache", authed(s.handleSetPageCache))
-	mux.Handle("POST /api/v1/sites/{id}/page-cache/purge", authed(s.handlePurgeCache))
-	mux.Handle("GET /api/v1/sites/{id}/object-cache", authed(s.handleObjectCache))
-	mux.Handle("PUT /api/v1/sites/{id}/object-cache", authed(s.handleSetObjectCache))
-	mux.Handle("POST /api/v1/sites/{id}/object-cache/flush", authed(s.handleFlushObjectCache))
-	mux.Handle("POST /api/v1/sites/{id}/object-cache/resume", authed(s.handleResumeObjectCache))
+	mux.Handle("DELETE /api/v1/sites/{id}", siteAuthed(s.handleDeleteSite))
+	mux.Handle("POST /api/v1/sites/{id}/php", siteAuthed(s.handleSwitchPHP))
+	mux.Handle("PUT /api/v1/sites/{id}/php-settings", siteAuthed(s.handleSetPHPSettings))
+	mux.Handle("PUT /api/v1/sites/{id}/redirects", siteAuthed(s.handleSetRedirects))
+	mux.Handle("GET /api/v1/sites/{id}/sftp", siteAuthed(s.handleSFTP))
+	mux.Handle("PUT /api/v1/sites/{id}/sftp", siteAuthed(s.handleSetSFTP))
+	mux.Handle("POST /api/v1/sites/{id}/sftp/password", siteAuthed(s.handleSFTPPassword))
+	mux.Handle("PUT /api/v1/sites/{id}/page-cache", siteAuthed(s.handleSetPageCache))
+	mux.Handle("POST /api/v1/sites/{id}/page-cache/purge", siteAuthed(s.handlePurgeCache))
+	mux.Handle("GET /api/v1/sites/{id}/object-cache", siteAuthed(s.handleObjectCache))
+	mux.Handle("PUT /api/v1/sites/{id}/object-cache", siteAuthed(s.handleSetObjectCache))
+	mux.Handle("POST /api/v1/sites/{id}/object-cache/flush", siteAuthed(s.handleFlushObjectCache))
+	mux.Handle("POST /api/v1/sites/{id}/object-cache/resume", siteAuthed(s.handleResumeObjectCache))
 	mux.Handle("GET /api/v1/sites/{id}/adopt", authed(s.handleAdoptPreview))
 	mux.Handle("POST /api/v1/sites/{id}/adopt", authed(s.handleAdopt))
 	mux.Handle("GET /api/v1/sites/{id}/takeover", authed(s.handleTakeoverPreview))
 	mux.Handle("POST /api/v1/sites/{id}/takeover", authed(s.handleTakeover))
-	mux.Handle("POST /api/v1/sites/{id}/ssl", authed(s.handleIssueSSL))
-	mux.Handle("DELETE /api/v1/sites/{id}/ssl", authed(s.handleRemoveSSL))
-	mux.Handle("POST /api/v1/sites/{id}/ssl/renew", authed(s.handleRenewSSL))
-	mux.Handle("POST /api/v1/sites/{id}/cron", authed(s.handleAddCron))
-	mux.Handle("GET /api/v1/sites/{id}/wp-admin", authed(s.handleWPAdmin))
-	mux.Handle("GET /api/v1/wp-admin.js", authed(s.handleWPAdminScript))
-	mux.Handle("GET /api/v1/sites/{id}/wp-debug", authed(s.handleGetWPDebug))
-	mux.Handle("PUT /api/v1/sites/{id}/wp-debug", authed(s.handleSetWPDebug))
+	mux.Handle("POST /api/v1/sites/{id}/ssl", siteAuthed(s.handleIssueSSL))
+	mux.Handle("DELETE /api/v1/sites/{id}/ssl", siteAuthed(s.handleRemoveSSL))
+	mux.Handle("POST /api/v1/sites/{id}/ssl/renew", siteAuthed(s.handleRenewSSL))
+	mux.Handle("POST /api/v1/sites/{id}/cron", siteAuthed(s.handleAddCron))
+	mux.Handle("GET /api/v1/sites/{id}/wp-admin", siteAuthed(s.handleWPAdmin))
+	mux.Handle("GET /api/v1/wp-admin.js", account(s.handleWPAdminScript))
+	mux.Handle("GET /api/v1/sites/{id}/wp-debug", siteAuthed(s.handleGetWPDebug))
+	mux.Handle("PUT /api/v1/sites/{id}/wp-debug", siteAuthed(s.handleSetWPDebug))
 
 	// Files (session only).
-	mux.Handle("GET /api/v1/sites/{id}/files", authed(s.handleListFiles))
-	mux.Handle("GET /api/v1/sites/{id}/files/content", authed(s.handleReadFile))
-	mux.Handle("PUT /api/v1/sites/{id}/files/content", authed(s.handleSaveFile))
-	mux.Handle("GET /api/v1/sites/{id}/files/download", authed(s.handleDownload))
-	mux.Handle("POST /api/v1/sites/{id}/files/upload", authed(s.handleUpload))
-	mux.Handle("POST /api/v1/sites/{id}/files/{op}", authed(s.handleFileOp))
+	mux.Handle("GET /api/v1/sites/{id}/files", siteAuthed(s.handleListFiles))
+	mux.Handle("GET /api/v1/sites/{id}/files/content", siteAuthed(s.handleReadFile))
+	mux.Handle("PUT /api/v1/sites/{id}/files/content", siteAuthed(s.handleSaveFile))
+	mux.Handle("GET /api/v1/sites/{id}/files/download", siteAuthed(s.handleDownload))
+	mux.Handle("POST /api/v1/sites/{id}/files/upload", siteAuthed(s.handleUpload))
+	mux.Handle("POST /api/v1/sites/{id}/files/{op}", siteAuthed(s.handleFileOp))
 
 	// Security, cron, databases (session only).
 	mux.Handle("POST /api/v1/security/ufw/rules", authed(s.handleUFWAllow))
@@ -134,20 +145,20 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/updates/apply", authed(s.handleUpdatesApply))
 	mux.Handle("GET /api/v1/system/processes", authed(s.handleProcesses))
 	mux.Handle("GET /api/v1/system/disk", authed(s.handleDiskBreakdown))
-	mux.Handle("PATCH /api/v1/cron/{id}", authed(s.handleUpdateCron))
-	mux.Handle("DELETE /api/v1/cron/{id}", authed(s.handleDeleteCron))
+	mux.Handle("PATCH /api/v1/cron/{id}", account(s.handleUpdateCron))
+	mux.Handle("DELETE /api/v1/cron/{id}", account(s.handleDeleteCron))
 	mux.Handle("POST /api/v1/databases", authed(s.handleCreateDatabase))
 	mux.Handle("DELETE /api/v1/databases/{name}", authed(s.handleDropDatabase))
-	mux.Handle("POST /api/v1/databases/{name}/password", authed(s.handleResetDBPassword))
-	mux.Handle("POST /api/v1/databases/{name}/export", authed(s.handleExportDatabase))
-	mux.Handle("POST /api/v1/databases/{name}/import", authed(s.handleImportDatabase))
+	mux.Handle("POST /api/v1/databases/{name}/password", account(s.handleResetDBPassword))
+	mux.Handle("POST /api/v1/databases/{name}/export", account(s.handleExportDatabase))
+	mux.Handle("POST /api/v1/databases/{name}/import", account(s.handleImportDatabase))
 	mux.Handle("POST /api/v1/sites/{id}/databases/link", authed(s.handleLinkDatabase))
 	mux.Handle("DELETE /api/v1/databases/{name}/link", authed(s.handleUnlinkDatabase))
 
 	// Jobs and API keys (session only).
-	mux.Handle("GET /api/v1/jobs/{id}", authed(s.handleGetJob))
-	mux.Handle("GET /api/v1/jobs/{id}/events", authed(s.handleJobEvents))
-	mux.Handle("GET /api/v1/jobs/{id}/secret", authed(s.handleJobSecret))
+	mux.Handle("GET /api/v1/jobs/{id}", account(s.handleGetJob))
+	mux.Handle("GET /api/v1/jobs/{id}/events", account(s.handleJobEvents))
+	mux.Handle("GET /api/v1/jobs/{id}/secret", account(s.handleJobSecret))
 	mux.Handle("GET /api/v1/keys", authed(s.handleListKeys))
 	mux.Handle("POST /api/v1/keys", authed(s.handleCreateKey))
 	mux.Handle("DELETE /api/v1/keys/{id}", authed(s.handleRevokeKey))

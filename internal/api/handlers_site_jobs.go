@@ -40,6 +40,10 @@ func (s *server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	if isSiteUser(r) { // TODO(site accounts): subdomains
+		writeError(w, http.StatusForbidden, "forbidden", "only admins can add sites")
+		return
+	}
 	jobID, siteID, err := s.sites.Create(r.Context(), actorOf(r), req)
 	if err != nil {
 		s.writeSiteError(w, "create site", err)
@@ -146,6 +150,10 @@ func (s *server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 	}
 	var req sites.DeleteRequest
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if isSiteUser(r) && site.ParentSiteID == 0 {
+		writeError(w, http.StatusForbidden, "forbidden", "only an admin can delete the main site of an account")
 		return
 	}
 	jobID, err := s.sites.Delete(r.Context(), actorOf(r), site, req)

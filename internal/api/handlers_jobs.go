@@ -37,6 +37,10 @@ func (s *server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "get job", err)
 		return
 	}
+	if !s.ownsJob(r, row) {
+		writeError(w, http.StatusNotFound, "not_found", "no such job")
+		return
+	}
 	out := jobJSON{
 		ID: row.ID, Kind: row.Kind, SiteID: row.SiteID, Status: row.Status, Error: row.Error,
 		Events: json.RawMessage(row.EventsJSON), Result: json.RawMessage(row.ResultJSON),
@@ -75,6 +79,13 @@ func (s *server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lastSeen, _ := strconv.Atoi(r.Header.Get("Last-Event-ID"))
+	if isSiteUser(r) { // site accounts: only the jobs they started
+		row, err := s.Store.JobByID(r.Context(), id)
+		if err != nil || !s.ownsJob(r, row) {
+			writeError(w, http.StatusNotFound, "not_found", "no such job")
+			return
+		}
+	}
 
 	history, live, cancel, running := s.Jobs.Subscribe(id)
 	defer cancel()

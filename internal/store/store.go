@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/url"
@@ -89,17 +90,67 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := s.inTx(ctx, func(tx *sql.Tx) error {
-			if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-				return err
-			}
-			_, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES (?)`, version)
-			return err
-		}); err != nil {
+		apply := s.applyMigration
+		if strings.HasPrefix(string(body), fkOffMarker) {
+			apply = s.applyMigrationFKOff
+		}
+		if err := apply(ctx, version, string(body)); err != nil {
 			return fmt.Errorf("apply migration %s: %w", version, err)
 		}
 	}
 	return nil
+}
+
+// fkOffMarker as a migration's first line runs it with foreign keys off:
+// SQLite's documented way to rebuild a table that other tables reference
+// (otherwise DROP TABLE would fire their ON DELETE actions).
+const fkOffMarker = "-- layte:foreign-keys-off"
+
+func (s *Store) applyMigration(ctx context.Context, version, body string) error {
+	return s.inTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, body); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES (?)`, version)
+		return err
+	})
+}
+
+// applyMigrationFKOff pins one connection (the PRAGMA is per connection and
+// has no effect inside a transaction), turns foreign keys off, applies the
+// migration in a transaction, checks the keys still hold, and turns them back on.
+func (s *Store) applyMigrationFKOff(ctx context.Context, version, body string) error {
+	conn, err := s.DB.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys = ON`)
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op after Commit
+	if _, err := tx.ExecContext(ctx, body); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	bad := rows.Next()
+	rows.Close()
+	if bad {
+		return errors.New("foreign key check failed")
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES (?)`, version); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // inTx runs fn inside a transaction, committing on success and rolling back on error.
