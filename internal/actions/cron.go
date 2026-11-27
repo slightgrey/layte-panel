@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -39,6 +40,9 @@ type CronWriteParams struct {
 	Username string      `json:"username"`
 	WebRoot  string      `json:"web_root,omitempty"` // adopted sites: jobs run from here
 	Jobs     []CronEntry `json:"jobs"`
+	// Limited: the site belongs to a site login; its jobs run inside the
+	// login's resource limits (layte-acct-<user>.slice) via `layte cron-exec`.
+	Limited bool `json:"limited,omitempty"`
 }
 
 func (p CronWriteParams) Validate() error {
@@ -67,6 +71,55 @@ func (p CronWriteParams) Validate() error {
 	return nil
 }
 
+// CronJobsPath holds a site login's cron commands for `layte cron-exec`
+// (root-only: the cron lines themselves name only the site and a number).
+func CronJobsPath(domain string) string { return "/etc/layte/cron/" + domain + ".json" }
+
+// CronJobs is the file `layte cron-exec` runs a job from.
+type CronJobs struct {
+	Domain   string   `json:"domain"`
+	Username string   `json:"username"`
+	Slice    string   `json:"slice"`
+	Dir      string   `json:"dir"`      // jobs start here
+	LogFile  string   `json:"log_file"` // output is appended here (as the user)
+	Commands []string `json:"commands"`
+}
+
+// cronWriteLimited: each line runs `layte cron-exec <domain> <n>` as root,
+// which starts job n as the site's user inside the login's slice. No text
+// the user wrote is ever part of a line cron runs as root.
+func (d Deps) cronWriteLimited(ctx context.Context, p CronWriteParams, dir, logDir string) (any, error) {
+	if !safeUnitPath.MatchString(d.SelfBin) {
+		return nil, fmt.Errorf("can't run cron jobs within limits: unexpected binary path %q", d.SelfBin)
+	}
+	jobs := CronJobs{Domain: p.Domain, Username: p.Username, Slice: acctSlice(p.Username), Dir: dir, LogFile: logDir + "/cron.log"}
+	for _, j := range p.Jobs {
+		jobs.Commands = append(jobs.Commands, j.Command)
+	}
+	b, err := json.MarshalIndent(jobs, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err := d.FS.MkdirAll("/etc/layte/cron", 0o700); err != nil {
+		return nil, err
+	}
+	if err := d.FS.WriteFileAtomic(CronJobsPath(p.Domain), b, 0o600); err != nil {
+		return nil, err
+	}
+	var c strings.Builder
+	fmt.Fprintf(&c, "%s — do not edit by hand (site: %s)\n", system.Marker, p.Domain)
+	c.WriteString("SHELL=/bin/sh\nPATH=/usr/local/bin:/usr/bin:/bin\nMAILTO=\"\"\n")
+	c.WriteString("# Runs within the site login's limits; the commands are in " + CronJobsPath(p.Domain) + ".\n")
+	for i, j := range p.Jobs {
+		fmt.Fprintf(&c, "%s root %s cron-exec %s %d\n", strings.Join(strings.Fields(j.Schedule), " "), d.SelfBin, p.Domain, i)
+	}
+	path := CronPath(p.Domain)
+	if err := system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{Path: path, Content: []byte(c.String()), Perm: 0o644}); err != nil {
+		return nil, err
+	}
+	return map[string]any{"path": path, "jobs": len(p.Jobs)}, nil
+}
+
 // cronWrite installs the site's cron jobs as /etc/cron.d/layte-<site>. Every
 // line runs as the site's own user (never root), with output appended to the
 // site's logs/cron.log. An empty list removes the file.
@@ -76,6 +129,7 @@ func (d Deps) cronWrite(ctx context.Context, _ agent.Actor, p CronWriteParams) (
 		if err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: path}); err != nil {
 			return nil, err
 		}
+		d.FS.Remove(CronJobsPath(p.Domain))
 		return map[string]any{"path": path, "jobs": 0}, nil
 	}
 	if _, err := d.Users.Lookup(p.Username); err != nil {
@@ -91,6 +145,11 @@ func (d Deps) cronWrite(ctx context.Context, _ agent.Actor, p CronWriteParams) (
 		}
 		dir, logDir = p.WebRoot, "/home/"+p.Username+"/logs"
 	}
+	jobsFile := CronJobsPath(p.Domain)
+	if p.Limited {
+		return d.cronWriteLimited(ctx, p, dir, logDir)
+	}
+	d.FS.Remove(jobsFile) // from when the site had a login
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s — do not edit by hand (site: %s)\n", system.Marker, p.Domain)
 	b.WriteString("SHELL=/bin/sh\nPATH=/usr/local/bin:/usr/bin:/bin\nMAILTO=\"\"\n")

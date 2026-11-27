@@ -49,13 +49,16 @@ type Site struct {
 	ParentSiteID int64 `json:"parent_site_id,omitempty"`
 	// BlockPHPShell disables PHP's shell functions in the site's pool (set
 	// for a site login's sites; an admin can allow them per site).
-	BlockPHPShell bool      `json:"block_php_shell"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	BlockPHPShell bool `json:"block_php_shell"`
+	// OwnFPM: the site's PHP runs in its site login's own PHP-FPM master,
+	// inside the login's resource limits.
+	OwnFPM    bool      `json:"own_fpm"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 const siteCols = `id, domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl,
-	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, redirects_json, sftp_json, object_cache_json, parent_site_id, block_php_shell, created_at, updated_at`
+	db_name, db_user, status, nginx_conf, fpm_pool, cert_path, adopted, php_settings_json, page_cache_json, nginx_managed, redirects_json, sftp_json, object_cache_json, parent_site_id, block_php_shell, own_fpm, created_at, updated_at`
 
 func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
@@ -63,7 +66,7 @@ func scanSite(row interface{ Scan(...any) error }) (Site, error) {
 	var created, updated int64
 	var parent sql.NullInt64
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.SystemUser, &s.RootPath, &s.PHPVersion, &s.Managed, &s.Source,
-		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &redirs, &sftp, &ocache, &parent, &s.BlockPHPShell, &created, &updated)
+		&s.WordPress, &s.SSL, &s.DBName, &s.DBUser, &s.Status, &s.NginxConf, &s.FPMPool, &s.CertPath, &s.Adopted, &php, &cache, &s.NginxManaged, &redirs, &sftp, &ocache, &parent, &s.BlockPHPShell, &s.OwnFPM, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Site{}, ErrNotFound
 	}
@@ -141,10 +144,10 @@ func aliasesJSON(a []string) string {
 func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 	now := time.Now().Unix()
 	res, err := s.DB.ExecContext(ctx, `INSERT INTO sites
-		(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, db_name, db_user, status, nginx_conf, fpm_pool, cert_path, php_settings_json, page_cache_json, parent_site_id, block_php_shell, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(domain, aliases_json, system_user, root_path, php_version, managed, source, wordpress, ssl, db_name, db_user, status, nginx_conf, fpm_pool, cert_path, php_settings_json, page_cache_json, parent_site_id, block_php_shell, own_fpm, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		x.Domain, aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.Source, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), nullID(x.ParentSiteID), x.BlockPHPShell, now, now)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), nullID(x.ParentSiteID), x.BlockPHPShell, x.OwnFPM, now, now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return 0, fmt.Errorf("site %s: %w", x.Domain, ErrExists)
@@ -157,9 +160,9 @@ func (s *Store) CreateSite(ctx context.Context, x Site) (int64, error) {
 // UpdateSite saves every mutable column of x (matched by id).
 func (s *Store) UpdateSite(ctx context.Context, x Site) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET aliases_json=?, system_user=?, root_path=?, php_version=?, managed=?,
-		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, php_settings_json=?, page_cache_json=?, nginx_managed=?, redirects_json=?, sftp_json=?, object_cache_json=?, block_php_shell=?, updated_at=? WHERE id=?`,
+		wordpress=?, ssl=?, db_name=?, db_user=?, status=?, nginx_conf=?, fpm_pool=?, cert_path=?, adopted=?, php_settings_json=?, page_cache_json=?, nginx_managed=?, redirects_json=?, sftp_json=?, object_cache_json=?, block_php_shell=?, own_fpm=?, updated_at=? WHERE id=?`,
 		aliasesJSON(x.Aliases), x.SystemUser, x.RootPath, x.PHPVersion, x.Managed, x.WordPress, x.SSL,
-		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), x.NginxManaged, redirectsJSON(x.Redirects), toJSON(x.SFTP), toJSON(x.ObjectCache), x.BlockPHPShell, time.Now().Unix(), x.ID)
+		x.DBName, x.DBUser, x.Status, x.NginxConf, x.FPMPool, x.CertPath, x.Adopted, phpSettingsJSON(x.PHPSettings), toJSON(x.PageCache), x.NginxManaged, redirectsJSON(x.Redirects), toJSON(x.SFTP), toJSON(x.ObjectCache), x.BlockPHPShell, x.OwnFPM, time.Now().Unix(), x.ID)
 	if err != nil {
 		return fmt.Errorf("update site %s: %w", x.Domain, err)
 	}
@@ -232,6 +235,12 @@ func (s *Store) CountSubdomains(ctx context.Context, mainID int64) (int, error) 
 // may be changing in a running job).
 func (s *Store) SetBlockPHPShell(ctx context.Context, id int64, block bool) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET block_php_shell=?, updated_at=? WHERE id=?`, block, time.Now().Unix(), id)
+	return err
+}
+
+// SetOwnFPM records where the site's PHP pool runs (and its pool path).
+func (s *Store) SetOwnFPM(ctx context.Context, id int64, own bool, poolPath string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE sites SET own_fpm=?, fpm_pool=?, updated_at=? WHERE id=?`, own, poolPath, time.Now().Unix(), id)
 	return err
 }
 

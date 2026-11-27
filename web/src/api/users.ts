@@ -4,6 +4,9 @@ import type { Account, UsersResponse } from "./types";
 
 type LinkResponse = { setup_url: string; expires_at: string };
 
+/** A site login's limits as the API takes them (0 = none). */
+export type AccountLimitsBody = { max_subdomains: number; cpu_percent: number; memory_mb: number; disk_mb: number };
+
 export const usersKey = ["users"] as const;
 
 /** GET /users: every panel login (admins only). */
@@ -21,7 +24,7 @@ export function useSiteAccount(siteId: number) {
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { username: string; site_id: number; max_subdomains?: number }) =>
+    mutationFn: (v: { username: string; site_id: number } & Partial<AccountLimitsBody>) =>
       api<{ user: Account } & LinkResponse>("POST", "/users", v),
     onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
   });
@@ -31,7 +34,7 @@ export function useCreateUser() {
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: number; max_subdomains: number }) => api<Account>("PATCH", `/users/${v.id}`, { max_subdomains: v.max_subdomains }),
+    mutationFn: ({ id, ...body }: { id: number } & Partial<AccountLimitsBody>) => api<Account>("PATCH", `/users/${id}`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
   });
 }

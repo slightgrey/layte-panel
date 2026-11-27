@@ -150,8 +150,25 @@ func TestSiteLoginBlocksPHPShell(t *testing.T) {
 	if code, body := admin.do("POST", "/api/v1/users", map[string]any{"username": "shellco", "site_id": mainID}); code != 201 {
 		t.Fatalf("create login: %d %v", code, body)
 	}
-	if !hasBlock(pool) {
+	// The login's PHP moved into its own PHP-FPM master (its limits).
+	ownPool := "/etc/layte/fpm/shelltest/8.3/pool.d/layte-shell.test.conf"
+	if !hasBlock(ownPool) {
 		t.Error("pool not blocked after the login was created")
+	}
+	if exists(t, deps.FS, pool) {
+		t.Error("the shared pool was left after the move")
+	}
+	vhost, _ := deps.FS.ReadFile("/etc/nginx/sites-available/layte-shell.test.conf")
+	if !strings.Contains(string(vhost), "unix:/run/layte-fpm/shelltest/shell.test-php8.3.sock") {
+		t.Errorf("vhost not pointed at the login's PHP:\n%s", vhost)
+	}
+	for _, p := range []string{"/etc/systemd/system/layte-acct-shelltest.slice", "/etc/systemd/system/layte-fpm-shelltest-8.3.service"} {
+		if !exists(t, deps.FS, p) {
+			t.Errorf("missing %s", p)
+		}
+	}
+	if b, _ := deps.FS.ReadFile("/etc/systemd/system/layte-acct-shelltest.slice"); !strings.Contains(string(b), "CPUQuota=100%") || !strings.Contains(string(b), "MemoryMax=512M") {
+		t.Errorf("slice:\n%s", b)
 	}
 
 	// A subdomain site of the login inherits it.
@@ -160,7 +177,7 @@ func TestSiteLoginBlocksPHPShell(t *testing.T) {
 	if job := waitJob(t, c, body["job_id"].(string)); job["status"] != "succeeded" {
 		t.Fatalf("subdomain: %v", job)
 	}
-	if !hasBlock("/etc/php/8.3/fpm/pool.d/layte-app.shell.test.conf") {
+	if !hasBlock("/etc/layte/fpm/shelltest/8.3/pool.d/layte-app.shell.test.conf") {
 		t.Error("subdomain pool not blocked")
 	}
 
@@ -172,7 +189,37 @@ func TestSiteLoginBlocksPHPShell(t *testing.T) {
 	if code, body := admin.do("PUT", path, map[string]bool{"block": false}); code != 200 || body["block_php_shell"] != false {
 		t.Fatalf("allow: %d %v", code, body)
 	}
-	if hasBlock(pool) {
+	if hasBlock(ownPool) {
 		t.Error("pool still blocked after the admin allowed shell functions")
+	}
+
+	// Cron jobs run inside the login's limits: the line names only the site.
+	if code, body := c.do("POST", fmt.Sprintf("/api/v1/sites/%d/cron", mainID), map[string]string{"schedule": "*/5 * * * *", "command": "php cleanup.php; echo $HOME"}); code != 201 {
+		t.Fatalf("add cron: %d %v", code, body)
+	}
+	line, _ := deps.FS.ReadFile("/etc/cron.d/layte-shell_test")
+	if !strings.Contains(string(line), "*/5 * * * * root /usr/local/bin/layte cron-exec shell.test 0") || strings.Contains(string(line), "cleanup.php") {
+		t.Errorf("cron file:\n%s", line)
+	}
+	if jobs, _ := deps.FS.ReadFile("/etc/layte/cron/shell.test.json"); !strings.Contains(string(jobs), "cleanup.php") || !strings.Contains(string(jobs), "layte-acct-shelltest.slice") {
+		t.Errorf("cron jobs file:\n%s", jobs)
+	}
+
+	// Deleting the login puts its PHP and cron jobs back on the shared services.
+	_, list := admin.do("GET", "/api/v1/users", nil)
+	var id float64
+	for _, u := range list["users"].([]any) {
+		if u.(map[string]any)["username"] == "shellco" {
+			id = u.(map[string]any)["id"].(float64)
+		}
+	}
+	if code, body := admin.do("DELETE", fmt.Sprintf("/api/v1/users/%d", int(id)), nil); code != 204 {
+		t.Fatalf("delete login: %d %v", code, body)
+	}
+	if !exists(t, deps.FS, pool) || exists(t, deps.FS, ownPool) || exists(t, deps.FS, "/etc/systemd/system/layte-acct-shelltest.slice") {
+		t.Error("PHP not moved back to the shared PHP-FPM after deleting the login")
+	}
+	if line, _ := deps.FS.ReadFile("/etc/cron.d/layte-shell_test"); !strings.Contains(string(line), " shelltest cd ") {
+		t.Errorf("cron not back to a plain line:\n%s", line)
 	}
 }

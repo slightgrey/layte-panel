@@ -64,6 +64,8 @@ export interface Account {
   locked: boolean;
   /** A setup link is pending until then. */
   setup_expires?: string;
+  /** Resource limits of a site login (0 = none). */
+  limits?: { cpu_percent: number; memory_mb: number; disk_mb: number };
   created_at: string;
 }
 

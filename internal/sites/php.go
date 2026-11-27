@@ -9,7 +9,6 @@ import (
 	"github.com/slightgrey/layte-panel/internal/agent"
 	"github.com/slightgrey/layte-panel/internal/jobs"
 	"github.com/slightgrey/layte-panel/internal/store"
-	"github.com/slightgrey/layte-panel/internal/templates"
 	"github.com/slightgrey/layte-panel/internal/validate"
 )
 
@@ -66,7 +65,7 @@ func (s *Service) SwitchPHP(ctx context.Context, actor agent.Actor, site store.S
 			return err
 		}
 		undo.push("remove PHP "+version+" pool", func(ctx context.Context) error {
-			return s.Agent.Call(ctx, "php.pool_remove", actor, actions.PoolRemoveParams{Domain: site.Domain, PHPVersion: version}, nil)
+			return s.Agent.Call(ctx, "php.pool_remove", actor, poolRemoveParams(site, version), nil)
 		})
 
 		j.Step("Point nginx to PHP " + version)
@@ -78,14 +77,14 @@ func (s *Service) SwitchPHP(ctx context.Context, actor agent.Actor, site store.S
 		})
 
 		site.PHPVersion = version
-		site.FPMPool = templates.PoolPath(version, site.Domain)
+		site.FPMPool = poolPath(site, version)
 		if err := s.Store.UpdateSite(context.WithoutCancel(ctx), site); err != nil {
 			return err
 		}
 
 		// From here the switch is done; cleaning up the old pool is best effort.
 		j.Step("Remove PHP " + oldVersion + " pool")
-		if err := call("php.pool_remove", actions.PoolRemoveParams{Domain: site.Domain, PHPVersion: oldVersion}); err != nil {
+		if err := call("php.pool_remove", poolRemoveParams(site, oldVersion)); err != nil {
 			j.Log("Warning: couldn't remove the old pool (%v). It is unused and can be removed later.", err)
 		}
 		j.SetResult(map[string]any{"site_id": site.ID, "from": oldVersion, "to": version})

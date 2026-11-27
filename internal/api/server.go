@@ -52,7 +52,7 @@ func New(d Deps) http.Handler {
 		Deps:        d,
 		authLimiter: auth.NewRateLimiter(5, 10),    // per IP: 5/min, burst 10
 		keyLimiter:  auth.NewRateLimiter(120, 240), // per API key
-		sites:       &sites.Service{Store: d.Store, Agent: d.Agent, Jobs: d.Jobs},
+		sites:       &sites.Service{Store: d.Store, Agent: d.Agent, Jobs: d.Jobs, Logger: d.Log},
 	}
 	mux := http.NewServeMux()
 

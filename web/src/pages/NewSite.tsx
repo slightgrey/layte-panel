@@ -6,6 +6,7 @@ import { useCreateSite, usePHPVersions, useSite } from "@/api/sites";
 import { useCertificates } from "@/api/ssl";
 import type { SetupLink } from "@/api/types";
 import { useCreateUser } from "@/api/users";
+import { defaultLimits, LimitsFields, limitsBody } from "@/components/PanelLoginCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox, Field, Select } from "@/components/ui/field";
@@ -54,7 +55,7 @@ export function NewSitePage() {
   }, [certs.data, sslEmail]);
   const [withLogin, setWithLogin] = useState(false);
   const [loginUser, setLoginUser] = useState("");
-  const [loginLimit, setLoginLimit] = useState("5");
+  const [loginLimits, setLoginLimits] = useState(defaultLimits);
   const createUser = useCreateUser();
 
   // Default to the newest installed PHP.
@@ -86,7 +87,7 @@ export function NewSitePage() {
           // The site row exists as soon as the job starts, so its login can be made right away.
           const user = loginUser.trim() || defaultUsername(domain.trim());
           createUser.mutate(
-            { username: user, site_id: res.site_id, max_subdomains: Number(loginLimit) },
+            { username: user, site_id: res.site_id, ...limitsBody(loginLimits) },
             { onSuccess: (r) => go({ username: r.user.username, setup_url: r.setup_url, expires_at: r.expires_at }), onError: () => go() },
           );
         },
@@ -218,13 +219,11 @@ export function NewSitePage() {
               onChange={(e) => setWithLogin(e.target.checked)}
             />
             {withLogin && (
-              <div className="grid gap-4 border-l-2 pl-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-4 border-l-2 pl-4">
                 <Field label="Username" htmlFor="login_user">
-                  <Input id="login_user" pattern="[a-z][a-z0-9_\-]{2,31}" title="3-32 lowercase letters, digits, _ or -" placeholder={domain ? defaultUsername(domain) : ""} spellCheck={false} value={loginUser} onChange={(e) => setLoginUser(e.target.value)} />
+                  <Input id="login_user" className="max-w-sm" pattern="[a-z][a-z0-9_\-]{2,31}" title="3-32 lowercase letters, digits, _ or -" placeholder={domain ? defaultUsername(domain) : ""} spellCheck={false} value={loginUser} onChange={(e) => setLoginUser(e.target.value)} />
                 </Field>
-                <Field label="Subdomain limit" htmlFor="login_limit" hint="Subdomains they may add (0-100).">
-                  <Input id="login_limit" type="number" min={0} max={100} required value={loginLimit} onChange={(e) => setLoginLimit(e.target.value)} />
-                </Field>
+                <LimitsFields id="newlogin" value={loginLimits} onChange={setLoginLimits} />
               </div>
             )}
           </CardContent>

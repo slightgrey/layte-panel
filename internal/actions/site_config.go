@@ -38,6 +38,9 @@ type SiteConfigParams struct {
 	OwnCert string `json:"own_cert,omitempty"`
 	// BlockShell disables PHP's shell functions in the pool.
 	BlockShell bool `json:"block_shell,omitempty"`
+	// OwnFPM: the pool runs in the site login's own PHP-FPM master (its
+	// resource limits), for Username.
+	OwnFPM bool `json:"own_fpm,omitempty"`
 }
 
 // validOwnCert checks a certbot live folder (/etc/letsencrypt/live/<name>).
@@ -104,7 +107,7 @@ func (p SiteConfigParams) Validate() error {
 }
 
 func (p SiteConfigParams) site() templates.Site {
-	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert, Redirects: p.Redirects, BlockShell: p.BlockShell}
+	return templates.Site{Domain: p.Domain, Aliases: p.Aliases, User: p.Username, PHPVersion: p.PHPVersion, SSL: p.SSL, PHP: p.PHP, Cache: p.Cache, WebRoot: p.WebRoot, OwnCert: p.OwnCert, Redirects: p.Redirects, BlockShell: p.BlockShell, OwnFPM: p.OwnFPM}
 }
 
 // checkWebRoot: config writes for an adopted site need its vhost taken over.
@@ -161,9 +164,18 @@ func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParam
 	if _, err := d.Users.Lookup(p.Username); err != nil {
 		return nil, err
 	}
-	// Before the pool's reload, so later reloads don't cut off requests
-	// (e.g. a PHP version installed after the agent started).
-	if _, err := d.ensureFPMGraceful(ctx, p.PHPVersion); err != nil {
+	target := sharedPoolTarget(p.PHPVersion, p.Domain)
+	if p.OwnFPM {
+		if err := d.requireSiteUser(p.Username); err != nil {
+			return nil, err
+		}
+		if err := d.ensureAccountFPM(ctx, p.Username, p.PHPVersion); err != nil {
+			return nil, err
+		}
+		target = accountPoolTarget(p.Username, p.PHPVersion, p.Domain)
+	} else if _, err := d.ensureFPMGraceful(ctx, p.PHPVersion); err != nil {
+		// Before the pool's reload, so later reloads don't cut off requests
+		// (e.g. a PHP version installed after the agent started).
 		return nil, err
 	}
 	site := p.site()
@@ -172,9 +184,9 @@ func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParam
 	if err != nil {
 		return nil, err
 	}
-	path := templates.PoolPath(p.PHPVersion, p.Domain)
+	path := target.path
 	err = system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
-		Path: path, Content: content, Test: fpmTest(p.PHPVersion), Reload: fpmReload(p.PHPVersion),
+		Path: path, Content: content, Test: target.test, Reload: target.reload,
 	})
 	if err != nil {
 		return nil, configError(err)
@@ -189,17 +201,32 @@ func (d Deps) phpPoolWrite(ctx context.Context, _ agent.Actor, p SiteConfigParam
 type PoolRemoveParams struct {
 	Domain     string `json:"domain"`
 	PHPVersion string `json:"php_version"`
+	// OwnFPM: the pool is in the site login Username's own PHP-FPM master.
+	OwnFPM   bool   `json:"own_fpm,omitempty"`
+	Username string `json:"username,omitempty"`
 }
 
 func (p PoolRemoveParams) Validate() error {
 	if err := validDomain(p.Domain); err != nil {
 		return err
 	}
+	if p.OwnFPM {
+		if err := validate.SiteUsername(p.Username); err != nil {
+			return err
+		}
+	}
 	return validate.PHPVersion(p.PHPVersion, []string{p.PHPVersion})
 }
 
 // phpPoolRemove removes the site's pool for one PHP version (idempotent).
 func (d Deps) phpPoolRemove(ctx context.Context, _ agent.Actor, p PoolRemoveParams) (any, error) {
+	if p.OwnFPM {
+		removed, err := d.removeAccountPool(ctx, p.Username, p.PHPVersion, p.Domain)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"removed": removed}, nil
+	}
 	path := templates.PoolPath(p.PHPVersion, p.Domain)
 	if ok, _ := d.FS.Exists(path); !ok {
 		return map[string]bool{"removed": false}, nil
