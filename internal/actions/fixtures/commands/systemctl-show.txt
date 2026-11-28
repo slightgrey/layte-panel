@@ -4,6 +4,8 @@ LoadState=loaded
 ActiveState=active
 SubState=running
 UnitFileState=enabled
+ActiveEnterTimestamp=Thu 2026-11-13 08:12:41 UTC
+MemoryCurrent=18350080
 
 Id=mysql.service
 Description=MySQL Community Server
@@ -11,6 +13,8 @@ LoadState=loaded
 ActiveState=active
 SubState=running
 UnitFileState=enabled
+ActiveEnterTimestamp=Thu 2026-11-13 08:12:44 UTC
+MemoryCurrent=412000256
 
 Id=mariadb.service
 Description=mariadb.service
@@ -25,6 +29,8 @@ LoadState=loaded
 ActiveState=active
 SubState=running
 UnitFileState=enabled
+ActiveEnterTimestamp=Thu 2026-11-13 08:12:40 UTC
+MemoryCurrent=2097152
 
 Id=ssh.service
 Description=OpenBSD Secure Shell server
@@ -32,6 +38,8 @@ LoadState=loaded
 ActiveState=active
 SubState=running
 UnitFileState=disabled
+ActiveEnterTimestamp=Thu 2026-11-13 08:12:40 UTC
+MemoryCurrent=6291456
 
 Id=ufw.service
 Description=Uncomplicated firewall
@@ -53,3 +61,5 @@ LoadState=loaded
 ActiveState=active
 SubState=running
 UnitFileState=enabled
+ActiveEnterTimestamp=Mon 2026-11-24 19:03:02 UTC
+MemoryCurrent=96468992

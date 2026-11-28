@@ -2,6 +2,8 @@
 
 A **site login** (a "site account") is a panel login for whoever runs one site: a client, a colleague, the site's own developer. It sees **only that site and its subdomains**. It never sees the server's other sites, the dashboard, Security, Updates, Users or API keys.
 
+![A site login's view: only Sites, and its plan in the sidebar](screenshots/site-login.png)
+
 ## Creating a login
 As an admin, use either of these:
 - **New site → Panel login → Create a login for this site**, while creating the site; or
@@ -13,6 +15,8 @@ Choose a username and a **subdomain limit** (how many subdomains the login may a
 - then has them set up **two-factor login** by scanning a QR code with an authenticator app. 2FA is required, just as it is for admins.
 
 If the link reaches the wrong person, or expires, issue a new one. The old link stops working at once.
+
+![The two-factor setup the user sees after choosing a password](screenshots/setup-2fa.png)
 
 Each main site can have one login. Subdomain sites use the login of their main site.
 
@@ -92,6 +96,8 @@ To stay light on busy servers:
 Adopted sites whose nginx config is still yours keep running in the shared PHP-FPM service, because their socket can't be moved without changing your config. They have no CPU or RAM limit until you let Layte manage the site's nginx config.
 
 ## Managing logins
+![Users: site logins in a table, one opened with its limits, actions and usage](screenshots/users.png)
+
 **Users** (admins) lists every login. For each site login you can:
 - change the **limits**: subdomains, CPU, RAM and disk. Lowering the subdomain limit doesn't delete existing subdomains; it only stops new ones. New CPU and RAM limits apply at once;
 - see its **usage**;
