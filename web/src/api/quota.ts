@@ -29,3 +29,16 @@ export function useEnableQuotas() {
     onSuccess: (st) => qc.setQueryData(quotaKey, st),
   });
 }
+
+/** POST /quota/disable (admins): quotas off, usrquota out of /etc/fstab; every login's disk limit goes back to none. */
+export function useDisableQuotas() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<QuotaStatus>("POST", "/quota/disable"),
+    onSuccess: (st) => {
+      qc.setQueryData(quotaKey, st);
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["usage"] });
+    },
+  });
+}

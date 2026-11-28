@@ -178,6 +178,7 @@ func New(d Deps) http.Handler {
 
 	mux.Handle("GET /api/v1/quota", authed(s.handleQuotaStatus))
 	mux.Handle("POST /api/v1/quota/enable", authed(s.handleEnableQuotas))
+	mux.Handle("POST /api/v1/quota/disable", authed(s.handleDisableQuotas))
 	mux.Handle("GET /api/v1/users", authed(s.handleListUsers))
 	mux.Handle("GET /api/v1/users/{id}/usage", authed(s.handleUserUsage))
 	mux.Handle("POST /api/v1/users", authed(s.handleCreateUser))

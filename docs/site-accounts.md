@@ -69,6 +69,14 @@ How it works:
 
   Only ext4 is supported; xfs needs boot options that Layte doesn't change.
 
+  **Turn off disk quotas** on the same card undoes it:
+  - quotas are switched off;
+  - `usrquota` is taken out of `/etc/fstab`, checked the same way, so the quota service doesn't switch them back on at boot;
+  - the quota file is removed;
+  - every login's disk limit goes back to none.
+
+  The quota tools and kernel module stay installed, so turning quotas on again is quick.
+
 Each login sees **Your plan** in the sidebar on every page (on the Sites page on phones):
 - disk used of its limit;
 - RAM and CPU in use right now;

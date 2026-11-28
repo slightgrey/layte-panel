@@ -31,3 +31,18 @@ func TestParseQuota(t *testing.T) {
 		t.Errorf("no quota: %+v, %v", q, ok)
 	}
 }
+
+func TestRemoveUsrquota(t *testing.T) {
+	fstab := "LABEL=root\t/\text4\tdiscard,errors=remount-ro\t0 1\n"
+	with, _, _ := addUsrquota(fstab, "/")
+	got, changed := removeUsrquota(with, "/")
+	if !changed || got != fstab {
+		t.Errorf("removeUsrquota = %q, %v", got, changed)
+	}
+	if _, changed := removeUsrquota(fstab, "/"); changed {
+		t.Error("changed an fstab without usrquota")
+	}
+	if got, _ := removeUsrquota("/dev/sda1 / ext4 usrquota 0 1\n", "/"); got != "/dev/sda1 / ext4 defaults 0 1\n" {
+		t.Errorf("only option removed: %q", got)
+	}
+}

@@ -73,4 +73,18 @@ func TestDiskQuotas(t *testing.T) {
 	if code, _ := admin.do("GET", path+"/usage?fresh=1", nil); code != 200 || quotaReads() != before+1 {
 		t.Errorf("fresh usage didn't measure disk: %d (quota reads %d → %d)", code, before, quotaReads())
 	}
+
+	// Turning quotas off: usrquota leaves fstab, disk limits go back to none.
+	if code, body := admin.do("POST", "/api/v1/quota/disable", nil); code != 200 || body["enabled"] != false {
+		t.Fatalf("disable: %d %v", code, body)
+	}
+	if b, _ := deps.FS.ReadFile("/etc/fstab"); strings.Contains(string(b), "usrquota") {
+		t.Errorf("fstab still has usrquota:\n%s", b)
+	}
+	_, list := admin.do("GET", "/api/v1/users", nil)
+	for _, u := range list["users"].([]any) {
+		if l, ok := u.(map[string]any)["limits"].(map[string]any); ok && l["disk_mb"] != float64(0) {
+			t.Errorf("disk limit kept after turning quotas off: %v", l)
+		}
+	}
 }

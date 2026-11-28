@@ -1,5 +1,5 @@
 import { HardDrive } from "lucide-react";
-import { useEnableQuotas, useQuotaStatus } from "@/api/quota";
+import { useDisableQuotas, useEnableQuotas, useQuotaStatus } from "@/api/quota";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { FormError } from "@/pages/AuthShell";
 export function QuotaCard() {
   const st = useQuotaStatus();
   const enable = useEnableQuotas();
+  const disable = useDisableQuotas();
   return (
     <Card>
       <CardHeader>
@@ -28,7 +29,23 @@ export function QuotaCard() {
             On for <code className="font-mono">{st.data.mount}</code> ({st.data.fs_type}). A site login's disk limit is a hard limit: the server stops
             its writes past it (PHP, SFTP, cron and uploads alike).
           </p>
-        ) : !st.data.supported ? (
+        ) : null}
+        {st.data?.enabled && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="self-start text-destructive"
+            disabled={disable.isPending}
+            onClick={() =>
+              confirm(
+                "Turn off disk quotas? Every site login's disk limit goes back to none, and usrquota is taken out of /etc/fstab (the file is checked before it's used). You can turn them on again later.",
+              ) && disable.mutate()
+            }
+          >
+            {disable.isPending ? "Turning off…" : "Turn off disk quotas"}
+          </Button>
+        )}
+        {st.isPending || st.error || st.data?.enabled ? null : !st.data.supported ? (
           <p className="text-muted-foreground">Disk quotas can't be turned on here: {st.data.reason}.</p>
         ) : (
           <>
@@ -54,7 +71,7 @@ export function QuotaCard() {
             </Button>
           </>
         )}
-        <FormError message={enable.error?.message} />
+        <FormError message={enable.error?.message ?? disable.error?.message} />
       </CardContent>
     </Card>
   );

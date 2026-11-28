@@ -215,6 +215,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 				state = "on"
 			}
 			return system.Result{Stdout: []byte("user quota on / (/dev/vda1) is " + state + "\n")}, nil
+		case c.Bin == quotaoffBin:
+			return system.Result{}, root.Remove("/var/lib/layte-dev/quota-on")
 		case c.Bin == quotaonBin:
 			root.MkdirAll("/var/lib/layte-dev", 0o755)
 			return system.Result{}, root.WriteFileAtomic("/var/lib/layte-dev/quota-on", []byte("1"), 0o644)

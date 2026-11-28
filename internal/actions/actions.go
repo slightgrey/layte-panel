@@ -96,6 +96,7 @@ func Register(reg *agent.Registry, d Deps) {
 		agent.Def("account.apply", false, 30*time.Second, d.accountApply),
 		agent.Def("account.remove", false, 60*time.Second, d.accountRemove),
 		agent.Def("quota.enable", false, 25*time.Minute, d.quotaEnable),
+		agent.Def("quota.disable", false, 2*time.Minute, d.quotaDisable),
 		agent.Def("quota.set", false, 30*time.Second, d.quotaSet),
 		agent.Def("php.pool_write", false, time.Minute, d.phpPoolWrite),
 		agent.Def("php.pool_remove", false, 30*time.Second, d.phpPoolRemove),
