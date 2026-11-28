@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/sites"
 	"github.com/slightgrey/layte-panel/internal/store"
@@ -27,8 +28,18 @@ func TestDiskQuotaOnRealServer(t *testing.T) {
 		t.Skipf("quotas not supported here: %s", st.Reason)
 	}
 	if !st.Enabled {
-		if st, err = e.svc.EnableQuotas(ctx, e.actor); err != nil {
+		if _, err := e.svc.EnableQuotas(e.actor); err != nil {
 			t.Fatal(err)
+		}
+		for deadline := time.Now().Add(20 * time.Minute); time.Now().Before(deadline); time.Sleep(time.Second) {
+			qs, _ := e.svc.QuotaState(ctx, e.actor)
+			if qs.Busy == "" {
+				if qs.LastError != "" {
+					t.Fatal(qs.LastError)
+				}
+				st = qs.QuotaStatus
+				break
+			}
 		}
 		if !st.Enabled {
 			t.Fatalf("quotas still off: %+v", st)

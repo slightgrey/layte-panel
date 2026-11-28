@@ -360,6 +360,12 @@ func (d Deps) editFstab(ctx context.Context, old, next []byte) error {
 		}
 		return fmt.Errorf("the new /etc/fstab failed findmnt --verify, so it was put back: %s", failure(res, err, 3))
 	}
+	// systemd's fstab generator reads it at boot and on reload: with
+	// usrquota, the mount pulls in quotaon.service, so quotas come back on
+	// after a reboot (and stop doing so once it's removed).
+	if res, err := d.Runner.Run(ctx, systemctl, "daemon-reload"); err != nil {
+		return fmt.Errorf("systemctl daemon-reload: %s", failure(res, err, 3))
+	}
 	return nil
 }
 
