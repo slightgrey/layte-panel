@@ -243,14 +243,23 @@ func devQuotaOpt(root system.FS) string {
 	return ""
 }
 
-// devQuota: every user with a fake limit uses 1 GB.
+// devQuota: a user with a fake limit uses what its site folders "hold".
 func devQuota(root system.FS, user string) system.Result {
 	hard, err := root.ReadFile("/var/lib/layte-dev/quota/" + user)
 	if err != nil {
 		return system.Result{Stdout: []byte("Disk quotas for user " + user + " (uid 1001): none\n")}
 	}
-	return system.Result{Stdout: []byte(fmt.Sprintf("Disk quotas for user %s (uid 1001):\n     Filesystem  blocks   quota   limit   grace   files   quota   limit   grace\n      /dev/vda1 1048576       0 %s       0      10       0       0       0\n",
-		user, strings.TrimSpace(string(hard))))}
+	// Used: what fakeDu says each of the user's site folders holds, so the
+	// plan matches the sites' "Size on disk".
+	dirs, _ := root.Glob("/home/" + user + "/*")
+	var usedKB int64
+	for _, d := range dirs {
+		if fi, err := root.Lstat(d); err == nil && fi.IsDir() {
+			usedKB += 51_200_000 / 1024
+		}
+	}
+	return system.Result{Stdout: []byte(fmt.Sprintf("Disk quotas for user %s (uid 1001):\n     Filesystem  blocks   quota   limit   grace   files   quota   limit   grace\n      /dev/vda1 %d       0 %s       0      10       0       0       0\n",
+		user, usedKB, strings.TrimSpace(string(hard))))}
 }
 
 // fakeDu reports made-up but stable sizes: the whole site is the sum of its

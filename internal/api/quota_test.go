@@ -51,7 +51,7 @@ func TestDiskQuotas(t *testing.T) {
 	code, body = admin.do("GET", path+"/usage", nil)
 	if code != 200 || body["active"] != true || body["cpu_limit"] != float64(50) || body["memory_bytes"] != float64(104857600) ||
 		body["memory_limit"] != float64(536870912) || body["processes"] != float64(4) ||
-		body["disk_exact"] != true || body["disk_bytes"] != float64(1<<30) || body["disk_limit"] != float64(2<<30) {
+		body["disk_exact"] != true || body["disk_bytes"] != float64(51_200_000/1024*1024) || body["disk_limit"] != float64(2<<30) {
 		t.Errorf("usage: %d %v", code, body)
 	}
 }

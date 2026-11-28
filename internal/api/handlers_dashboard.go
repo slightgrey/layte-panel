@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/slightgrey/layte-panel/internal/actions"
 	"sync"
 	"time"
 
@@ -70,4 +72,15 @@ func (s *server) agentError(action string, err error) *apiError {
 	}
 	s.Log.Error("agent unavailable", "action", action, "err", err)
 	return &apiError{Code: "agent_unavailable", Message: "cannot reach layte-agent; is the service running?"}
+}
+
+// GET /api/v1/system/info — just the server's CPU, memory and disks (the
+// sidebar's server stats; lighter than the whole dashboard).
+func (s *server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
+	var info actions.SystemInfo
+	if err := s.Agent.Call(r.Context(), "system.info", actorOf(r), nil, &info); err != nil {
+		s.writeSiteError(w, "system info", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }
