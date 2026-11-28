@@ -1,25 +1,79 @@
-import { Gauge, RefreshCw } from "lucide-react";
+import { Check, Gauge, RefreshCw } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { type Usage, useRefreshUsage, useUsage } from "@/api/usage";
 import { Spinner } from "@/components/Spinner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** ↻: measure everything now, disk included (it's otherwise reused for up to 5 minutes). */
-export function RefreshUsage({ userId, checkedAt }: { userId?: number; checkedAt?: string }) {
-  const refresh = useRefreshUsage(userId);
-  const when = checkedAt ? new Date(checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+/** true for 2 s after `doneAt` changes (a refresh just finished). */
+function useJustDone(doneAt: number) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!doneAt) return;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 2000);
+    return () => clearTimeout(t);
+  }, [doneAt]);
+  return show;
+}
+
+/** ↻ with a spin while busy, and a short "Updated" after. */
+export function RefreshButton({ busy, doneAt, onClick, title }: { busy: boolean; doneAt: number; onClick: () => void; title: string }) {
+  const done = useJustDone(doneAt);
   return (
-    <button
-      type="button"
-      onClick={() => refresh.mutate()}
-      disabled={refresh.isPending}
-      className="inline-flex items-center gap-1 rounded-md p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-60"
-      title={`Refresh now${when ? ` (disk checked at ${when})` : ""}`}
-      aria-label="Refresh usage"
-    >
-      <RefreshCw className={cn("size-3.5", refresh.isPending && "animate-spin")} />
-    </button>
+    <span className="inline-flex items-center gap-1.5">
+      {busy ? (
+        <span className="text-[0.6875rem] text-muted-foreground" role="status">
+          Refreshing…
+        </span>
+      ) : done ? (
+        <span className="inline-flex items-center gap-0.5 text-[0.6875rem] text-success" role="status">
+          <Check className="size-3" /> Updated
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={busy}
+        className="inline-flex items-center rounded-md p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-60"
+        title={title}
+        aria-label={title}
+      >
+        <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
+      </button>
+    </span>
+  );
+}
+
+/** Dims what it wraps while it's being refreshed. */
+export function Refreshing({ busy, children }: { busy: boolean; children: ReactNode }) {
+  return <div className={cn("transition-opacity", busy && "pointer-events-none animate-pulse opacity-40")}>{children}</div>;
+}
+
+/** A login's usage with its header (title + refresh) — the sidebar box, the plan card, the admin's view. */
+export function UsagePanel({ userId, title, compact = false }: { userId?: number; title: ReactNode; compact?: boolean }) {
+  const usage = useUsage(userId);
+  const refresh = useRefreshUsage(userId);
+  const when = usage.data?.disk_checked_at ? new Date(usage.data.disk_checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  if (usage.isPending) return <Spinner />;
+  if (usage.error) return <p className="text-xs text-muted-foreground">Usage unavailable: {usage.error.message}</p>;
+  if (usage.data.max_subdomains === undefined) return null;
+  return (
+    <div className="flex flex-col">
+      <div className={cn("flex items-center justify-between gap-2", compact ? "mb-2" : "mb-3")}>
+        {title}
+        <RefreshButton
+          busy={refresh.isPending}
+          doneAt={refresh.isSuccess ? refresh.submittedAt : 0}
+          onClick={() => refresh.mutate()}
+          title={`Refresh now${when ? ` (disk checked at ${when})` : ""}`}
+        />
+      </div>
+      <Refreshing busy={refresh.isPending}>
+        <UsageRows u={usage.data} compact={compact} />
+      </Refreshing>
+    </div>
   );
 }
 
@@ -59,17 +113,17 @@ export function UsageRows({ u, compact = false }: { u: Usage; compact?: boolean 
 
 /** A site login's usage against its limits: "Your plan" for the login, the same for admins. */
 export function UsageCard({ userId, title = "Your plan" }: { userId?: number; title?: string }) {
-  const usage = useUsage(userId);
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Gauge className="size-4" /> {title}
-        </CardTitle>
-        <RefreshUsage userId={userId} checkedAt={usage.data?.disk_checked_at} />
-      </CardHeader>
-      <CardContent>
-        {usage.isPending ? <Spinner /> : usage.error ? <p className="text-sm text-destructive">{usage.error.message}</p> : <UsageRows u={usage.data} />}
+      <CardContent className="pt-5">
+        <UsagePanel
+          userId={userId}
+          title={
+            <CardTitle className="flex items-center gap-2">
+              <Gauge className="size-4" /> {title}
+            </CardTitle>
+          }
+        />
         <p className="mt-3 text-xs text-muted-foreground">
           RAM and CPU count every PHP request and cron job of these sites together. 100% CPU is one full core.
         </p>
