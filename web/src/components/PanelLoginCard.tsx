@@ -2,7 +2,7 @@ import { Check, KeyRound, LoaderCircle, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useQuotaStatus } from "@/api/quota";
 import type { Account, SetupLink, Site } from "@/api/types";
-import { useCreateUser, useDeleteUser, useResetUser2FA, useResetUserPassword, useSiteAccount, useUpdateUser } from "@/api/users";
+import { useCreateUser, useDeleteUser, useResetUser2FA, useResetUserPassword, useSetUserPassword, useSiteAccount, useUpdateUser } from "@/api/users";
 import { Spinner } from "@/components/Spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,7 @@ export function AccountRow({ account: a, onLink }: { account: Account; onLink: (
       </form>
       <p className="-mt-1 text-xs text-muted-foreground">0 = no limit (CPU 100% = one full core; RAM is for all their PHP and cron jobs together).</p>
       <div className="flex flex-wrap items-end gap-2">
+        <ChangePassword account={a} />
         <Button
           variant="outline"
           size="sm"
@@ -153,6 +154,82 @@ export function AccountRow({ account: a, onLink }: { account: Account; onLink: (
       </div>
       <FormError message={err?.message} />
     </div>
+  );
+}
+
+const MIN_PASSWORD = 12; // auth.MinPasswordLen
+
+/** Admins: set a site login's password directly (it's signed out everywhere; its 2FA stays). */
+function ChangePassword({ account: a }: { account: Account }) {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const [again, setAgain] = useState("");
+  const [done, setDone] = useState(false);
+  const set = useSetUserPassword();
+  const close = () => {
+    setOpen(false);
+    setPw("");
+    setAgain("");
+    set.reset();
+  };
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => (setDone(false), setOpen(true))}>
+        {done ? (
+          <>
+            <Check className="text-success" /> Password changed
+          </>
+        ) : (
+          "Change password"
+        )}
+      </Button>
+      <Dialog open={open} onClose={close} title={`New password for ${a.username}`}>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            set.mutate(
+              { id: a.id, password: pw },
+              {
+                onSuccess: () => {
+                  setDone(true);
+                  close();
+                },
+              },
+            );
+          }}
+        >
+          <p className="text-sm text-muted-foreground">
+            They're signed out everywhere and sign in again with this password (their two-factor login stays). Any setup or reset link stops working.
+          </p>
+          <Field label="New password" htmlFor={`setpw-${a.id}`} hint={`At least ${MIN_PASSWORD} characters.`}>
+            <Input id={`setpw-${a.id}`} type="password" autoComplete="new-password" required minLength={MIN_PASSWORD} value={pw} onChange={(e) => setPw(e.target.value)} />
+          </Field>
+          <Field
+            label="Repeat password"
+            htmlFor={`setpw2-${a.id}`}
+            hint={again !== "" && again !== pw ? <span className="text-destructive">The passwords don't match.</span> : undefined}
+          >
+            <Input id={`setpw2-${a.id}`} type="password" autoComplete="new-password" required value={again} onChange={(e) => setAgain(e.target.value)} />
+          </Field>
+          <FormError message={set.error?.message} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={close}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={set.isPending || pw.length < MIN_PASSWORD || pw !== again}>
+              {set.isPending ? (
+                <>
+                  <LoaderCircle className="animate-spin" /> Saving…
+                </>
+              ) : (
+                "Change password"
+              )}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   );
 }
 
