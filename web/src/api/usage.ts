@@ -35,7 +35,8 @@ export function useUsage(userId?: number) {
 export function useRefreshUsage(userId?: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api<Usage>("GET", usagePath(userId) + "?fresh=1"),
+    // At least a moment, so the refresh is visible even when it's instant.
+    mutationFn: async () => (await Promise.all([api<Usage>("GET", usagePath(userId) + "?fresh=1"), new Promise((r) => setTimeout(r, 400))]))[0],
     onSuccess: (u) => qc.setQueryData(usageKey(userId), u),
   });
 }
