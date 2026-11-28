@@ -506,7 +506,8 @@ func (s *server) handleUserUsage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) writeUsage(w http.ResponseWriter, r *http.Request, u store.User) {
-	usage, err := s.sites.AccountUsage(r.Context(), actorOf(r), u)
+	// ?fresh=1 (the refresh button): measure disk use now, not the cached one.
+	usage, err := s.sites.AccountUsage(r.Context(), actorOf(r), u, r.URL.Query().Get("fresh") == "1")
 	if err != nil {
 		s.writeSiteError(w, "usage", err)
 		return

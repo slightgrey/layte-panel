@@ -12,7 +12,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/pages/AuthShell";
 import { OneTimeSecrets } from "./JobProgress";
-import { UsageRows } from "./UsageCard";
+import { RefreshUsage, UsageRows } from "./UsageCard";
 import { useUsage } from "@/api/usage";
 
 /** A login's live usage, for admins. */
@@ -22,6 +22,9 @@ export function UsageRowsLive({ userId }: { userId: number }) {
   if (u.error) return <p className="text-xs text-muted-foreground">Usage unavailable: {u.error.message}</p>;
   return (
     <div className="rounded-[12px] bg-background p-3 shadow-inset">
+      <div className="-mt-1 mb-1 flex justify-end">
+        <RefreshUsage userId={userId} checkedAt={u.data.disk_checked_at} />
+      </div>
       <UsageRows u={u.data} />
     </div>
   );
