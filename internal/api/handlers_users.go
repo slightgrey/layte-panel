@@ -467,7 +467,7 @@ func (s *server) handleTOTPSetupConfirm(w http.ResponseWriter, r *http.Request) 
 
 // GET /api/v1/quota — whether disk quotas are on for /home's filesystem.
 func (s *server) handleQuotaStatus(w http.ResponseWriter, r *http.Request) {
-	st, err := s.sites.QuotaStatus(r.Context(), actorOf(r))
+	st, err := s.sites.QuotaState(r.Context(), actorOf(r))
 	if err != nil {
 		s.writeSiteError(w, "quota status", err)
 		return
@@ -478,12 +478,12 @@ func (s *server) handleQuotaStatus(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/quota/enable — turn disk quotas on (installs the quota tools,
 // adds usrquota to /etc/fstab, remounts). Admins, once.
 func (s *server) handleEnableQuotas(w http.ResponseWriter, r *http.Request) {
-	st, err := s.sites.EnableQuotas(r.Context(), actorOf(r))
+	st, err := s.sites.EnableQuotas(actorOf(r))
 	if err != nil {
 		s.writeSiteError(w, "enable quotas", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, http.StatusAccepted, st) // runs on; GET /quota says when it's done
 }
 
 // GET /api/v1/account/usage — a site login's own usage and limits.
@@ -518,12 +518,12 @@ func (s *server) writeUsage(w http.ResponseWriter, r *http.Request, u store.User
 // POST /api/v1/quota/disable — turn disk quotas off (and take usrquota out
 // of /etc/fstab); every login's disk limit goes back to none.
 func (s *server) handleDisableQuotas(w http.ResponseWriter, r *http.Request) {
-	st, err := s.sites.DisableQuotas(r.Context(), actorOf(r))
+	st, err := s.sites.DisableQuotas(actorOf(r))
 	if err != nil {
 		s.writeSiteError(w, "disable quotas", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, http.StatusAccepted, st)
 }
 
 // PUT /api/v1/users/{id}/password {password} — admins: set a site login's

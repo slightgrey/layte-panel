@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
 	"github.com/slightgrey/layte-panel/internal/system"
@@ -28,9 +29,13 @@ func TestDiskQuotas(t *testing.T) {
 		t.Errorf("disk limit without quotas: %d %v", code, body)
 	}
 
+	// Turning on runs in the background; the status says it's busy until done.
 	code, body = admin.do("POST", "/api/v1/quota/enable", nil)
-	if code != 200 || body["enabled"] != true {
+	if code != 202 || body["busy"] != "enabling" {
 		t.Fatalf("enable: %d %v", code, body)
+	}
+	if body := waitQuota(t, admin); body["enabled"] != true || body["last_error"] != nil {
+		t.Fatalf("after enabling: %v", body)
 	}
 	if b, _ := deps.FS.ReadFile("/etc/fstab"); !strings.Contains(string(b), "discard,errors=remount-ro,usrquota") || !strings.Contains(string(b), "/boot/efi") {
 		t.Errorf("fstab:\n%s", b)
@@ -75,8 +80,11 @@ func TestDiskQuotas(t *testing.T) {
 	}
 
 	// Turning quotas off: usrquota leaves fstab, disk limits go back to none.
-	if code, body := admin.do("POST", "/api/v1/quota/disable", nil); code != 200 || body["enabled"] != false {
+	if code, body := admin.do("POST", "/api/v1/quota/disable", nil); code != 202 {
 		t.Fatalf("disable: %d %v", code, body)
+	}
+	if body := waitQuota(t, admin); body["enabled"] != false {
+		t.Fatalf("after disabling: %v", body)
 	}
 	if b, _ := deps.FS.ReadFile("/etc/fstab"); strings.Contains(string(b), "usrquota") {
 		t.Errorf("fstab still has usrquota:\n%s", b)
@@ -87,4 +95,16 @@ func TestDiskQuotas(t *testing.T) {
 			t.Errorf("disk limit kept after turning quotas off: %v", l)
 		}
 	}
+}
+
+// waitQuota polls GET /quota until no turn on/off is running.
+func waitQuota(t *testing.T, c *client) map[string]any {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if code, body := c.do("GET", "/api/v1/quota", nil); code == 200 && body["busy"] == nil {
+			return body
+		}
+	}
+	t.Fatal("disk quotas stayed busy")
+	return nil
 }
