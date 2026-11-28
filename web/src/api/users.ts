@@ -35,7 +35,8 @@ export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...body }: { id: number } & Partial<AccountLimitsBody>) => api<Account>("PATCH", `/users/${id}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
+    // Waits for the fresh list, so "Saved" shows with the new values in place.
+    onSuccess: (_, v) => Promise.all([qc.invalidateQueries({ queryKey: usersKey }), qc.invalidateQueries({ queryKey: ["usage", v.id] })]),
   });
 }
 

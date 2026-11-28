@@ -1,4 +1,4 @@
-import { KeyRound, UserPlus } from "lucide-react";
+import { Check, KeyRound, LoaderCircle, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useQuotaStatus } from "@/api/quota";
 import type { Account, SetupLink, Site } from "@/api/types";
@@ -110,11 +110,32 @@ export function AccountRow({ account: a, onLink }: { account: Account; onLink: (
           update.mutate({ id: a.id, ...limitsBody(limits) });
         }}
       >
-        <LimitsFields id={`acc-${a.id}`} value={limits} onChange={setLimits} compact />
+        <LimitsFields
+          id={`acc-${a.id}`}
+          value={limits}
+          onChange={(v) => {
+            update.reset(); // a new change: the last "Saved" no longer applies
+            setLimits(v);
+          }}
+          compact
+        />
         <Button type="submit" variant="outline" size="sm" disabled={update.isPending || !dirty}>
-          Save limits
+          {update.isPending ? (
+            <>
+              <LoaderCircle className="animate-spin" /> Saving…
+            </>
+          ) : (
+            "Save limits"
+          )}
         </Button>
+        {update.isPending && <span className="text-xs text-muted-foreground">Applying the limits on the server (a few seconds)…</span>}
+        {update.isSuccess && !dirty && (
+          <span className="inline-flex items-center gap-1 text-xs text-success" role="status">
+            <Check className="size-3.5" /> Saved: the new limits apply now
+          </span>
+        )}
       </form>
+      <p className="-mt-1 text-xs text-muted-foreground">0 = no limit (CPU 100% = one full core; RAM is for all their PHP and cron jobs together).</p>
       <div className="flex flex-wrap items-end gap-2">
         <Button
           variant="outline"
@@ -243,7 +264,13 @@ function CreateLogin({ site, onCreated }: { site: Site; onCreated: (v: SetupLink
               Cancel
             </Button>
             <Button type="submit" disabled={create.isPending}>
-              Create login
+              {create.isPending ? (
+                <>
+                  <LoaderCircle className="animate-spin" /> Creating… (setting up its limits)
+                </>
+              ) : (
+                "Create login"
+              )}
             </Button>
           </div>
         </form>
