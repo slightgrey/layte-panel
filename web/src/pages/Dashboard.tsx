@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UsageBar } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Notice } from "@/components/ui/notice";
+import { RebootControl } from "@/components/RebootControl";
 import { formatBytes, formatUptime, percent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +106,7 @@ function SystemCards({ section }: { section: Section<SystemInfo> }) {
       <Stat icon={<Server />} label="System">
         <p className="text-2xl font-semibold tabular-nums">{formatUptime(s.uptime_seconds)}</p>
         <p className="text-xs text-muted-foreground">uptime · kernel {s.kernel}</p>
+        <RebootControl />
       </Stat>
       <Stat icon={<Cpu />} label="Load" to="/system/load">
         <p className="text-2xl font-semibold tabular-nums">{s.load[0].toFixed(2)}</p>
@@ -153,6 +155,9 @@ function ServicesCard({ section }: { section: Section<Service[]> }) {
     <Card>
       <CardHeader>
         <CardTitle>Services</CardTitle>
+        <Link to="/system/services" className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline">
+          Details <ChevronRight className="size-3.5" />
+        </Link>
       </CardHeader>
       <CardContent>
         <SectionBody section={section}>
