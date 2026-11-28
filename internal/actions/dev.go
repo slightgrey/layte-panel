@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -205,6 +206,12 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{Stdout: []byte("/ ext4 rw,relatime" + devQuotaOpt(root) + "\n")}, nil
 		case c.Bin == mountBinPath && len(args) > 1 && args[0] == "-o" && args[1] == "remount":
 			return system.Result{}, nil
+		case c.Bin == busctlBin && slices.Contains(args, "CancelScheduledShutdown"):
+			return system.Result{Stdout: []byte("b true\n")}, root.Remove(shutdownScheduled)
+		case c.Bin == busctlBin && slices.Contains(args, "ScheduleShutdown"):
+			root.MkdirAll(path.Dir(shutdownScheduled), 0o755)
+			at, _ := strconv.ParseInt(args[len(args)-1], 10, 64)
+			return system.Result{}, root.WriteFileAtomic(shutdownScheduled, []byte(fmt.Sprintf("USEC=%d\nWARN_WALL=1\nMODE=reboot\n", at)), 0o644)
 		case c.Bin == modprobeBin: // the dev kernel "has" every module
 			return system.Result{}, nil
 		case c.Bin == quotacheckBin:

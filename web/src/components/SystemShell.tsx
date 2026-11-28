@@ -1,4 +1,4 @@
-import { ArrowLeft, Cpu, HardDrive, type LucideIcon, MemoryStick } from "lucide-react";
+import { ArrowLeft, Cpu, HardDrive, type LucideIcon, MemoryStick, ServerCog } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { cn } from "@/lib/utils";
@@ -7,9 +7,10 @@ const tabs: { label: string; to: string; icon: LucideIcon }[] = [
   { label: "Load", to: "/system/load", icon: Cpu },
   { label: "Memory", to: "/system/memory", icon: MemoryStick },
   { label: "Disk", to: "/system/disk", icon: HardDrive },
+  { label: "Services", to: "/system/services", icon: ServerCog },
 ];
 
-/** Back to the dashboard, title, and Load / Memory / Disk tabs. */
+/** Back to the dashboard, title, and Load / Memory / Disk / Services tabs. */
 export function SystemShell({ title, description, actions, children }: { title: string; description: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">

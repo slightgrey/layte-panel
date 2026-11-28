@@ -21,6 +21,7 @@ import { SiteWPDebugPage } from "./pages/SiteWPDebug";
 import { SystemDiskPage } from "./pages/SystemDisk";
 import { SystemLoadPage } from "./pages/SystemLoad";
 import { SystemMemoryPage } from "./pages/SystemMemory";
+import { SystemServicesPage } from "./pages/SystemServices";
 import { UpdatesPage } from "./pages/Updates";
 import { SitesPage } from "./pages/Sites";
 import { SSLPage } from "./pages/SSL";
@@ -57,6 +58,7 @@ export function App() {
             <Route path="system/load" element={<SystemLoadPage />} />
             <Route path="system/memory" element={<SystemMemoryPage />} />
             <Route path="system/disk" element={<SystemDiskPage />} />
+            <Route path="system/services" element={<SystemServicesPage />} />
             <Route path="updates" element={<UpdatesPage />} />
           </Route>
           <Route path="sites/:id/ssl" element={<SiteSSLPage />} />
