@@ -1,9 +1,27 @@
-import { Gauge } from "lucide-react";
-import { type Usage, useUsage } from "@/api/usage";
+import { Gauge, RefreshCw } from "lucide-react";
+import { type Usage, useRefreshUsage, useUsage } from "@/api/usage";
 import { Spinner } from "@/components/Spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+/** ↻: measure everything now, disk included (it's otherwise reused for up to 5 minutes). */
+export function RefreshUsage({ userId, checkedAt }: { userId?: number; checkedAt?: string }) {
+  const refresh = useRefreshUsage(userId);
+  const when = checkedAt ? new Date(checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  return (
+    <button
+      type="button"
+      onClick={() => refresh.mutate()}
+      disabled={refresh.isPending}
+      className="inline-flex items-center gap-1 rounded-md p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-60"
+      title={`Refresh now${when ? ` (disk checked at ${when})` : ""}`}
+      aria-label="Refresh usage"
+    >
+      <RefreshCw className={cn("size-3.5", refresh.isPending && "animate-spin")} />
+    </button>
+  );
+}
 
 /** One "used of limit" row with a bar (no bar without a limit). */
 export function Meter({ label, used, limit, text, compact = false }: { label: string; used: number; limit: number; text: string; compact?: boolean }) {
@@ -48,6 +66,7 @@ export function UsageCard({ userId, title = "Your plan" }: { userId?: number; ti
         <CardTitle className="flex items-center gap-2">
           <Gauge className="size-4" /> {title}
         </CardTitle>
+        <RefreshUsage userId={userId} checkedAt={usage.data?.disk_checked_at} />
       </CardHeader>
       <CardContent>
         {usage.isPending ? <Spinner /> : usage.error ? <p className="text-sm text-destructive">{usage.error.message}</p> : <UsageRows u={usage.data} />}

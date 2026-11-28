@@ -4,7 +4,7 @@ import { api } from "@/api/client";
 import type { SystemInfo } from "@/api/types";
 import { useUsage } from "@/api/usage";
 import { formatBytes } from "@/lib/format";
-import { Meter, UsageRows } from "./UsageCard";
+import { Meter, RefreshUsage, UsageRows } from "./UsageCard";
 
 const box = "mx-3 mb-2 rounded-[12px] px-3 py-2.5 shadow-inset";
 
@@ -38,7 +38,10 @@ export function PlanStats() {
   if (usage.data?.max_subdomains === undefined) return null;
   return (
     <div className={box}>
-      <p className="eyebrow mb-2">Your plan</p>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="eyebrow">Your plan</p>
+        <RefreshUsage checkedAt={usage.data.disk_checked_at} />
+      </div>
       <UsageRows u={usage.data} compact />
     </div>
   );

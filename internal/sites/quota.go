@@ -34,5 +34,6 @@ func (s *Service) SetDiskQuota(ctx context.Context, actor agent.Actor, user stri
 			return conflict("quota_off", "turn on disk quotas first (Users → Disk quotas), or set the disk limit to 0")
 		}
 	}
+	ForgetDiskUsage(user) // the next reading shows the new limit
 	return s.Agent.Call(ctx, "quota.set", actor, actions.QuotaSetParams{Username: user, MB: mb}, nil)
 }

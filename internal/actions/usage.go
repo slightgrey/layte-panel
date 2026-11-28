@@ -69,7 +69,16 @@ func (d Deps) cpuLimit(dir string) int {
 	return int(q/p*100 + 0.5)
 }
 
-func (d Deps) accountUsage(ctx context.Context, _ agent.Actor, p UserParams) (any, error) {
+// AccountUsageParams: Disk also measures disk use (the quota, or du when
+// quotas are off), the costly part; callers cache it.
+type AccountUsageParams struct {
+	Username string `json:"username"`
+	Disk     bool   `json:"disk,omitempty"`
+}
+
+func (p AccountUsageParams) Validate() error { return UserParams{Username: p.Username}.Validate() }
+
+func (d Deps) accountUsage(ctx context.Context, _ agent.Actor, p AccountUsageParams) (any, error) {
 	if err := d.requireSiteUser(p.Username); err != nil {
 		return nil, err
 	}
@@ -92,6 +101,9 @@ func (d Deps) accountUsage(ctx context.Context, _ agent.Actor, p UserParams) (an
 		u.MemoryBytes = d.cgroupInt(dir, "memory.current")
 		u.MemoryLimit = d.cgroupInt(dir, "memory.max")
 		u.Processes = int(d.cgroupInt(dir, "pids.current"))
+	}
+	if !p.Disk {
+		return u, nil
 	}
 	if q, ok := d.userQuota(ctx, p.Username); ok {
 		u.DiskBytes, u.DiskLimit, u.DiskExact = q.Used, q.Limit, true

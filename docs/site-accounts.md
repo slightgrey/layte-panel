@@ -69,12 +69,17 @@ How it works:
 
   Only ext4 is supported; xfs needs boot options that Layte doesn't change.
 
-Each login sees **Your plan** at the top of its Sites page:
+Each login sees **Your plan** in the sidebar on every page (on the Sites page on phones):
 - disk used of its limit;
 - RAM and CPU in use right now;
 - subdomains used.
 
-Admins see the same on the site's Panel login card and under **Usage** on the Users page. The numbers come straight from the kernel (the slice's cgroup and the disk quota). Without quotas, disk use is measured with `du`.
+Admins see the same on the site's Panel login card and under **Usage** on the Users page; their own sidebar shows the whole server's CPU load, RAM and disk instead. The numbers come straight from the kernel (the slice's cgroup and the disk quota). Without quotas, disk use is measured with `du`.
+
+To stay light on busy servers:
+- RAM and CPU refresh every 30 seconds (and not in background tabs);
+- disk use is measured at most every 5 minutes per login, because it can cost a `du` over all their files;
+- the ↻ button measures everything right away; its tooltip shows when the disk was last checked.
 
 Adopted sites whose nginx config is still yours keep running in the shared PHP-FPM service, because their socket can't be moved without changing your config. They have no CPU or RAM limit until you let Layte manage the site's nginx config.
 

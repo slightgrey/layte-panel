@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/slightgrey/layte-panel/internal/actions"
+	"github.com/slightgrey/layte-panel/internal/system"
 )
 
 // Disk quotas: off until an admin turns them on; then a login's disk limit
@@ -53,5 +54,23 @@ func TestDiskQuotas(t *testing.T) {
 		body["memory_limit"] != float64(536870912) || body["processes"] != float64(4) ||
 		body["disk_exact"] != true || body["disk_bytes"] != float64(51_200_000/1024*1024) || body["disk_limit"] != float64(2<<30) {
 		t.Errorf("usage: %d %v", code, body)
+	}
+
+	// Disk use is cached: refreshes reuse it, ?fresh=1 measures again.
+	quotaReads := func() int {
+		n := 0
+		for _, c := range deps.Runner.(*system.FakeRunner).CallList() {
+			if strings.Contains(c, "/usr/bin/quota ") {
+				n++
+			}
+		}
+		return n
+	}
+	before := quotaReads()
+	if code, body := admin.do("GET", path+"/usage", nil); code != 200 || body["disk_bytes"] != float64(51_200_000/1024*1024) || quotaReads() != before {
+		t.Errorf("cached usage: %d %v (quota reads %d → %d)", code, body, before, quotaReads())
+	}
+	if code, _ := admin.do("GET", path+"/usage?fresh=1", nil); code != 200 || quotaReads() != before+1 {
+		t.Errorf("fresh usage didn't measure disk: %d (quota reads %d → %d)", code, before, quotaReads())
 	}
 }

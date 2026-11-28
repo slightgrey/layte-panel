@@ -71,7 +71,7 @@ func TestDiskQuotaOnRealServer(t *testing.T) {
 		t.Errorf("wrote 30 MB with a 20 MB quota: %v %s", err, out)
 	}
 	u, _ = e.st.UserByID(ctx, uid)
-	usage, err := e.svc.AccountUsage(ctx, e.actor, u)
+	usage, err := e.svc.AccountUsage(ctx, e.actor, u, true)
 	if err != nil {
 		t.Fatal(err)
 	}

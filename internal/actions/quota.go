@@ -110,6 +110,29 @@ func (d Deps) quotaStatus(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 	return d.readQuotaStatus(ctx)
 }
 
+// quotaOn is the light part of the status: the mount and whether quota is
+// on (no kernel or package checks), for setting and reading quotas.
+func (d Deps) quotaOn(ctx context.Context) (QuotaStatus, error) {
+	var st QuotaStatus
+	target, fstype, _, err := d.quotaMount(ctx)
+	if err != nil {
+		return st, err
+	}
+	st.Mount, st.FSType = target, fstype
+	if st.Tools, _ = d.FS.Exists(setquotaBin); st.Tools {
+		st.Enabled = d.quotaEnabled(ctx, target)
+	}
+	return st, nil
+}
+
+// quotaEnabled asks quotaon from outside the agent's sandbox (its own mount
+// namespace may not see the state). Its exit status is 1 when quota *is*
+// on, so only the text counts.
+func (d Deps) quotaEnabled(ctx context.Context, target string) bool {
+	res, _ := d.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: quotaonBin, Args: []string{"--print-state", "--user", target}}))
+	return strings.Contains(string(res.Stdout), " is on")
+}
+
 func (d Deps) readQuotaStatus(ctx context.Context) (QuotaStatus, error) {
 	var st QuotaStatus
 	target, fstype, _, err := d.quotaMount(ctx)
@@ -134,11 +157,7 @@ func (d Deps) readQuotaStatus(ctx context.Context) (QuotaStatus, error) {
 		st.Reason = fstype + " isn't supported (ext4 only)"
 	}
 	if st.Tools {
-		// From outside the agent's sandbox, like quotaon itself (its own mount
-		// namespace may not see the state).
-		// Its exit status is 1 when quota *is* on, so only the text counts.
-		res, _ := d.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: quotaonBin, Args: []string{"--print-state", "--user", target}}))
-		st.Enabled = strings.Contains(string(res.Stdout), " is on")
+		st.Enabled = d.quotaEnabled(ctx, target)
 	}
 	return st, nil
 }
@@ -291,7 +310,7 @@ func (d Deps) quotaSet(ctx context.Context, _ agent.Actor, p QuotaSetParams) (an
 	if err := d.requireSiteUser(p.Username); err != nil {
 		return nil, err
 	}
-	st, err := d.readQuotaStatus(ctx)
+	st, err := d.quotaOn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +338,7 @@ type QuotaUsage struct {
 // `quota` (repquota reads the quota file, which lags behind). Only when
 // quotas are on.
 func (d Deps) userQuota(ctx context.Context, user string) (QuotaUsage, bool) {
-	st, err := d.readQuotaStatus(ctx)
+	st, err := d.quotaOn(ctx)
 	if err != nil || !st.Enabled {
 		return QuotaUsage{}, false
 	}
