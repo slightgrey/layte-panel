@@ -66,3 +66,12 @@ export function useDeleteUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
   });
 }
+
+/** PUT /users/{id}/password (admins): set a site login's password; it's signed out everywhere. */
+export function useSetUserPassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: number; password: string }) => api<void>("PUT", `/users/${v.id}/password`, { password: v.password }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: usersKey }),
+  });
+}

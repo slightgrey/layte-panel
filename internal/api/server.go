@@ -184,6 +184,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /api/v1/users", authed(s.handleCreateUser))
 	mux.Handle("PATCH /api/v1/users/{id}", authed(s.handleUpdateUser))
 	mux.Handle("POST /api/v1/users/{id}/password", authed(s.handleResetUserPassword))
+	mux.Handle("PUT /api/v1/users/{id}/password", authed(s.handleSetUserPassword))
 	mux.Handle("POST /api/v1/users/{id}/reset-2fa", authed(s.handleResetUser2FA))
 	mux.Handle("DELETE /api/v1/users/{id}", authed(s.handleDeleteUser))
 	mux.Handle("GET /api/v1/keys", authed(s.handleListKeys))

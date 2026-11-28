@@ -525,3 +525,39 @@ func (s *server) handleDisableQuotas(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, st)
 }
+
+// PUT /api/v1/users/{id}/password {password} — admins: set a site login's
+// password directly. It's signed out everywhere, any lockout and pending
+// setup link are cleared; its 2FA stays.
+func (s *server) handleSetUserPassword(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.siteAccount(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid", err.Error())
+		return
+	}
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		s.internalError(w, "hash password", err)
+		return
+	}
+	if err := s.Store.SetPassword(r.Context(), u.ID, hash); err != nil {
+		s.internalError(w, "set password", err)
+		return
+	}
+	// An older setup or reset link must not override the new password.
+	if err := s.Store.SetSetupToken(r.Context(), u.ID, "", time.Unix(0, 0)); err != nil {
+		s.internalError(w, "clear setup link", err)
+		return
+	}
+	s.auditPanel(r, "user.password_set", map[string]any{"id": u.ID, "username": u.Username})
+	w.WriteHeader(http.StatusNoContent)
+}

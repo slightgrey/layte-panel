@@ -95,7 +95,7 @@ Adopted sites whose nginx config is still yours keep running in the shared PHP-F
 **Users** (admins) lists every login. For each site login you can:
 - change the **limits**: subdomains, CPU, RAM and disk. Lowering the subdomain limit doesn't delete existing subdomains; it only stops new ones. New CPU and RAM limits apply at once;
 - see its **usage**;
-- issue a **password reset link** (shown once, works like the setup link). Their current password keeps working until the link is used; then every session is signed out;
+- **change the password** directly (they are signed out everywhere and their 2FA stays), or issue a **password reset link** (shown once, works like the setup link). Their current password keeps working until the link is used; then every session is signed out;
 - **reset 2FA** (for a lost phone; the user sets it up again at the next sign-in);
 - **delete the login** (the sites and their files stay).
 

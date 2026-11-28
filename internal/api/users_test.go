@@ -160,3 +160,34 @@ func TestSetupLinks(t *testing.T) {
 		t.Errorf("expired link works: %d", st)
 	}
 }
+
+// An admin sets a site login's password: it's signed out, the old password
+// and any setup link stop working, the new one works.
+func TestAdminSetsLoginPassword(t *testing.T) {
+	e := newTestEnv(t)
+	main, _, _ := accountSites(t, e)
+	a := e.loggedIn(t)
+	c := e.siteUser(t, "client", main)
+	id := mustUser(t, e, "client")
+	path := fmt.Sprintf("/api/v1/users/%d/password", id)
+
+	if st, _ := a.do("PUT", path, map[string]string{"password": "short"}); st != 400 {
+		t.Errorf("short password: %d", st)
+	}
+	if st, _ := c.do("PUT", path, map[string]string{"password": "a new long passphrase"}); st != 403 {
+		t.Errorf("site login set a password: %d", st)
+	}
+	if st, body := a.do("PUT", path, map[string]string{"password": "a new long passphrase"}); st != 204 {
+		t.Fatalf("set: %d %v", st, body)
+	}
+	if st, _ := c.do("GET", "/api/v1/auth/me", nil); st != 401 {
+		t.Errorf("session survived: %d", st)
+	}
+	n := e.client(t)
+	if st, _ := n.do("POST", "/api/v1/auth/login", map[string]string{"username": "client", "password": testPassword}); st != 401 {
+		t.Errorf("old password still works: %d", st)
+	}
+	if st, body := n.do("POST", "/api/v1/auth/login", map[string]string{"username": "client", "password": "a new long passphrase"}); st != 200 || body["totp_setup"] != false {
+		t.Errorf("new password: %d %v", st, body)
+	}
+}
