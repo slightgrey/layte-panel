@@ -148,6 +148,7 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /api/v1/updates/plan", authed(s.handleUpdatesPlan))
 	mux.Handle("POST /api/v1/updates/refresh", authed(s.handleUpdatesRefresh))
 	mux.Handle("POST /api/v1/updates/apply", authed(s.handleUpdatesApply))
+	mux.Handle("GET /api/v1/system/info", authed(s.handleSystemInfo))
 	mux.Handle("GET /api/v1/system/processes", authed(s.handleProcesses))
 	mux.Handle("GET /api/v1/system/disk", authed(s.handleDiskBreakdown))
 	mux.Handle("PATCH /api/v1/cron/{id}", account(s.handleUpdateCron))

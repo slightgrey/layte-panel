@@ -66,7 +66,11 @@ export function SitesPage() {
         )}
       </div>
 
-      {!isAdmin && user && <UsageCard />}
+      {!isAdmin && user && (
+        <div className="md:hidden">
+          <UsageCard />
+        </div>
+      )}
 
       {scan.data && (
         <p className="text-sm text-muted-foreground" role="status">

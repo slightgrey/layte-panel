@@ -18,6 +18,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useLogout, useMe } from "@/api/auth";
 import { formatVersion, useHealth } from "@/api/health";
 import { JobFeedbackProvider } from "@/components/JobFeedback";
+import { PlanStats, ServerStats } from "@/components/SidebarStats";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,7 @@ export function Layout() {
             <NavEntry key={item.label} item={item} />
           ))}
         </nav>
+        {me.data?.user.role === "admin" ? <ServerStats /> : me.data ? <PlanStats /> : null}
         <VersionFooter />
       </aside>
 
