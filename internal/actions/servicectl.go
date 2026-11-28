@@ -66,7 +66,7 @@ func serviceOp(name string) (ServiceOp, bool) {
 // ServiceDetail is a row of the Services page.
 type ServiceDetail struct {
 	Service
-	Since       time.Time  `json:"since,omitempty"`        // active since
+	Since       *time.Time `json:"since,omitempty"`        // active since (nil: unknown)
 	MemoryBytes int64      `json:"memory_bytes,omitempty"` // the unit's cgroup
 	Action      *ServiceOp `json:"action,omitempty"`
 }
@@ -111,7 +111,7 @@ func (d Deps) servicesDetail(ctx context.Context, _ agent.Actor, _ agent.NoParam
 			Active: kv["ActiveState"], Sub: kv["SubState"], Enabled: kv["UnitFileState"],
 		}}
 		if t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", kv["ActiveEnterTimestamp"]); err == nil && s.Active == "active" {
-			s.Since = t
+			s.Since = &t
 		}
 		if n, err := strconv.ParseInt(kv["MemoryCurrent"], 10, 64); err == nil && n > 0 && n < 1<<50 {
 			s.MemoryBytes = n

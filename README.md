@@ -23,10 +23,12 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
 - **Cron:** per-site jobs that run as the site's own user, with WP-Cron in one click.
 - **Logs:** live tail of nginx, PHP-FPM and site logs.
 - **File manager:** browse, edit, upload and download. It always runs as the site's user, inside the site folder.
-- **Site logins and subdomains:** give a site its own panel login (2FA required) that sees only that site and its subdomains, and can add subdomain sites up to a limit you set. See [docs/site-accounts.md](docs/site-accounts.md).
+- **Site logins and subdomains:** give a site its own panel login (sent as a one-time setup link; 2FA required) that sees only that site and its subdomains, and can add subdomain sites up to a limit you set. Each login gets real **CPU, RAM and disk limits** (its own PHP-FPM in a systemd slice, Linux disk quotas) and sees its usage in the sidebar. See [docs/site-accounts.md](docs/site-accounts.md).
 - **SFTP per site:** an SFTP-only login (SSH keys, optional generated password) jailed to the site's folder, working as the site's user, so FileZilla, VS Code or rsync keep files owned correctly. See [docs/sftp.md](docs/sftp.md).
 - **Updates:** preview and install package updates. Only upgrades (nothing is removed), your config files are kept, every site is checked afterwards, and you're told when a reboot is needed.
 - **Server insight:** see what uses the CPU and memory (per service and per site's PHP pool), and what takes up disk space.
+- **Services and reboot:** reload a service (after its config test) or restart one that has no reload, and reboot the server (with a minute to cancel) when updates need it.
+- **Account page:** change your own password, move 2FA to a new phone, see and end your sessions.
 - **Security:** ufw rules with lockout protection, security updates in one click, failed SSH logins.
 - **API:** a read-only REST API with scoped, expiring API keys and an OpenAPI spec.
 - **Safe by design:**
@@ -42,7 +44,9 @@ Layte Panel is a self-hosted cPanel alternative for WordPress and PHP sites on y
 |---|---|
 | ![Sites](docs/screenshots/sites.png) Sites: created and imported | ![New site](docs/screenshots/new-site.png) New site: user, PHP pool, nginx, database and WordPress in one step |
 | ![Site overview](docs/screenshots/site-overview.png) A site's overview, with its own tabs | ![Memory](docs/screenshots/memory.png) What uses the memory, per service and site |
-| ![Updates](docs/screenshots/updates.png) Updates: preview first, then install | ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) Dark mode |
+| ![Updates](docs/screenshots/updates.png) Updates: preview first, then install | ![Services](docs/screenshots/services.png) Services: reload or restart, after the config test |
+| ![Users](docs/screenshots/users.png) Site logins: limits, password, 2FA and usage | ![A site login's view](docs/screenshots/site-login.png) A site login sees only its sites, with its plan in the sidebar |
+| ![Account](docs/screenshots/account.png) Your own account: password, 2FA, sessions | ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) Dark mode |
 
 *Demo data. The screenshots are generated with `cd web && npm run screenshots`.*
 

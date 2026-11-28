@@ -172,6 +172,18 @@ async function main() {
   await job(await call("POST", `/api/v1/sites/${site.site_id}/ssl`, { email: "owner@example.com" }));
   await call("POST", `/api/v1/sites/${site.site_id}/cron`, { schedule: "*/15 * * * *", command: "php public/wp-cron.php" });
 
+  // Site logins: disk quotas on (dev fake), then a login with limits for the demo site.
+  await call("POST", "/api/v1/quota/enable");
+  await waitFor(async () => !(await call("GET", "/api/v1/quota")).busy, "disk quotas");
+  const login = await call("POST", "/api/v1/users", {
+    username: "democlient",
+    site_id: site.site_id,
+    max_subdomains: 3,
+    cpu_percent: 100,
+    memory_mb: 512,
+    disk_mb: 2048,
+  });
+
   mkdirSync(out, { recursive: true });
   const shot = async (name, path, waitText) => {
     await page.goto(path);
@@ -195,6 +207,11 @@ async function main() {
   await page.fill("#title", "My Store");
   await page.fill("#admin_user", "owner");
   await page.fill("#admin_email", "owner@example.com");
+  // The newer options: HTTPS right away, and a panel login for the site.
+  await page.getByLabel("Issue a free SSL certificate (Let's Encrypt)").check();
+  await page.fill("#ssl_email", "owner@example.com");
+  await page.getByLabel("Create a login for this site").check();
+  await page.fill("#login_user", "storeowner");
   await page.locator("body").click({ position: { x: 5, y: 5 } }); // no focus ring / caret in the picture
   await sleep(500);
   await page.screenshot({ path: join(out, "new-site.png"), fullPage: true }); // the form is taller than the window
@@ -202,6 +219,50 @@ async function main() {
   await shot("site-overview", `/sites/${site.site_id}`, "Size on disk");
   await shot("memory", "/system/memory", "By service and site");
   await shot("updates", "/updates", "Kept back");
+  await shot("services", "/system/services", "Reload");
+  await shot("account", "/account", "Signed-in sessions");
+
+  // The site login, in its own browser: setup link → password → 2FA setup.
+  console.log("Signing in as the site login…");
+  const lctx = await browser.newContext({ baseURL: base, viewport: { width: 1440, height: 900 }, colorScheme: "light" });
+  const lp = await lctx.newPage();
+  await lp.goto(new URL(login.setup_url).pathname);
+  await lp.fill("#pw", password);
+  await lp.fill("#pw2", password);
+  const setupResp = lp.waitForResponse((r) => r.url().endsWith("/api/v1/auth/totp/setup"));
+  await lp.click('button[type="submit"]');
+  const loginSecret = (await (await setupResp).json()).secret;
+  await lp.waitForURL("**/login/2fa/setup");
+  await lp.getByAltText("QR code for your authenticator app").waitFor();
+  await sleep(500);
+  await lp.screenshot({ path: join(out, "setup-2fa.png") });
+  console.log("  saved docs/screenshots/setup-2fa.png");
+  await lp.fill("#code", totp(loginSecret));
+  await lp.click('button[type="submit"]');
+  await lp.waitForURL("**/sites");
+  // A subdomain site of its own (through its own session).
+  const lcsrf = (await (await lctx.request.get("/api/v1/auth/me")).json()).csrf_token;
+  const sub = await lctx.request.post("/api/v1/sites", { data: { domain: "blog.demo.example.com", php_version: "8.3", create_db: true }, headers: { "X-CSRF-Token": lcsrf } });
+  if (!sub.ok()) throw new Error(`subdomain: ${sub.status()} ${await sub.text()}`);
+  const subJob = (await sub.json()).job_id;
+  await waitFor(async () => (await (await lctx.request.get(`/api/v1/jobs/${subJob}`)).json()).status !== "running", "the subdomain", 120000);
+  await lp.goto("/sites");
+  await lp.getByText("blog.demo.example.com").first().waitFor();
+  await lp.getByText("Your plan").first().waitFor();
+  await sleep(1000);
+  await lp.screenshot({ path: join(out, "site-login.png") });
+  console.log("  saved docs/screenshots/site-login.png");
+  await lctx.close();
+
+  // Users: the table, one login opened (limits, actions, usage).
+  await page.goto("/users");
+  await page.getByText("democlient").first().waitFor({ timeout: 30000 });
+  await page.getByRole("button", { name: "Show details" }).first().click();
+  await page.getByText("Save limits").first().waitFor();
+  await sleep(1200);
+  await page.screenshot({ path: join(out, "users.png"), fullPage: true });
+  console.log("  saved docs/screenshots/users.png");
+  await shot("sites", "/sites", "blog.demo.example.com"); // again, now with the subdomain under its site
 
   await page.evaluate(() => localStorage.setItem("layte-theme", "dark"));
   await page.emulateMedia({ colorScheme: "dark" });
