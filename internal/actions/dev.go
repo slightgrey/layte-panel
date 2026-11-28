@@ -205,6 +205,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 			return system.Result{Stdout: []byte("/ ext4 rw,relatime" + devQuotaOpt(root) + "\n")}, nil
 		case c.Bin == mountBinPath && len(args) > 1 && args[0] == "-o" && args[1] == "remount":
 			return system.Result{}, nil
+		case c.Bin == modprobeBin: // the dev kernel "has" every module
+			return system.Result{}, nil
 		case c.Bin == quotacheckBin:
 			return system.Result{}, root.WriteFileAtomic("/aquota.user", []byte{}, 0o600)
 		case c.Bin == quotaonBin && slices.Contains(args, "--print-state"):
@@ -219,8 +221,8 @@ func devHandler(cmds fs.FS, root system.FS) func(system.Cmd) (system.Result, err
 		case c.Bin == setquotaBin && len(args) >= 4:
 			root.MkdirAll("/var/lib/layte-dev/quota", 0o755)
 			return system.Result{}, root.WriteFileAtomic("/var/lib/layte-dev/quota/"+args[1], []byte(args[3]), 0o644)
-		case c.Bin == repquotaBin:
-			return devRepquota(root), nil
+		case c.Bin == quotaBin:
+			return devQuota(root, args[len(args)-1]), nil
 		case c.Bin == mountpointBin:
 			return system.Result{}, &system.ExitError{Bin: c.Bin, ExitCode: 1} // nothing is mounted in dev
 		case strings.HasPrefix(c.Bin, "/usr/bin/php") && len(args) > 0 && strings.HasSuffix(args[0], ".phar"):
@@ -241,16 +243,14 @@ func devQuotaOpt(root system.FS) string {
 	return ""
 }
 
-// devRepquota: every user with a fake limit uses 1 GB.
-func devRepquota(root system.FS) system.Result {
-	var b strings.Builder
-	b.WriteString("User,BlockStatus,FileStatus,BlockUsed,BlockSoftLimit,BlockHardLimit,BlockGrace,FileUsed,FileSoftLimit,FileHardLimit,FileGrace\n")
-	files, _ := root.Glob("/var/lib/layte-dev/quota/*")
-	for _, f := range files {
-		hard, _ := root.ReadFile(f)
-		fmt.Fprintf(&b, "%s,ok,ok,1048576,0,%s,,10,0,0,\n", path.Base(f), strings.TrimSpace(string(hard)))
+// devQuota: every user with a fake limit uses 1 GB.
+func devQuota(root system.FS, user string) system.Result {
+	hard, err := root.ReadFile("/var/lib/layte-dev/quota/" + user)
+	if err != nil {
+		return system.Result{Stdout: []byte("Disk quotas for user " + user + " (uid 1001): none\n")}
 	}
-	return system.Result{Stdout: []byte(b.String())}
+	return system.Result{Stdout: []byte(fmt.Sprintf("Disk quotas for user %s (uid 1001):\n     Filesystem  blocks   quota   limit   grace   files   quota   limit   grace\n      /dev/vda1 1048576       0 %s       0      10       0       0       0\n",
+		user, strings.TrimSpace(string(hard))))}
 }
 
 // fakeDu reports made-up but stable sizes: the whole site is the sum of its

@@ -15,6 +15,10 @@ import (
 // PHP-FPM master inside a systemd slice with the limits (see
 // internal/actions/account.go), and so do its cron jobs.
 
+// FPMMoveGrace is how long the old pool keeps serving after nginx switched
+// to the new one (a var so tests can shorten it).
+var FPMMoveGrace = 3 * time.Second
+
 // poolPath is where the site's pool for a PHP version lives.
 func poolPath(site store.Site, version string) string {
 	if site.OwnFPM {
@@ -56,6 +60,13 @@ func (s *Service) moveFPM(ctx context.Context, actor agent.Actor, site *store.Si
 	}
 	*site = to
 	site.FPMPool = poolPath(to, to.PHPVersion)
+	// nginx's reload returns before its old workers have handed over: they
+	// still pass requests to the old socket for a moment. Keep the old pool
+	// until they're gone, so the move costs no request.
+	select {
+	case <-time.After(FPMMoveGrace):
+	case <-ctx.Done():
+	}
 	// Done: removing the old pool is clean-up.
 	if err := call("php.pool_remove", poolRemoveParams(from, from.PHPVersion)); err != nil {
 		s.Log().Warn("remove old PHP pool", "site", site.Domain, "err", err)

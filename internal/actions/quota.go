@@ -2,9 +2,9 @@ package actions
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -30,7 +30,7 @@ const (
 	quotaonBin    = "/usr/sbin/quotaon"
 	quotacheckBin = "/usr/sbin/quotacheck"
 	setquotaBin   = "/usr/sbin/setquota"
-	repquotaBin   = "/usr/sbin/repquota"
+	quotaBin      = "/usr/bin/quota"
 	mountBinPath  = "/usr/bin/mount"
 	fstabPath     = "/etc/fstab"
 	quotaHome     = "/home"
@@ -44,6 +44,53 @@ type QuotaStatus struct {
 	Mount     string `json:"mount"`            // the filesystem that holds /home
 	FSType    string `json:"fs_type"`
 	Tools     bool   `json:"tools"` // the quota package is installed
+	// Kernel: the running kernel has the quota format (quota_v2). Ubuntu's
+	// cloud kernels ship it in linux-modules-extra-<version>, which turning
+	// quotas on installs (KernelPackages, about 110 MB).
+	Kernel         bool     `json:"kernel"`
+	KernelPackages []string `json:"kernel_packages,omitempty"`
+}
+
+const (
+	modprobeBin = "/usr/sbin/modprobe"
+	aptCacheBin = "/usr/bin/apt-cache"
+)
+
+// kernelRelease is the running kernel's version (uname -r).
+func (d Deps) kernelRelease() string {
+	b, _ := d.FS.ReadFile("/proc/sys/kernel/osrelease")
+	return strings.TrimSpace(string(b))
+}
+
+var kernelReleaseRe = regexp.MustCompile(`^[0-9][0-9A-Za-z.+-]{0,60}$`)
+
+// quotaKernel reports whether the kernel can load the quota format, and if
+// not, the packages that add it (only ones apt can install).
+func (d Deps) quotaKernel(ctx context.Context) (bool, []string) {
+	// The agent's own sandbox hides /lib/modules: ask from outside it.
+	if _, err := d.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: modprobeBin, Args: []string{"--dry-run", "--quiet", "quota_v2"}})); err == nil {
+		return true, nil
+	}
+	rel := d.kernelRelease()
+	if !kernelReleaseRe.MatchString(rel) {
+		return false, nil
+	}
+	var pkgs []string
+	for _, p := range []string{"linux-modules-extra-" + rel, "linux-image-extra-virtual"} {
+		if d.aptCandidate(ctx, p) {
+			pkgs = append(pkgs, p)
+		}
+	}
+	if len(pkgs) == 0 || pkgs[0] != "linux-modules-extra-"+rel {
+		return false, nil // no package with this kernel's modules
+	}
+	return false, pkgs
+}
+
+// aptCandidate reports whether apt can install the package.
+func (d Deps) aptCandidate(ctx context.Context, pkg string) bool {
+	res, err := d.Runner.Run(ctx, aptCacheBin, "policy", pkg)
+	return err == nil && strings.Contains(string(res.Stdout), "Candidate:") && !strings.Contains(string(res.Stdout), "Candidate: (none)")
 }
 
 // quotaMount finds the filesystem holding /home.
@@ -71,17 +118,27 @@ func (d Deps) readQuotaStatus(ctx context.Context) (QuotaStatus, error) {
 	}
 	st.Mount, st.FSType = target, fstype
 	st.Tools, _ = d.FS.Exists(setquotaBin)
+	st.Kernel, st.KernelPackages = d.quotaKernel(ctx)
+	switch {
+	case fstype != "ext4":
+	case !st.Kernel && len(st.KernelPackages) == 0:
+		st.Reason = "the running kernel (" + d.kernelRelease() + ") has no quota support, and apt has no extra modules package for it"
+	default:
+		st.Supported = true
+	}
 	switch fstype {
 	case "ext4":
-		st.Supported = true
 	case "xfs":
 		st.Reason = "xfs needs quota options at boot (rootflags=uquota); Layte Panel doesn't change boot settings"
 	default:
 		st.Reason = fstype + " isn't supported (ext4 only)"
 	}
 	if st.Tools {
-		res, err := d.Runner.Run(ctx, quotaonBin, "--print-state", "--user", target)
-		st.Enabled = err == nil && strings.Contains(string(res.Stdout), " is on")
+		// From outside the agent's sandbox, like quotaon itself (its own mount
+		// namespace may not see the state).
+		// Its exit status is 1 when quota *is* on, so only the text counts.
+		res, _ := d.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: quotaonBin, Args: []string{"--print-state", "--user", target}}))
+		st.Enabled = strings.Contains(string(res.Stdout), " is on")
 	}
 	return st, nil
 }
@@ -135,9 +192,19 @@ func (d Deps) quotaEnable(ctx context.Context, _ agent.Actor, _ agent.NoParams) 
 		}
 		return nil
 	}
-	// 1. The quota tools (a fixed package; nothing else is installed).
+	// 1. The quota tools, and the kernel's quota format if it's missing (fixed
+	// package names; nothing else is installed).
 	if !st.Tools {
 		if err := run(5*time.Minute, aptGetBin, "install", "-y", "--no-install-recommends", "quota"); err != nil {
+			return nil, err
+		}
+	}
+	if !st.Kernel {
+		args := append([]string{"install", "-y", "--no-install-recommends"}, st.KernelPackages...)
+		if err := run(10*time.Minute, aptGetBin, args...); err != nil {
+			return nil, err
+		}
+		if err := run(time.Minute, modprobeBin, "quota_v2"); err != nil {
 			return nil, err
 		}
 	}
@@ -183,9 +250,14 @@ func (d Deps) editFstab(ctx context.Context, old, next []byte) error {
 		if err := d.FS.WriteFileAtomic(fstabOrig, old, 0o644); err != nil {
 			return fmt.Errorf("keep a copy of /etc/fstab: %w", err)
 		}
+		d.FS.Chown(fstabOrig, 0, 0)
 	}
 	if err := d.FS.WriteFileAtomic(fstabPath, next, 0o644); err != nil {
 		return fmt.Errorf("write /etc/fstab: %w", err)
+	}
+	// root:root like before (new files get the agent's group).
+	if err := d.FS.Chown(fstabPath, 0, 0); err != nil {
+		return fmt.Errorf("chown /etc/fstab: %w", err)
 	}
 	res, err := d.Runner.Run(ctx, findmntBin, "--verify", "--tab-file", fstabPath)
 	if err != nil {
@@ -243,36 +315,34 @@ type QuotaUsage struct {
 	Limit int64 `json:"limit"`
 }
 
-// userQuota reads a user's usage from repquota (only when quotas are on).
+// userQuota reads a user's usage and hard limit from the kernel with
+// `quota` (repquota reads the quota file, which lags behind). Only when
+// quotas are on.
 func (d Deps) userQuota(ctx context.Context, user string) (QuotaUsage, bool) {
 	st, err := d.readQuotaStatus(ctx)
 	if err != nil || !st.Enabled {
 		return QuotaUsage{}, false
 	}
-	res, err := d.Runner.Run(ctx, repquotaBin, "--user", "--output=csv", st.Mount)
-	if err != nil {
-		return QuotaUsage{}, false
-	}
-	rows, err := csv.NewReader(strings.NewReader(string(res.Stdout))).ReadAll()
-	if err != nil || len(rows) < 2 {
-		return QuotaUsage{}, false
-	}
-	col := map[string]int{}
-	for i, h := range rows[0] {
-		col[h] = i
-	}
-	ui, okU := col["User"]
-	bu, okB := col["BlockUsed"]
-	bh, okH := col["BlockHardLimit"]
-	if !okU || !okB || !okH {
-		return QuotaUsage{}, false
-	}
-	for _, r := range rows[1:] {
-		if len(r) > bh && len(r) > bu && r[ui] == user {
-			used, _ := strconv.ParseInt(r[bu], 10, 64)
-			hard, _ := strconv.ParseInt(r[bh], 10, 64)
-			return QuotaUsage{Used: used * 1024, Limit: hard * 1024}, true
+	// -w: one line per filesystem; -p: grace as a number (fixed columns).
+	res, _ := d.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: quotaBin, Args: []string{"--no-wrap", "--raw-grace", "--user", "--filesystem", st.Mount, user}}))
+	return parseQuota(string(res.Stdout))
+}
+
+// parseQuota reads `quota -w -p` output: a header, then
+// "<fs> <blocks>[*] <soft> <hard> <grace> <files>[*] …" in 1 KB blocks.
+func parseQuota(out string) (QuotaUsage, bool) {
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 4 || !strings.HasPrefix(f[0], "/") {
+			continue
 		}
+		used, err1 := strconv.ParseInt(strings.TrimSuffix(f[1], "*"), 10, 64)
+		hard, err2 := strconv.ParseInt(f[3], 10, 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		return QuotaUsage{Used: used * 1024, Limit: hard * 1024}, true
 	}
-	return QuotaUsage{}, true // no row yet: nothing used
+	// "Disk quotas for user x (uid n): none": nothing used, no limit.
+	return QuotaUsage{}, strings.Contains(out, "Disk quotas for user")
 }

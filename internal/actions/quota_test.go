@@ -21,3 +21,13 @@ func TestAddUsrquota(t *testing.T) {
 		t.Error("two lines for /, but no error")
 	}
 }
+
+func TestParseQuota(t *testing.T) {
+	out := "Disk quotas for user acme (uid 1003):\n     Filesystem  blocks   quota   limit   grace   files   quota   limit   grace\n      /dev/sda1   20480*  19456   20480  604800       5       0       0       0\n"
+	if q, ok := parseQuota(out); !ok || q.Used != 20480*1024 || q.Limit != 20480*1024 {
+		t.Errorf("parseQuota = %+v, %v", q, ok)
+	}
+	if q, ok := parseQuota("Disk quotas for user acme (uid 1003): none\n"); !ok || q != (QuotaUsage{}) {
+		t.Errorf("no quota: %+v, %v", q, ok)
+	}
+}
