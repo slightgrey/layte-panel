@@ -9,6 +9,9 @@ export interface QuotaStatus {
   mount: string;
   fs_type: string;
   tools: boolean;
+  /** The running kernel has the quota format; if not, kernel_packages adds it (about 110 MB). */
+  kernel: boolean;
+  kernel_packages?: string[];
 }
 
 export const quotaKey = ["quota"] as const;

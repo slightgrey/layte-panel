@@ -502,6 +502,14 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 				s.Store.RemoveDatabase(context.WithoutCancel(ctx), db.Name)
 			}
 		}
+		// The user's last site: its login's limits and PHP-FPM services go too
+		// (also any half set up by a failed attempt). Before the user goes:
+		// the slice is named by the user's UID.
+		if sharedUser <= 1 && site.Managed {
+			if err := s.longCall(ctx, time.Minute, "account.remove", actor, actions.UserParams{Username: site.SystemUser}, nil); err != nil {
+				j.Log("Warning: couldn't remove the login's limits (%v).", err)
+			}
+		}
 		// Without DropDB, linked databases are kept: deleting the site row unlinks
 		// them (ON DELETE SET NULL) and they stay manageable on the Databases page.
 		switch {
@@ -518,11 +526,6 @@ func (s *Service) Delete(ctx context.Context, actor agent.Actor, site store.Site
 			}
 		default:
 			j.Log("Kept %s and its files (user %s).", templates.Site{Domain: site.Domain, User: site.SystemUser}.Dir(), site.SystemUser)
-		}
-		if site.OwnFPM && sharedUser <= 1 { // the login's last site: its limits go too
-			if err := s.longCall(ctx, time.Minute, "account.remove", actor, actions.UserParams{Username: site.SystemUser}, nil); err != nil {
-				j.Log("Warning: couldn't remove the login's limits (%v).", err)
-			}
 		}
 		if err := s.Store.DeleteSite(context.WithoutCancel(ctx), site.ID); err != nil {
 			return err

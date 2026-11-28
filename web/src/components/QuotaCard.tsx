@@ -34,7 +34,13 @@ export function QuotaCard() {
           <>
             <p className="text-muted-foreground">
               Turn on Linux user quotas for <code className="font-mono">{st.data.mount}</code> ({st.data.fs_type}) to give site logins a disk limit. This
-              {st.data.tools ? "" : " installs the quota package,"} adds <code className="font-mono">usrquota</code> to that filesystem's line in{" "}
+              {st.data.tools ? "" : " installs the quota package,"}
+              {!st.data.kernel && st.data.kernel_packages?.length ? (
+                <>
+                  {" "}installs the kernel's quota module (<code className="font-mono">{st.data.kernel_packages.join(", ")}</code>, about 110 MB: Ubuntu's cloud kernels leave it out),
+                </>
+              ) : null}{" "}
+              adds <code className="font-mono">usrquota</code> to that filesystem's line in{" "}
               <code className="font-mono">/etc/fstab</code> (the original is kept as <code className="font-mono">/etc/fstab.layte-orig</code>, and the new file is
               checked before it's used), remounts it and builds the quota file. Sites keep running. It can take a few minutes on a large disk.
             </p>

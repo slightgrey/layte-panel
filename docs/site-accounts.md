@@ -63,6 +63,7 @@ How it works:
 - **Cron jobs** run in the slice too. Their line in `/etc/cron.d` only calls `layte cron-exec <site> <n>`; the commands themselves sit in a root-only file and run as the site's user.
 - **Disk quotas** need turning on once: Users → **Disk quotas** → Turn on disk quotas. That:
   - installs the `quota` tools;
+  - installs the kernel's quota module if the running kernel lacks it. Ubuntu's cloud kernels ship it separately, in `linux-modules-extra-<version>` (about 110 MB), and `linux-image-extra-virtual` keeps it there after kernel updates;
   - adds `usrquota` to the `/home` filesystem's line in `/etc/fstab`. The original is kept as `/etc/fstab.layte-orig`, and the new file is checked with `findmnt --verify` and put back if the check fails;
   - remounts the filesystem and builds the quota file.
 

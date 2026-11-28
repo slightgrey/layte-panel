@@ -138,13 +138,16 @@ func (d Deps) accountApply(ctx context.Context, _ agent.Actor, p AccountParams) 
 	if err := d.FS.MkdirAll(systemdUnitDir, 0o755); err != nil {
 		return nil, err
 	}
-	unitPath := systemdUnitDir + "/" + d.acctSlice(p.Username)
+	slice := d.acctSlice(p.Username)
+	if slice == "" {
+		return nil, agent.Errorf(agent.CodeInvalidParams, "no user %s", p.Username)
+	}
 	if err := system.WriteConfig(ctx, d.FS, d.Runner, system.WriteSpec{
-		Path: unitPath, Content: []byte(sliceContent(p)), Reload: daemonReload,
+		Path: systemdUnitDir + "/" + slice, Content: []byte(sliceContent(p)), Reload: daemonReload,
 	}); err != nil {
 		return nil, err
 	}
-	return map[string]string{"slice": d.acctSlice(p.Username)}, nil
+	return map[string]string{"slice": slice}, nil
 }
 
 // accountRemove removes the login's slice once its sites are back on the
@@ -156,7 +159,11 @@ func (d Deps) accountRemove(ctx context.Context, _ agent.Actor, p UserParams) (a
 		}
 	}
 	d.FS.RemoveAll(acctFPMRoot + "/" + p.Username)
-	unitPath := systemdUnitDir + "/" + d.acctSlice(p.Username)
+	slice := d.acctSlice(p.Username)
+	if slice == "" { // no such user (any more): its slice can't be named
+		return map[string]bool{"removed": false}, nil
+	}
+	unitPath := systemdUnitDir + "/" + slice
 	if ok, _ := d.FS.Exists(unitPath); ok {
 		if err := system.RemoveConfig(ctx, d.FS, d.Runner, system.RemoveSpec{Path: unitPath, Test: daemonReload, Reload: daemonReload}); err != nil {
 			return nil, err
@@ -166,7 +173,7 @@ func (d Deps) accountRemove(ctx context.Context, _ agent.Actor, p UserParams) (a
 }
 
 func fpmMasterContent(user, version string) string {
-	return system.Marker + ` — do not edit by hand
+	return system.MarkerINI + ` — do not edit by hand
 ; PHP ` + version + ` for the site login ` + user + ` (Layte Panel). Its pools are in pool.d/.
 [global]
 pid = ` + acctRunRoot + `/` + user + `/php` + version + `.pid
@@ -193,6 +200,10 @@ RuntimeDirectoryPreserve=yes
 ExecStart=` + phpFPMBin(version) + ` --nodaemonize --fpm-config ` + acctFPMConf(user, version) + `
 ExecReload=/bin/kill -USR2 $MAINPID
 Restart=on-failure
+# A request over the RAM limit gets its worker killed by the kernel; the
+# master keeps running and starts a new one (systemd's default would stop
+# the whole service, taking every site of the login down).
+OOMPolicy=continue
 
 [Install]
 WantedBy=multi-user.target
