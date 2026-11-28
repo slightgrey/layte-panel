@@ -514,3 +514,14 @@ func (s *server) writeUsage(w http.ResponseWriter, r *http.Request, u store.User
 	}
 	writeJSON(w, http.StatusOK, usage)
 }
+
+// POST /api/v1/quota/disable — turn disk quotas off (and take usrquota out
+// of /etc/fstab); every login's disk limit goes back to none.
+func (s *server) handleDisableQuotas(w http.ResponseWriter, r *http.Request) {
+	st, err := s.sites.DisableQuotas(r.Context(), actorOf(r))
+	if err != nil {
+		s.writeSiteError(w, "disable quotas", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}

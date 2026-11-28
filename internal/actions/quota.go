@@ -28,6 +28,7 @@ import (
 const (
 	findmntBin    = "/usr/bin/findmnt"
 	quotaonBin    = "/usr/sbin/quotaon"
+	quotaoffBin   = "/usr/sbin/quotaoff"
 	quotacheckBin = "/usr/sbin/quotacheck"
 	setquotaBin   = "/usr/sbin/setquota"
 	quotaBin      = "/usr/bin/quota"
@@ -162,6 +163,59 @@ func (d Deps) readQuotaStatus(ctx context.Context) (QuotaStatus, error) {
 	return st, nil
 }
 
+// removeUsrquota returns fstab without usrquota in the options of the line
+// that mounts target (what addUsrquota added).
+func removeUsrquota(fstab, target string) (string, bool) {
+	lines := strings.Split(fstab, "\n")
+	changed := false
+	for i, l := range lines {
+		f := strings.Fields(l)
+		if len(f) < 4 || strings.HasPrefix(f[0], "#") || f[1] != target {
+			continue
+		}
+		var keep []string
+		for _, o := range strings.Split(f[3], ",") {
+			if o == "usrquota" {
+				changed = true
+				continue
+			}
+			keep = append(keep, o)
+		}
+		if len(keep) == 0 {
+			keep = []string{"defaults"}
+		}
+		lines[i] = setField(l, 3, strings.Join(keep, ","))
+	}
+	return strings.Join(lines, "\n"), changed
+}
+
+// quotaDisable turns user quotas off and takes usrquota out of /etc/fstab
+// (so the quota service doesn't turn them back on at boot). The quota tools
+// and kernel module stay; turning quotas on again is quick.
+func (d Deps) quotaDisable(ctx context.Context, _ agent.Actor, _ agent.NoParams) (any, error) {
+	st, err := d.quotaOn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if st.Enabled {
+		res, err := d.Runner.RunCmd(ctx, outsideSandbox(system.Cmd{Bin: quotaoffBin, Args: []string{"--user", st.Mount}}))
+		if err != nil {
+			return nil, fmt.Errorf("quotaoff: %s", failure(res, err, 3))
+		}
+	}
+	b, err := d.FS.ReadFile(fstabPath)
+	if err != nil {
+		return nil, err
+	}
+	if next, changed := removeUsrquota(string(b), st.Mount); changed {
+		if err := d.editFstab(ctx, b, []byte(next)); err != nil {
+			return nil, err
+		}
+	}
+	d.FS.Remove(strings.TrimSuffix(st.Mount, "/") + "/aquota.user")
+	return d.readQuotaStatus(ctx)
+}
+
 // addUsrquota returns fstab with usrquota added to the options of the line
 // that mounts target, or an error if there is no single such line.
 func addUsrquota(fstab, target string) (string, bool, error) {
@@ -185,9 +239,30 @@ func addUsrquota(fstab, target string) (string, bool, error) {
 	if slices.Contains(opts, "usrquota") || slices.Contains(opts, "usrjquota=aquota.user") {
 		return fstab, false, nil
 	}
-	f[3] = f[3] + ",usrquota"
-	lines[found] = strings.Join(f, "\t")
+	lines[found] = setField(lines[found], 3, f[3]+",usrquota")
 	return strings.Join(lines, "\n"), true, nil
+}
+
+// setField replaces the n-th whitespace-separated field of line, keeping
+// every other character (the admin's spacing) as it was.
+func setField(line string, n int, value string) string {
+	i, field := 0, -1
+	for i < len(line) {
+		for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+			i++
+		}
+		start := i
+		for i < len(line) && line[i] != ' ' && line[i] != '\t' {
+			i++
+		}
+		if start == i {
+			break
+		}
+		if field++; field == n {
+			return line[:start] + value + line[i:]
+		}
+	}
+	return line
 }
 
 // quotaEnable turns on user quotas for the filesystem holding /home.
